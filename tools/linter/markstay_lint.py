@@ -16,14 +16,14 @@ and the MDX profile
 
     {/* stay:ID [hash=sha256:HEX] [k=v ...] */}
 
-(SPEC_DECISIONS.md). Markers attach to the block immediately above them
-(after-block placement). A chunk that is *only* markers attaches to the previous
+(SPEC.md §3). Markers attach to the block immediately above them (after-block
+placement, SPEC.md §5). A chunk that is *only* markers attaches to the previous
 content block; a marker with no preceding block is an orphan.
 
-Hash normalization is open question #2 in SPEC_DECISIONS.md and not yet settled.
-This linter uses a provisional rule (see `normalize_body`) and always compares at
-the precision recorded in the marker, so it never reports drift merely because a
-freshly computed hash is longer than a short stored one.
+Hash normalization is SPEC.md §8. `normalize_body` implements that rule, and the
+linter always compares at the precision recorded in the marker, so it never
+reports drift merely because a freshly computed hash is longer than a short
+stored one.
 
 What it does NOT do: detect block split/merge relocations where content only
 partially moved. Exact-content marker swaps are caught (RELOCATED_ID); partial
@@ -54,7 +54,7 @@ from pathlib import Path
 # A marker body always begins with the `stay:` namespace. We capture the body
 # lazily up to the closing delimiter, then pull id/hash out of it. Capturing the
 # whole body (rather than a fixed attribute order) tolerates reordered or extra
-# attributes, which open question #1 leaves room for.
+# attributes, which the spec's free-order attribute grammar allows (SPEC.md §4).
 HTML_MARKER = re.compile(r"<!--\s*(?P<body>stay:.*?)\s*-->", re.DOTALL)
 MDX_MARKER = re.compile(r"\{/\*\s*(?P<body>stay:.*?)\s*\*/\}", re.DOTALL)
 
@@ -99,10 +99,10 @@ class Finding:
         return {k: v for k, v in self.__dict__.items() if v is not None}
 
 
-# --- hashing (provisional; ties to SPEC open question #2) -----------------
+# --- hashing (SPEC.md §8) -------------------------------------------------
 
 def normalize_body(text: str) -> str:
-    """Provisional normalization for hashing: LF endings, per-line trailing
+    """Normalization for hashing (SPEC.md §8): LF endings, per-line trailing
     whitespace stripped, leading/trailing blank lines dropped. Markers are
     excluded upstream (they are stripped before a block's content is hashed)."""
     t = text.replace("\r\n", "\n").replace("\r", "\n")

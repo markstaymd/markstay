@@ -3,7 +3,7 @@
 Does a markstay id stay attached to the **correct** block after an edit moves,
 splits, merges, edits, or deletes content, and does the resolver refuse to guess
 when it cannot? This is the test of the resolution model (`id` / `hash` / `quote`
-from `../../SPEC_DECISIONS.md`), distinct from the marker-survival eval
+from `../../SPEC.md` §2.1, §9), distinct from the marker-survival eval
 (`../FINDINGS.md`), which only checked that the id *token* survives.
 
 No network, no API key, no install: every edit is a deterministic block operator

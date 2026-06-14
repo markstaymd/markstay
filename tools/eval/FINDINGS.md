@@ -1,8 +1,8 @@
 # LLM marker-survival: findings
 
 Question: does the markstay marker survive when an LLM processes the document,
-and does the choice of syntax change the answer? This is open question #5 in
-`../SPEC_DECISIONS.md` and the one assumption the AI use case rests on.
+and does the choice of syntax change the answer? This measurement backs the AI
+editing contract (`../SPEC.md` §11), the one assumption the AI use case rests on.
 
 Method: 8 candidate marker syntaxes inserted after every block of 2 documents,
 each run through 4 perturbations (rewrite, cleanup, translate, edit) on 3 models
@@ -57,6 +57,7 @@ model.
 - Generated, non-semantic ids remain preferable: nothing to tempt a model into
   "improving" them.
 
-This resolves open question #5: the marker survives reliably *only* under an
-explicit preservation contract, and that contract, not the syntax, is what the
-spec has to standardize for agent workflows.
+This is why the spec standardizes the AI editing contract (`../SPEC.md` §11), not
+a marker syntax: the marker survives reliably *only* under an explicit
+preservation contract, and that contract, not the syntax, is the lever for agent
+workflows.

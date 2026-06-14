@@ -46,13 +46,13 @@ a thing other annotation products can adopt.
 
 ## Is Markdown even the right layer?
 
-This is a genuinely open question, and disagreement is welcome. The argument for the
-source layer: Markdown is already the interchange format for human and agent edits, it
-travels across tools, and it diffs cleanly in Git. The argument against: an editor or a
-sidecar file could carry richer identity without cluttering the prose. The
-[evaluation](evaluation.md) gives one data point against the sidecar approach (out-of-
-band frontmatter survived LLM editing *worse* than inline markers), but it does not
-close the question.
+v1 makes the call: the source layer. Markdown is already the interchange format for
+human and agent edits, it travels across tools, and it diffs cleanly in Git, so the id
+should travel in the text. The argument against, that an editor or a sidecar file could
+carry richer identity without cluttering the prose, is real, but the
+[evaluation](evaluation.md) found the sidecar approach worse where it matters most:
+out-of-band frontmatter survived LLM editing *worse* than inline markers. Disagreement
+is still welcome and would inform later versions.
 
 ## Will LLMs actually preserve the markers?
 
@@ -89,12 +89,11 @@ Markdown by hand; it is sharper now.
 
 ## Is "markstay" the final name?
 
-The name is settled enough to register a domain and a repository, but the standard
-itself is not. The project name is markstay; the marker token is the shorter `stay:`.
+Yes. The project name is markstay; the marker token is the shorter `stay:`. Version 1
+of the specification is settled too.
 
 ## How do I disagree with this?
 
-Open an issue at [markstaymd/markstay](https://github.com/markstaymd/markstay). The
-explicit goal is to find out whether the problem is real and whether this is the wrong
-design. A well-argued "this is unnecessary" or "this is the wrong layer" is exactly the
-feedback that makes the exploration worthwhile.
+Open an issue at [markstaymd/markstay](https://github.com/markstaymd/markstay). v1 is
+settled but young; a well-argued "this is unnecessary", "this is the wrong layer", or
+"this case isn't covered" is exactly the feedback that shapes later versions.

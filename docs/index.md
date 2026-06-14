@@ -1,22 +1,22 @@
 # markstay
 
-**A research-stage proposal for giving logical blocks of Markdown a stable identity that survives editing.**
+**A specification for giving logical blocks of Markdown a stable identity that survives editing.**
 
-markstay is an exploration, not a finished answer. The goal is to find out whether
-there is a real gap between how Markdown is used today (the storage format for
-documentation, and for documents that AI agents read and rewrite) and what it can
-express (no portable way to point at a paragraph, list item, or code block and keep
-pointing at it after the text changes).
+markstay is a small, source-native identity layer for Markdown. It gives a logical
+block of content a **stay**: a stable address other tools can point at and keep
+pointing at across edits, moves, and AI rewrites. The address *stays* put while the
+content around it changes.
 
-If that gap is real, a small, source-native identity layer could fill it. This site
-states the problem, surveys the [prior art](prior-art.md), and puts a
-[draft spec](spec.md) on the table so the idea can be argued with rather than
-admired.
+This site states the problem, surveys the [prior art](prior-art.md), and gives the
+[specification](spec.md). Version 1 is settled: the marker grammar, attachment
+model, hashing, and recovery behaviour are fixed, and a reference
+[linter](linter.md) and an [evaluation](evaluation.md) back them with runnable code
+and measurements.
 
-!!! note "Status"
-    Nothing here is locked. The syntax is a strawman. The intent is to gather
-    feedback from the Markdown, AI, documentation, and knowledge-management
-    communities, then decide whether the idea is worth standardising at all.
+!!! note "Status: version 1, settled"
+    The v1 surface is small and stable. It is also young: real-world use and
+    critique will shape later versions (finer-grained identity and CommonMark-tree
+    attachment are the named next steps). Issues and counter-arguments are welcome.
 
 ## The problem
 
@@ -29,7 +29,7 @@ It has stable handles at every level except one:
 - **Files** have paths.
 - **Revisions** have commit SHAs.
 - **Headings** have generated anchors.
-- **Logical blocks** (a specific paragraph, list item, table, or code fence) have
+- **Logical blocks** (a specific paragraph, list, table, or code fence) have
   nothing.
 
 There is no portable way to say "this paragraph" and have the reference still hold
@@ -58,10 +58,10 @@ be audited afterwards (which ids changed, which were dropped).
 
 This is the case markstay is built around. It is also where the idea is most fragile,
 because the same agents that would *use* the ids are the ones most likely to *destroy*
-them during a rewrite. That risk was measured rather than assumed; see
+them during a rewrite. That risk was measured, not assumed; see
 [the findings](evaluation.md).
 
-## The proposal in one example
+## markstay in one example
 
 A block carries a marker on the line after it. The canonical form is a trailing HTML
 comment, invisible in rendered Markdown and preserved in the source:
@@ -100,30 +100,30 @@ mismatch with the marker still present means "same block, changed content", not 
 block". This split is the single most consistent lesson from the
 [prior art](prior-art.md).
 
-## Open questions
+## What version 1 settles
 
-The hardest questions are not yet settled, and feedback on them is the point of this
-site:
+The [specification](spec.md) fixes:
 
-1. Is identity-only the right scope, or does it have to ship with annotation?
-2. Is Markdown source the right layer, versus the editor or a sidecar?
-3. What exactly is hashed (the normalisation rules that decide when two
-   implementations agree on drift)?
-4. What are the precise block-boundary rules for nested lists, blockquotes, and
-   tables?
-5. What does adoption actually look like, and would anyone consume the ids?
+- **Marker grammar**: a positional `stay:` id plus free-order `key=value`
+  attributes, HTML-comment form for `.md` and a JSX-comment profile for MDX.
+- **Attachment**: markers bind to the blank-line-delimited block above them, at
+  whole-block granularity (whole list, fence, table, quote).
+- **Hashing**: an exact normalization rule, so two implementations agree on drift.
+- **Recovery**: a `TextQuoteSelector`-style ladder (marker → hash → quote) that
+  surfaces a detached marker as outdated rather than guessing.
+- **The AI editing contract**: what an agent must do to preserve stays, made
+  measurable by the post-edit [linter](linter.md).
 
-The [draft spec](spec.md) records the calls the prior art supports, the calls it
-leaves open, and the failure modes any real version has to answer. The
-[FAQ](faq.md) covers the obvious objections (why not heading anchors, UUIDs, an
-external database, or HTML ids).
+Deferred to later versions, by design: list-item and table-row identity, and
+CommonMark-tree attachment (so loose lists and blank-line-containing code fences can
+carry a single stay). The [FAQ](faq.md) covers the obvious objections (why not
+heading anchors, UUIDs, an external database, or HTML ids).
 
-## What success means
+## Scope
 
-Success here is not adoption. Success is learning whether the problem is real and
-whether this proposal fills a genuine gap. If the conclusion is "the gap is real but
-this is the wrong design", that is a useful result. If it is "the gap is not real",
-that is too.
+markstay is deliberately one thing: identity and recovery. Annotation, transclusion,
+AI editing, and cross-references are consumers that build on the stay layer, not part
+of it. Keeping the core small is what lets other tools adopt it.
 
 The work is openly licensed (content under CC BY 4.0, code samples under MIT) and
 lives at [markstaymd/markstay](https://github.com/markstaymd/markstay). Issues and

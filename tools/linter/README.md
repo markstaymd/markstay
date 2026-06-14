@@ -50,25 +50,25 @@ Regeneration diff (`--before OLD.md NEW.md`):
 
 - **Marker syntax**: the canonical HTML comment `<!-- stay:ID [hash=sha256:HEX]
   [k=v ...] -->` and the MDX profile `{/* stay:ID ... */}` (one data model, two
-  serializations, per `../SPEC_DECISIONS.md`). Attribute order is free and extra
-  attributes are tolerated; only `id` is required.
-- **Attachment**: after-block placement. A marker binds to the block immediately
-  above it, whether on the next line or as its own blank-line-separated chunk. A
-  chunk that is only markers attaches to the previous content block.
-- **Hash normalization** is open question #2 in the spec and *not settled*. The
-  linter uses a provisional rule (`normalize_body`: LF endings, per-line trailing
-  whitespace stripped, leading/trailing blank lines dropped, marker excluded) and
-  always compares at the precision recorded in the marker, so it never reports
-  drift merely because a freshly computed hash is longer than a short stored one.
-  When the spec pins the rule, update `normalize_body` to match.
+ serializations, per `../SPEC.md` §3, §4). Attribute order is free and extra
+ attributes are tolerated; only `id` is required.
+- **Attachment**: after-block placement over blank-line-delimited blocks
+ (`../SPEC.md` §5). A marker binds to the block immediately above it, whether on
+ the next line or as its own blank-line-separated chunk. A chunk that is only
+ markers attaches to the previous content block.
+- **Hash normalization** is `../SPEC.md` §8. `normalize_body` implements it (LF
+ endings, per-line trailing whitespace stripped, leading/trailing blank lines
+ dropped, marker excluded) and always compares at the precision recorded in the
+ marker, so it never reports drift merely because a freshly computed hash is
+ longer than a short stored one.
 
 ## Known limitation
 
 Relocation detection is exact-content only: it catches markers that swap between
 blocks whose text is otherwise unchanged. It does **not** detect partial
 relocation when a block is split or merged. That case needs quote/selector
-recovery and is the subject of the planned attachment-survival eval, not this
-deterministic linter.
+recovery (`../SPEC.md` §9), handled by the attachment-survival eval
+(`../eval/attachment/`), not this deterministic linter.
 
 ## Programmatic use
 

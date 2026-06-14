@@ -1,8 +1,8 @@
 # Examples
 
-These show the strawman syntax across the common block types and a few realistic
-agent workflows. The marker is always a trailing comment on the line after the block.
-In rendered Markdown it is invisible; the source carries it.
+These show the v1 syntax across the common block types and a few realistic agent
+workflows. The marker is always a trailing comment on the line after the block. In
+rendered Markdown it is invisible; the source carries it.
 
 ## Paragraph
 
@@ -21,15 +21,16 @@ This market doubled in 2025.
 <!-- stay:market-growth hash=sha256:7a9c quote="This market doubled in 2025." -->
 ```
 
-## List items
+## List
 
-Identity is per list item, because a bullet is the natural edit and reference unit.
+A marker after a list identifies the **whole list**. List-item identity is deferred
+to a later extension, so v1 lists carry one stay for the list as a unit. The list
+must be tight (no blank lines between items) for the marker to bind the whole list.
 
 ```md
 - Retry failed requests with jitter.
-  <!-- stay:retry-jitter -->
 - Cap retries at five attempts.
-  <!-- stay:retry-cap -->
+<!-- stay:retry-policy -->
 ```
 
 ## Code fence
@@ -65,12 +66,12 @@ a later extension.
 
 ## Heading landmark
 
-Authored, human-readable ids are allowed for important landmarks. A before-block marker
-is acceptable for large containers like sections.
+Authored, human-readable ids are allowed for important landmarks. The marker follows
+the heading, like every other block.
 
 ```md
-<!-- stay:section-api -->
 ## API
+<!-- stay:section-api -->
 ```
 
 ## MDX profile
@@ -131,11 +132,14 @@ Install the package.
 
 ### Duplicate text
 
-A quote selector alone cannot tell two identical bullets apart; a generated id can.
+A quote selector alone cannot tell two identical blocks apart; a generated id can.
 
 ```md
-- Run `npm install`. <!-- stay:install-node -->
-- Run `npm install`. <!-- stay:install-web -->
+This statement needs a citation.
+<!-- stay:claim-uptime -->
+
+This statement needs a citation.
+<!-- stay:claim-latency -->
 ```
 
 ### Review comment that has to survive a move

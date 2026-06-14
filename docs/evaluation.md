@@ -77,9 +77,9 @@ dominates the model.
 - **Generated, non-semantic ids remain preferable**: there is nothing to tempt a model
  into "improving" them.
 
-The headline result for the [draft spec](spec.md): the marker survives reliably *only*
-under an explicit preservation contract, and that contract, not the syntax, is what a
-spec has to standardise for agent workflows.
+The headline result behind the [specification](spec.md): the marker survives reliably
+*only* under an explicit preservation contract, and that contract, not the syntax, is
+what the spec standardises for agent workflows (the AI editing contract).
 
 ## What this does not test
 

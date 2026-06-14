@@ -1,9 +1,9 @@
 # markstay reference tooling
 
 Runnable code behind the [reference linter](https://markstay.org/linter/) and
-[evaluation](https://markstay.org/evaluation/) pages. Everything here is research
-tooling that backs the draft spec with measurements and a deterministic checker,
-not a production library.
+[evaluation](https://markstay.org/evaluation/) pages. Everything here is reference
+tooling that backs the [specification](https://markstay.org/spec/) with measurements
+and a deterministic checker, not a production library.
 
 ## Layout
 

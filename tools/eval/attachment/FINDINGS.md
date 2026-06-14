@@ -3,7 +3,7 @@
 Question: after an edit moves, splits, merges, edits, or deletes blocks, can a
 tool re-attach each original `stay:` to the **correct** block, and does it refuse
 to guess when it cannot? This is the question the resolution model in
-`../../SPEC_DECISIONS.md` rests on, and the one the marker-survival eval
+`../../SPEC.md` (§9) rests on, and the one the marker-survival eval
 (`../FINDINGS.md`) explicitly did not test: that eval proved the *id token*
 survives an edit, not that it stays bound to the *right* block.
 
@@ -92,8 +92,8 @@ repetitive content.
   reliable.
 - **The `hash` field earns its place.** It silently and exactly handles 81% of
   re-attachment (every moved-but-unchanged block) and never mis-attaches. The
-  spec should keep hash as the primary post-marker tier and pin its normalization
-  (open question #2), since the whole tier depends on two implementations
+  spec keeps hash as the primary post-marker tier and pins its normalization
+  (`../../SPEC.md` §8), since the whole tier depends on two implementations
   agreeing on the bytes.
 - **Quote recovery must default to DETACHED on a near-tie.** The margin guard is
   not optional; without it, false attachment roughly doubles. A quote match

@@ -33,8 +33,8 @@ from dataclasses import dataclass
 from difflib import SequenceMatcher
 
 # How much neighbour context to keep on each side. Short enough to stay cheap,
-# long enough to disambiguate repeated blocks. Open question #4 in
-# SPEC_DECISIONS.md leaves the real number unpinned; this is the eval's choice.
+# long enough to disambiguate repeated blocks. SPEC.md §9 pins this value; the
+# spec records the number this eval measured.
 CONTEXT_CHARS = 48
 
 

@@ -112,5 +112,5 @@ markstay probes.
 The survey supports the identity-versus-evidence split, generated-id defaults, and the
 HTML-comment degradation path. It does not settle the exact attribute grammar, hash
 normalisation rules, copy-versus-move behaviour at the boundaries, or the precise
-block-attachment rules. Those are carried into the [draft spec](spec.md) as open
-questions.
+block-attachment rules. The [specification](spec.md) settles those by decision and
+measurement, beyond what the survey alone could.

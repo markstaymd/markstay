@@ -4,7 +4,7 @@ The [evaluation](evaluation.md) settled that an agent which is not told about ma
 strips nearly every marker during a rewrite. The defence is to make silent loss a
 *caught* error rather than a quiet break of every downstream reference. That is what a
 linter is for, and it is the second of the two mandatory mitigations in the
-[draft spec](spec.md).
+[specification](spec.md).
 
 A [reference checker](https://github.com/markstaymd/markstay/tree/master/tools/linter)
 implements the rules below. It is dependency-free (Python standard library only) and
@@ -60,12 +60,11 @@ markstay-lint --json --before OLD.md NEW.md
   only `id` is required.
 - **Attachment**: after-block placement. A marker binds to the block immediately above
   it. A chunk of markers on their own attaches to the previous content block.
-- **Hash normalisation** is an [open question](spec.md) and not yet settled. The
-  reference checker uses a provisional rule (LF line endings, per-line trailing
-  whitespace stripped, leading and trailing blank lines dropped, the marker excluded)
-  and always compares at the precision recorded in the marker, so it never reports
-  drift merely because a freshly computed hash is longer than a short stored one. When
-  the spec pins the rule, the checker follows.
+- **Hash normalisation** follows [the spec](spec.md#hash-normalisation): LF line
+  endings, per-line trailing whitespace stripped, leading and trailing blank lines
+  dropped, the marker excluded. The checker always compares at the precision recorded
+  in the marker, so it never reports drift merely because a freshly computed hash is
+  longer than a short stored one.
 
 ## Known limitation
 

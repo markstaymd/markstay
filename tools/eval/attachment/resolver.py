@@ -5,7 +5,7 @@ This answers the harder question the spec actually rests on: after an edit that
 moves, splits, merges, edits, or deletes blocks, can a tool re-attach each
 original id to the *correct* block, and does it refuse to guess when it cannot?
 
-The resolution model is the three-field split from SPEC_DECISIONS.md:
+The resolution model is the three-field split from SPEC.md §2.1:
 
     id     stable identity (answers *which block*)
     hash   drift detection (answers *did the body change*)
