@@ -1,0 +1,63 @@
+site_name: markstay
+site_description: "markstay: stable identity for Markdown blocks"
+site_url: https://markstay.org/
+repo_url: https://github.com/markstaymd/markstay
+repo_name: markstaymd/markstay
+edit_uri: edit/master/docs/
+
+copyright: Released under CC BY 4.0. Code samples under MIT.
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  font:
+    text: Inter
+    code: JetBrains Mono
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.details
+
+plugins:
+  - search
+
+nav:
+  - Home: index.md
+  - Prior art: prior-art.md
+  - Draft spec: spec.md
+  - Examples: examples.md
+  - Findings:
+      - LLM marker survival: evaluation.md
+      - Reference linter: linter.md
+  - FAQ: faq.md

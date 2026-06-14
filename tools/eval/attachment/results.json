@@ -1,0 +1,332 @@
+{
+  "docs": [
+    "doc1",
+    "doc2"
+  ],
+  "adv_doc": "fixtures/near_dups.md",
+  "threshold": 0.5,
+  "margin": 0.05,
+  "rows_strip": [
+    {
+      "op": "reorder",
+      "n": 20,
+      "cats": {
+        "correct": 20
+      },
+      "methods": {
+        "hash": 20
+      }
+    },
+    {
+      "op": "edit_in_place",
+      "n": 20,
+      "cats": {
+        "correct": 20
+      },
+      "methods": {
+        "hash": 10,
+        "quote": 10
+      }
+    },
+    {
+      "op": "heavy_paraphrase",
+      "n": 20,
+      "cats": {
+        "correct": 20
+      },
+      "methods": {
+        "hash": 8,
+        "quote": 12
+      }
+    },
+    {
+      "op": "split",
+      "n": 20,
+      "cats": {
+        "correct": 19,
+        "missed": 1
+      },
+      "methods": {
+        "hash": 18,
+        "quote": 1,
+        "detached": 1
+      }
+    },
+    {
+      "op": "merge",
+      "n": 20,
+      "cats": {
+        "correct": 20
+      },
+      "methods": {
+        "hash": 16,
+        "quote": 4
+      }
+    },
+    {
+      "op": "delete",
+      "n": 20,
+      "cats": {
+        "correct": 18,
+        "correct_detach": 2
+      },
+      "methods": {
+        "hash": 18,
+        "detached": 2
+      }
+    },
+    {
+      "op": "insert",
+      "n": 20,
+      "cats": {
+        "correct": 20
+      },
+      "methods": {
+        "hash": 20
+      }
+    },
+    {
+      "op": "decoy",
+      "n": 20,
+      "cats": {
+        "correct": 20
+      },
+      "methods": {
+        "hash": 18,
+        "quote": 2
+      }
+    },
+    {
+      "op": "clone",
+      "n": 20,
+      "cats": {
+        "correct": 18,
+        "missed": 2
+      },
+      "methods": {
+        "hash": 18,
+        "detached": 2
+      }
+    }
+  ],
+  "rows_keep": [
+    {
+      "op": "reorder",
+      "n": 20,
+      "cats": {
+        "correct": 20
+      },
+      "methods": {
+        "marker": 20
+      }
+    },
+    {
+      "op": "edit_in_place",
+      "n": 20,
+      "cats": {
+        "correct": 20
+      },
+      "methods": {
+        "marker": 20
+      }
+    },
+    {
+      "op": "heavy_paraphrase",
+      "n": 20,
+      "cats": {
+        "correct": 20
+      },
+      "methods": {
+        "marker": 20
+      }
+    },
+    {
+      "op": "split",
+      "n": 20,
+      "cats": {
+        "correct": 20
+      },
+      "methods": {
+        "marker": 20
+      }
+    },
+    {
+      "op": "merge",
+      "n": 20,
+      "cats": {
+        "correct": 20
+      },
+      "methods": {
+        "marker": 20
+      }
+    },
+    {
+      "op": "delete",
+      "n": 20,
+      "cats": {
+        "correct": 18,
+        "correct_detach": 2
+      },
+      "methods": {
+        "marker": 18,
+        "detached": 2
+      }
+    },
+    {
+      "op": "insert",
+      "n": 20,
+      "cats": {
+        "correct": 20
+      },
+      "methods": {
+        "marker": 20
+      }
+    },
+    {
+      "op": "decoy",
+      "n": 20,
+      "cats": {
+        "correct": 20
+      },
+      "methods": {
+        "marker": 20
+      }
+    },
+    {
+      "op": "clone",
+      "n": 20,
+      "cats": {
+        "correct": 20
+      },
+      "methods": {
+        "marker": 20
+      }
+    }
+  ],
+  "adv_rows": [
+    {
+      "op": "reorder",
+      "n": 8,
+      "cats": {
+        "correct": 8
+      },
+      "methods": {
+        "hash": 8
+      }
+    },
+    {
+      "op": "edit_in_place",
+      "n": 8,
+      "cats": {
+        "correct": 5,
+        "missed": 2,
+        "wrong": 1
+      },
+      "methods": {
+        "hash": 4,
+        "detached": 2,
+        "quote": 2
+      }
+    },
+    {
+      "op": "heavy_paraphrase",
+      "n": 8,
+      "cats": {
+        "correct": 7,
+        "missed": 1
+      },
+      "methods": {
+        "hash": 1,
+        "quote": 6,
+        "detached": 1
+      }
+    },
+    {
+      "op": "split",
+      "n": 8,
+      "cats": {
+        "correct": 8
+      },
+      "methods": {
+        "hash": 8
+      }
+    },
+    {
+      "op": "merge",
+      "n": 8,
+      "cats": {
+        "correct": 6,
+        "wrong": 2
+      },
+      "methods": {
+        "hash": 6,
+        "quote": 2
+      }
+    },
+    {
+      "op": "delete",
+      "n": 8,
+      "cats": {
+        "correct": 7,
+        "correct_detach": 1
+      },
+      "methods": {
+        "hash": 7,
+        "detached": 1
+      }
+    },
+    {
+      "op": "insert",
+      "n": 8,
+      "cats": {
+        "correct": 8
+      },
+      "methods": {
+        "hash": 8
+      }
+    },
+    {
+      "op": "decoy",
+      "n": 8,
+      "cats": {
+        "correct": 7,
+        "missed": 1
+      },
+      "methods": {
+        "hash": 7,
+        "detached": 1
+      }
+    },
+    {
+      "op": "clone",
+      "n": 8,
+      "cats": {
+        "correct": 7,
+        "missed": 1
+      },
+      "methods": {
+        "hash": 7,
+        "detached": 1
+      }
+    }
+  ],
+  "ablation": [
+    [
+      0.0,
+      {
+        "correct": 66,
+        "wrong": 5,
+        "false_attach": 1
+      }
+    ],
+    [
+      0.05,
+      {
+        "correct": 63,
+        "missed": 5,
+        "wrong": 3,
+        "correct_detach": 1
+      }
+    ]
+  ]
+}

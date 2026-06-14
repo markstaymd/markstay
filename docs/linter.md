@@ -1,0 +1,83 @@
+# Reference linter
+
+The [evaluation](evaluation.md) settled that an agent which is not told about markstay
+strips nearly every marker during a rewrite. The defence is to make silent loss a
+*caught* error rather than a quiet break of every downstream reference. That is what a
+linter is for, and it is the second of the two mandatory mitigations in the
+[draft spec](spec.md).
+
+A [reference checker](https://github.com/markstaymd/markstay/tree/master/tools/linter)
+implements the rules below. It is dependency-free (Python standard library only) and
+fully local: no network, no credentials. It is meant to run as a git pre-commit hook or
+as the post-edit step of an agent that edits markstay documents. The code ships with the
+site repo (`tools/linter/`, 13/13 self-tests in `test_lint.py`).
+
+## What it checks
+
+### Single document
+
+| Code | Level | Meaning |
+|------|-------|---------|
+| `MALFORMED_MARKER` | error | a `stay:` marker with no parseable id |
+| `ORPHAN_MARKER` | error | a marker with no preceding block to attach to |
+| `DUPLICATE_ID` | error | the same id used by two markers in one document |
+| `HASH_DRIFT` | warn | a marker's stored `hash=` no longer matches its block |
+
+### Regeneration diff (before vs after an edit)
+
+| Code | Level | Meaning |
+|------|-------|---------|
+| `DROPPED_ID` | error | id in the baseline, gone after the edit (the AI-rewrite failure mode) |
+| `DUPLICATED_ID` | error | id appears more than once after the edit (copy without re-mint, or a regeneration collision) |
+| `RELOCATED_ID` | error | an id now sits on content that previously carried a *different* id |
+| `HASH_DRIFT` | warn | id present in both, content edited in place |
+| `NEW_ID` | info | id present only after the edit |
+
+Any error-level finding exits non-zero, so the check gates a hook or an agent step
+directly.
+
+## Usage
+
+The runnable script is `tools/linter/markstay_lint.py` in the repo; `markstay-lint`
+below stands in for `python3 markstay_lint.py`.
+
+```bash
+# well-formedness + intra-document checks
+markstay-lint FILE [FILE ...]
+
+# regeneration diff: what an edit did to the ids
+markstay-lint --before OLD.md NEW.md
+
+# machine-readable findings for a hook or agent step
+markstay-lint --json --before OLD.md NEW.md
+```
+
+## Scope and conventions
+
+- **Marker syntax**: the canonical HTML comment
+  `<!-- stay:ID [hash=sha256:HEX] [k=v ...] -->` and the MDX profile
+  `{/* stay:ID ... */}`. Attribute order is free and unknown attributes are tolerated;
+  only `id` is required.
+- **Attachment**: after-block placement. A marker binds to the block immediately above
+  it. A chunk of markers on their own attaches to the previous content block.
+- **Hash normalisation** is an [open question](spec.md) and not yet settled. The
+  reference checker uses a provisional rule (LF line endings, per-line trailing
+  whitespace stripped, leading and trailing blank lines dropped, the marker excluded)
+  and always compares at the precision recorded in the marker, so it never reports
+  drift merely because a freshly computed hash is longer than a short stored one. When
+  the spec pins the rule, the checker follows.
+
+## Known limitation
+
+Relocation detection is exact-content only: it catches markers that swap between blocks
+whose text is otherwise unchanged. It does **not** detect partial relocation when a
+block is split or merged. That case needs the `quote`/selector recovery model and is
+the subject of the next planned experiment, not a deterministic linter.
+
+## Why a deterministic check, not a smarter one
+
+The point of the linter is to be boring and certain. It answers one question with no
+model in the loop: did this edit drop, duplicate, or relocate any id? That is exactly
+the class of failure the [evaluation](evaluation.md) showed an agent will introduce by
+accident, and it is cheap to catch deterministically. Anything that needs judgement
+(was this the *right* block to keep?) belongs to the recovery model, not the gate.
