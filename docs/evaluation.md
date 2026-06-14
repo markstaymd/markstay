@@ -96,3 +96,21 @@ attachment (the exact `hash` tier alone does 81%), but near-duplicate blocks are
 failure mode, content recovery binds to the wrong twin a few percent of the time even
 with a margin guard. So content recovery is best-effort evidence, and keeping the id
 token alive via the preservation contract remains the trustworthy path.
+
+That deterministic eval has one blind spot: its edits are synthetic, so even its
+most aggressive paraphrase keeps roughly 0.7 text similarity to the original. The
+genuinely hard case for the recovery model is an agent rewording prose much further
+than that. A third study now tests exactly that, with real LLM rewrites:
+[`tools/eval/attachment/llm/`](https://github.com/markstaymd/markstay/tree/master/tools/eval/attachment/llm)
+(findings in `FINDINGS.md`). It has a model rewrite a document while preserving the
+markers (so their placement is a checkable ground truth), then strips the markers and
+asks the recovery model to re-find every block from `hash` + `quote` alone, scored by
+the measured before/after similarity of each block. Across 336 ids and three models,
+recovery degrades gracefully as the rewrite drifts (100% at high similarity down to
+about a third at 0.3-0.5), but the false-attachment rate stays near zero in **every**
+similarity band: when a rewrite is too aggressive to match confidently, the recovery
+model surfaces the marker as detached rather than guessing. The single wrong
+attachment in the whole run was again a near-duplicate twin. The takeaway confirms the
+spec's recovery parameters hold under real rewrites: content recovery loses recall on
+heavy edits but does not start binding to wrong blocks, because the commit rule turns
+uncertainty into an explicit detached state.

@@ -113,9 +113,12 @@ repetitive content.
 
 - Edits are deterministic so ground truth is exact; this measures the *resolution
   algorithm's* behavior, not real LLM paraphrase at very low similarity. The
-  synthetic "heavy" paraphrase still kept ~0.7 text similarity. The natural
-  follow-up is an LLM-driven variant: real rewrites, with ground truth labeled by
-  an LLM judge or by the linter's `lint_diff`.
+  synthetic "heavy" paraphrase still kept ~0.7 text similarity. **Follow-up built**
+  (`llm/`): an LLM-driven variant with real rewrites down to 0.3-0.5 similarity,
+  ground truth from the linter's `lint_diff` over preserved markers. Result: recovery
+  degrades gracefully (100% at high similarity to 36% at 0.3-0.5) while false
+  attachment stays ~0% across all bands, the §9 commit rule converts lost recall
+  into safe detaches, so v1 §9 holds. See `llm/FINDINGS.md`.
 - Granularity is the linter's blank-line block model (whole list, whole table,
   whole fence). Row-level and nested-block attachment (the deferred v1 items) are
   not exercised.

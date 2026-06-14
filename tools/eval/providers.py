@@ -2,8 +2,7 @@
 
 Anthropic via the official async SDK; OpenAI-compatible families (OpenAI,
 Moonshot/Kimi) via raw httpx so no extra packages are needed. Keys come from the
-environment: set ANTHROPIC_API_KEY, OPENAI_API_KEY, and/or MOONSHOT_API_KEY for
-whichever model families you run.
+environment (source ~/.credentials/unlock.sh before running).
 """
 
 import os
@@ -38,12 +37,16 @@ def _anthropic():
 async def complete(model_name: str, prompt: str, max_tokens: int = 2000) -> str:
     family, model_id = MODELS[model_name]
     if family == "anthropic":
-        resp = await _anthropic().messages.create(
+        kwargs = dict(
             model=model_id,
             max_tokens=max_tokens,
-            temperature=0,
             messages=[{"role": "user", "content": prompt}],
         )
+        # Newer Anthropic models (e.g. opus 4.8) reject `temperature`; older ones
+        # still accept it and we want temp 0 there for determinism.
+        if not model_id.startswith("claude-opus-4-8"):
+            kwargs["temperature"] = 0
+        resp = await _anthropic().messages.create(**kwargs)
         return "".join(b.text for b in resp.content if getattr(b, "type", None) == "text")
 
     url, key_env = OPENAI_COMPAT[family]
