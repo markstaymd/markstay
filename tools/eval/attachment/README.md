@@ -13,11 +13,18 @@ with exact ground truth, so each id is scored right or wrong with no judge.
 
 ```bash
 python run_attach_eval.py        # writes results.{json,md}
-python test_attach.py            # 25 self-tests
+python test_attach.py            # self-tests
 ```
 
 Options: `--threshold` and `--margin` tune the quote-recovery tier;
 `--docs doc1,doc2` selects the realistic fixtures (reused from `../docs/`).
+
+`build_anchors` and `resolve` take a `mode=` argument (`"blank-line"` default,
+`"commonmark"` for `../../SPEC.md` §5.2 segmentation), which MUST match between
+the two calls. CommonMark mode lets a whole loose list or a blank-line-containing
+fence attach as a single block; the self-tests cover the recovery of each as one
+block. It is the linter's optional `markdown-it-py` extra, inherited through the
+reused `parse_document`.
 
 ## Files
 

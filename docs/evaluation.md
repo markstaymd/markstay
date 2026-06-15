@@ -18,13 +18,16 @@ Rather than assume an answer, it was measured.
  MDX comment, a UUID variant, and an out-of-band YAML frontmatter map.
 - **4 tasks** run over each document: full rewrite, "clean up", translate, and a
  targeted edit.
-- **3 models** across two families: Claude Haiku 4.5, Claude Sonnet 4.6, and
- GPT-4o-mini.
+- **5 models** across three vendor families: Claude Haiku 4.5, Claude Sonnet 4.6,
+ and Claude Opus 4.8 (Anthropic), GPT-4o-mini (OpenAI), and Kimi K2.6 (Moonshot).
 - **Two conditions**: with and without an explicit "preserve the markers"
  instruction.
 
-That is 384 cells, run with 0 harness failures. The metric is the percentage of block
+That is 640 cells, run with 0 harness failures. The metric is the percentage of block
 markers that survive *intact* (the full marker plus its id present in the output).
+(Kimi K2.6 is a reasoning model that spends completion tokens on hidden reasoning
+before the visible answer, so the harness gives it an 8000-token ceiling and a 300s
+timeout; a tighter cap truncates its output to empty and misreads as ~0% survival.)
 
 The harness and every per-cell result ship with the site repo:
 [`tools/eval/`](https://github.com/markstaymd/markstay/tree/master/tools/eval)
@@ -33,8 +36,8 @@ without re-running the models.
 
 ## What the data says
 
-**1. Syntax choice barely matters.** Every inline syntax scores about 50% naive and
-100% instructed. The HTML comment is marginally best in the naive case (54% vs 50%),
+**1. Syntax choice barely matters.** Every inline syntax scores ~55-67% naive and
+100% instructed. The HTML comment is marginally best in the naive case (67% vs 55%),
 but the gap is within noise. There is no LLM-durability reason to prefer a visible or
 attribute syntax over the HTML comment.
 
@@ -42,10 +45,10 @@ attribute syntax over the HTML comment.
 
 | Task | Naive survival | Instructed |
 |------|---------------:|-----------:|
-| translate | ~100% | 100% |
-| edit (targeted) | ~100% | 100% |
-| rewrite | near 0-16% | 100% |
-| cleanup | near 0-16% | 100% |
+| translate | ~95% | ~98% |
+| edit (targeted) | ~96% | 100% |
+| rewrite | ~37% | ~97% |
+| cleanup | ~5% | ~96% |
 
 Structure-preserving operations (translate, targeted edit) keep markers whether or not
 the model is told. Full-document regeneration (rewrite, "clean up") destroys almost all
@@ -53,13 +56,16 @@ markers when the model is not told: a spot check of a naive cleanup stripped 0 o
 HTML comments. Told to preserve them, the same model kept 10 of 10.
 
 **3. Out-of-band placement does not help; it hurts.** Putting ids in a YAML
-frontmatter map instead of inline scores *worse* (about 25% naive / 75% instructed):
-models rewrite or drop the frontmatter block. Keeping identity out of the prose does
-not protect it.
+frontmatter map instead of inline scores *worse* (45% naive / 84% instructed): models
+rewrite or drop the frontmatter block. Keeping identity out of the prose does not
+protect it; it is the only syntax that fails to reach 100% even when instructed.
 
-**4. Model tier is a minor effect.** Overall survival was roughly GPT-4o-mini 68% /
-Haiku 73% / Sonnet 77%. Better models preserve a little more, but the instruction
-dominates the model.
+**4. Model tier is a minor effect, and the finding holds across vendors.** Overall
+survival was roughly GPT-4o-mini 70% / Haiku 73% / Kimi 76% / Sonnet 82% / Opus 90%.
+Better models preserve a little more, but the instruction dominates the model. Adding
+a third vendor family (Moonshot's Kimi K2.6) corroborates the headline: 100% instructed
+survival on every inline syntax, so the preservation-contract result is not specific to
+Anthropic or OpenAI.
 
 ## Conclusions
 

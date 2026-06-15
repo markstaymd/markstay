@@ -179,6 +179,53 @@ def test_determinism():
           all(r1[x.id].target == r2[x.id].target for x in a))
 
 
+# --- CommonMark-tree attachment (SPEC.md §5.2, v1.1) ----------------------
+
+def test_commonmark_loose_list_binds_whole_list():
+    # The §5.2 contrast: the `list` stay binds the *last item* under blank-line
+    # segmentation but the *whole list* under commonmark. (Both modes yield 3
+    # anchors, since only marked blocks anchor and the bare items carry none.)
+    before = ("Intro paragraph here.\n<!-- stay:intro -->\n\n"
+              "- item one\n\n- item two\n\n- item three\n<!-- stay:list -->\n\n"
+              "Closing paragraph here.\n<!-- stay:close -->\n")
+    a_bl = {a.id: a for a in R.build_anchors(before, mode="blank-line")}
+    a_cm = {a.id: a for a in R.build_anchors(before, mode="commonmark")}
+    check("blank-line: list stay binds the last item only (the §5.2 limit)",
+          a_bl["list"].selector.quote == "- item three")
+    check("commonmark: list stay binds the whole loose list",
+          all(x in a_cm["list"].selector.quote
+              for x in ("item one", "item two", "item three")))
+
+
+def test_commonmark_loose_list_recovers_as_whole_block():
+    # Strip every marker and move the loose list to the top. commonmark mode must
+    # recover the whole list as a single block via the hash tier, no false attach.
+    before = ("Intro paragraph here.\n<!-- stay:intro -->\n\n"
+              "- item one\n\n- item two\n\n- item three\n<!-- stay:list -->\n\n"
+              "Closing paragraph here.\n<!-- stay:close -->\n")
+    after = ("- item one\n\n- item two\n\n- item three\n\n"
+             "Intro paragraph here.\n\nClosing paragraph here.\n")
+    anchors = R.build_anchors(before, mode="commonmark")
+    res = R.resolve(anchors, after, mode="commonmark")
+    check("loose list recovered by the hash tier", res["list"].method == "hash")
+    after_blocks = [b for b in R.L.parse_document(after, mode="commonmark") if b.index >= 0]
+    tgt = after_blocks[res["list"].target].content
+    check("recovered target is the whole list",
+          "item one" in tgt and "item three" in tgt)
+    check("every other stay also recovered (no detach on a survivor)",
+          res["intro"].method == "hash" and res["close"].method == "hash")
+
+
+def test_commonmark_blank_line_fence_recovers_as_whole_block():
+    before = ("Lead-in line.\n<!-- stay:lead -->\n\n"
+              "```py\nx = 1\n\ny = 2\n```\n<!-- stay:code -->\n")
+    after = ("```py\nx = 1\n\ny = 2\n```\n\nLead-in line.\n")  # markers stripped, fence moved
+    anchors = R.build_anchors(before, mode="commonmark")
+    check("fence with internal blank is one anchor", len(anchors) == 2)
+    res = R.resolve(anchors, after, mode="commonmark")
+    check("blank-line fence recovered by the hash tier", res["code"].method == "hash")
+
+
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for t in tests:

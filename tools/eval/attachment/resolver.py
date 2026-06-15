@@ -67,11 +67,15 @@ class Resolution:
     score: float         # confidence in [0, 1] (1.0 for marker/hash)
 
 
-def build_anchors(before_md: str) -> list[Anchor]:
+def build_anchors(before_md: str, mode: str = "blank-line") -> list[Anchor]:
     """Extract anchors from an annotated baseline document. Each non-orphan block
     with a well-formed marker contributes one anchor carrying the block's hash
-    and a quote selector built from the block and its neighbours."""
-    blocks = [b for b in L.parse_document(before_md) if b.index >= 0]
+    and a quote selector built from the block and its neighbours.
+
+    `mode` selects the block segmenter (SPEC.md §5): 'blank-line' (default) or
+    'commonmark' (§5.2, whole loose lists / blank-line fences). It MUST match the
+    mode passed to `resolve`."""
+    blocks = [b for b in L.parse_document(before_md, mode=mode) if b.index >= 0]
     anchors: list[Anchor] = []
     for i, b in enumerate(blocks):
         prev_text = blocks[i - 1].content if i > 0 else ""
@@ -92,10 +96,12 @@ def resolve(
     after_md: str,
     threshold: float = DEFAULT_THRESHOLD,
     margin: float = DEFAULT_MARGIN,
+    mode: str = "blank-line",
 ) -> dict[str, Resolution]:
     """Resolve every anchor id against the edited document via the evidence
-    ladder. Returns id -> Resolution."""
-    after_blocks = [b for b in L.parse_document(after_md) if b.index >= 0]
+    ladder. Returns id -> Resolution. `mode` selects the block segmenter and MUST
+    match the mode `build_anchors` used (SPEC.md §5)."""
+    after_blocks = [b for b in L.parse_document(after_md, mode=mode) if b.index >= 0]
     bodies = [b.content for b in after_blocks]
 
     # Tier 1 lookup: ids whose marker is still attached, mapped to block index.

@@ -6,8 +6,9 @@ markstay strips nearly every marker (0/10 in a spot check), so silent loss has
 to become a *caught* error rather than a quiet break of every downstream
 reference. That is this tool's job.
 
-It is dependency-free (Python 3.10+ stdlib only) and fully local: no API
-credentials, no network.
+The default path is dependency-free (Python 3.10+ stdlib only) and fully local: no
+API credentials, no network. CommonMark mode (`--commonmark`, below) is the one
+optional extra and needs `markdown-it-py`.
 
 ## Usage
 
@@ -20,6 +21,10 @@ python3 markstay_lint.py --before OLD.md NEW.md
 
 # machine-readable findings (for a commit hook or an agent's post-edit step)
 python3 markstay_lint.py --json --before OLD.md NEW.md
+
+# CommonMark-tree attachment (SPEC.md §5.2, v1.1): a loose list or a fence with
+# internal blank lines attaches as one block. Needs markdown-it-py.
+python3 markstay_lint.py --commonmark FILE
 ```
 
 Exit status is `1` if any **error**-level finding is reported, `0` otherwise, so
@@ -52,10 +57,13 @@ Regeneration diff (`--before OLD.md NEW.md`):
   [k=v ...] -->` and the MDX profile `{/* stay:ID ... */}` (one data model, two
  serializations, per `../SPEC.md` §3, §4). Attribute order is free and extra
  attributes are tolerated; only `id` is required.
-- **Attachment**: after-block placement over blank-line-delimited blocks
- (`../SPEC.md` §5). A marker binds to the block immediately above it, whether on
- the next line or as its own blank-line-separated chunk. A chunk that is only
- markers attaches to the previous content block.
+- **Attachment**: after-block placement (`../SPEC.md` §5). A marker binds to the
+ block immediately above it, whether on the next line or as its own chunk; a chunk
+ that is only markers attaches to the previous content block. Blocks are split by
+ blank lines by default (dependency-free); `--commonmark` / `parse_document(...,
+ mode="commonmark")` splits over the CommonMark tree instead, so a loose list or a
+ blank-line-containing fence attaches as one block (`../SPEC.md` §5.2, v1.1). The
+ two modes agree on documents with tight lists and blank-line-free fences.
 - **Hash normalization** is `../SPEC.md` §8. `normalize_body` implements it (LF
  endings, per-line trailing whitespace stripped, leading/trailing blank lines
  dropped, marker excluded) and always compares at the precision recorded in the
@@ -72,10 +80,11 @@ recovery (`../SPEC.md` §9), handled by the attachment-survival eval
 
 ## Programmatic use
 
-`parse_document`, `lint_document`, and `lint_diff` are importable. The
-attachment-survival eval is expected to reuse `parse_document` (block + marker
-extraction) and `lint_diff` (before/after id accounting) rather than reimplement
-marker parsing.
+`parse_document`, `lint_document`, and `lint_diff` are importable and all take a
+`mode=` argument (`"blank-line"` default, `"commonmark"` for the §5.2 segmenter).
+The attachment-survival eval reuses `parse_document` (block + marker extraction)
+and `lint_diff` (before/after id accounting) rather than reimplement marker
+parsing, so it inherits the same mode switch.
 
 ## Tests
 

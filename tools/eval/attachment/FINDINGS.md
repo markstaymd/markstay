@@ -21,8 +21,8 @@ Marker parsing and hashing are reused from the reference linter
 block operators with exact ground truth, so every id is scored right or wrong
 with no judge in the loop. The headline case strips all markers first (the
 AI-regeneration failure mode), forcing recovery onto hash + quote alone. Harness:
-`run_attach_eval.py`; raw results `results.{json,md}`; 25/25 self-tests in
-`test_attach.py`.
+`run_attach_eval.py`; raw results `results.{json,md}`; 32/32 self-tests in
+`test_attach.py` (the last three cover CommonMark-tree attachment, SPEC.md §5.2).
 
 Two fixture sets: the marker-survival prose docs (lexically distinct blocks) and
 an adversarial fixture (`fixtures/near_dups.md`) of near-duplicate blocks that

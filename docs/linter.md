@@ -7,10 +7,12 @@ linter is for, and it is the second of the two mandatory mitigations in the
 [specification](spec.md).
 
 A [reference checker](https://github.com/markstaymd/markstay/tree/master/tools/linter)
-implements the rules below. It is dependency-free (Python standard library only) and
-fully local: no network, no credentials. It is meant to run as a git pre-commit hook or
-as the post-edit step of an agent that edits markstay documents. The code ships with the
-site repo (`tools/linter/`, 13/13 self-tests in `test_lint.py`).
+implements the rules below. Its default path is dependency-free (Python standard
+library only) and fully local: no network, no credentials. It is meant to run as a git
+pre-commit hook or as the post-edit step of an agent that edits markstay documents. The
+code ships with the site repo (`tools/linter/`, 19/19 self-tests in `test_lint.py`).
+The one optional extra is `--commonmark` mode ([version 1.1](spec.md#commonmark-tree-attachment-version-11)),
+which needs `markdown-it-py`.
 
 ## What it checks
 
@@ -50,6 +52,10 @@ markstay-lint --before OLD.md NEW.md
 
 # machine-readable findings for a hook or agent step
 markstay-lint --json --before OLD.md NEW.md
+
+# CommonMark-tree attachment (version 1.1): a loose list or a fence with internal
+# blank lines attaches as one block. Needs markdown-it-py.
+markstay-lint --commonmark FILE
 ```
 
 ## Scope and conventions
@@ -59,7 +65,10 @@ markstay-lint --json --before OLD.md NEW.md
   `{/* stay:ID ... */}`. Attribute order is free and unknown attributes are tolerated;
   only `id` is required.
 - **Attachment**: after-block placement. A marker binds to the block immediately above
-  it. A chunk of markers on their own attaches to the previous content block.
+  it. A chunk of markers on their own attaches to the previous content block. Blocks
+  are split by blank lines by default; `--commonmark` splits over the CommonMark tree
+  instead, so a loose list or a blank-line-containing fence attaches as one block
+  ([version 1.1](spec.md#commonmark-tree-attachment-version-11)).
 - **Hash normalisation** follows [the spec](spec.md#hash-normalisation): LF line
   endings, per-line trailing whitespace stripped, leading and trailing blank lines
   dropped, the marker excluded. The checker always compares at the precision recorded

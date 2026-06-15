@@ -1,10 +1,12 @@
-# Specification (version 1)
+# Specification (version 1.1)
 
-!!! note "This is the standard, version 1"
+!!! note "This is the standard, version 1.1"
     The marker grammar, attachment model, hashing, and recovery behaviour below
     are settled. A conforming document and a conforming tool agree on this
     document. The reference [linter](linter.md) and the resolver behind the
-    [attachment evaluation](evaluation.md) implement it.
+    [attachment evaluation](evaluation.md) implement it. Version 1.1 adds optional
+    CommonMark-tree attachment (a loose list or a blank-line-containing fence can
+    carry a single stay); the version 1 grammar and identity are unchanged.
 
 The key words MUST, SHOULD, MAY, and their negatives are used as in RFC 2119.
 
@@ -86,19 +88,28 @@ A marker MUST carry an `id`, SHOULD carry a `hash`, and MAY carry the
 
 ## Attachment model
 
-v1 attachment is defined over **blank-line-delimited blocks**, not a full
-CommonMark parse, which keeps the reference implementation dependency-free.
+Attachment binds each marker to the block it follows. A conforming tool segments a
+document into blocks one of two ways, which agree on every document that keeps lists
+tight and fences free of internal blank lines:
 
-- A **block** is a maximal run of non-blank lines bounded by blank lines or the
-  document edges.
+- **Blank-line segmentation** is the baseline and the reference default. A **block**
+  is a maximal run of non-blank lines bounded by blank lines or the document edges.
+  It needs no Markdown parser, so the reference implementation stays dependency-free.
+- **CommonMark-tree segmentation** (the version 1.1 refinement, below) makes a
+  **block** a node of the CommonMark block tree, so a loose list or a fence with
+  internal blank lines is one block. It needs a CommonMark parser and is an optional
+  extra.
+
+Both segmenters share the rest:
+
 - A marker binds to the block **immediately preceding** it. It MAY sit on the
-  block's last line or as its own blank-line-separated chunk after the block.
+  block's last line or as its own chunk after the block.
 - A marker with no preceding content block is an **orphan** (an error).
 - More than one marker MAY bind to one block.
 
-### Block granularity (v1)
+### Block granularity
 
-Every v1 stay identifies a **whole block**:
+Every stay identifies a **whole block**:
 
 - **List**: a marker after the list identifies the **whole list**. List-item
   identity is deferred to a later extension.
@@ -107,19 +118,27 @@ Every v1 stay identifies a **whole block**:
   identity is deferred.
 - **Blockquote**: a marker after the quote identifies the **whole quote**.
 
-### Known limits of the blank-line model
+### CommonMark-tree attachment (version 1.1)
 
-Two constructs contain blank lines and so split into multiple blocks. For the
-whole-block granularity above to hold in v1:
+The blank-line baseline splits two constructs that legitimately contain blank lines:
 
-- **Lists must be tight** (no blank lines between items). A loose list parses as
-  multiple blocks, so a trailing marker binds the last item, not the whole list.
-- **Fenced code blocks with internal blank lines** should not be relied on to carry
-  a single stay.
+- a **loose list** (blank lines between items) parses as one block per item, so a
+  trailing marker binds the last item, not the whole list;
+- a **fenced code block with internal blank lines** parses as multiple blocks, so a
+  fence cannot reliably carry one stay.
 
-CommonMark-tree attachment (handling loose lists, blank-line-containing fences, and
-nested blockquotes precisely) is the named refinement for a later version. It
-relaxes these limits without changing the grammar or the identity model.
+CommonMark-tree segmentation lifts both: parsing the CommonMark block tree makes a
+list, fence, or blockquote a single node regardless of internal blank lines, so the
+whole-block granularity above holds for them too. It changes only *what counts as one
+block*; the grammar, identity model, hashing, and the quote/margin recovery rule are
+unchanged.
+
+It is a **conservative extension**. On the subset where lists are tight and fences
+hold no blank lines the two segmenters produce identical blocks, so every document
+that was well-defined under version 1 resolves identically; CommonMark mode only adds
+defined single-stay attachment for the loose lists and blank-line fences version 1
+left out of scope. Because it needs a CommonMark parser it is an optional extra: a
+tool MAY implement either or both, and the dependency-free baseline stays the default.
 
 ## IDs
 
@@ -230,18 +249,20 @@ in-document stay and its address form.
   give a model nothing to "improve".
 - **Copy-paste duplication**: copy mints a new id; tools detect and repair
   duplicates.
-- **Granularity disagreement**: granularity pinned over blank-line blocks.
+- **Granularity disagreement**: granularity pinned to whole blocks; loose lists and
+  blank-line fences are handled by CommonMark-tree attachment (version 1.1).
 - **Scope creep into an annotation product**: core stays at identity + resolution;
   annotation is a separate, layered spec.
 
-## Non-goals (v1)
+## Non-goals
 
 - Annotation, comment storage, threads.
 - Transclusion / embedding.
 - Row-level table identity, list-item identity, inline-span identity.
-- Single-stay attachment for loose lists and blank-line-containing fences (deferred
-  to the CommonMark-tree refinement).
 - A backend, accounts, or a hosted registry; any global or cross-repo namespace.
+
+(Single-stay attachment for loose lists and blank-line-containing fences was a
+version 1 non-goal; version 1.1 resolves it with CommonMark-tree attachment.)
 
 ## Closest existing standards
 

@@ -55,7 +55,7 @@ plugins:
 nav:
   - Home: index.md
   - Prior art: prior-art.md
-  - Draft spec: spec.md
+  - Specification: spec.md
   - Examples: examples.md
   - Findings:
       - LLM marker survival: evaluation.md

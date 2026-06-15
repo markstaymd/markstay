@@ -11,12 +11,14 @@ This site states the problem, surveys the [prior art](prior-art.md), and gives t
 [specification](spec.md). Version 1 is settled: the marker grammar, attachment
 model, hashing, and recovery behaviour are fixed, and a reference
 [linter](linter.md) and an [evaluation](evaluation.md) back them with runnable code
-and measurements.
+and measurements. Version 1.1 adds optional CommonMark-tree attachment, a backward-
+compatible refinement so a loose list or a blank-line-containing fence can carry a
+single stay.
 
-!!! note "Status: version 1, settled"
-    The v1 surface is small and stable. It is also young: real-world use and
-    critique will shape later versions (finer-grained identity and CommonMark-tree
-    attachment are the named next steps). Issues and counter-arguments are welcome.
+!!! note "Status: version 1.1, settled"
+    The surface is small and stable. It is also young: real-world use and critique
+    will shape later versions (finer-grained, list-item and table-row identity is the
+    named next step). Issues and counter-arguments are welcome.
 
 ## The problem
 
@@ -106,18 +108,20 @@ The [specification](spec.md) fixes:
 
 - **Marker grammar**: a positional `stay:` id plus free-order `key=value`
   attributes, HTML-comment form for `.md` and a JSX-comment profile for MDX.
-- **Attachment**: markers bind to the blank-line-delimited block above them, at
-  whole-block granularity (whole list, fence, table, quote).
+- **Attachment**: markers bind to the block above them at whole-block granularity
+  (whole list, fence, table, quote), over blank-line-delimited blocks by default and
+  the CommonMark block tree under the version 1.1 refinement.
 - **Hashing**: an exact normalization rule, so two implementations agree on drift.
 - **Recovery**: a `TextQuoteSelector`-style ladder (marker → hash → quote) that
   surfaces a detached marker as outdated rather than guessing.
 - **The AI editing contract**: what an agent must do to preserve stays, made
   measurable by the post-edit [linter](linter.md).
 
-Deferred to later versions, by design: list-item and table-row identity, and
-CommonMark-tree attachment (so loose lists and blank-line-containing code fences can
-carry a single stay). The [FAQ](faq.md) covers the obvious objections (why not
-heading anchors, UUIDs, an external database, or HTML ids).
+Version 1.1 adds CommonMark-tree attachment, so a loose list or a blank-line-containing
+code fence can carry a single stay (an optional extra; the dependency-free blank-line
+path stays the default). Deferred to later versions, by design: list-item and
+table-row identity. The [FAQ](faq.md) covers the obvious objections (why not heading
+anchors, UUIDs, an external database, or HTML ids).
 
 ## Scope
 

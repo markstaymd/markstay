@@ -24,14 +24,19 @@ This market doubled in 2025.
 ## List
 
 A marker after a list identifies the **whole list**. List-item identity is deferred
-to a later extension, so v1 lists carry one stay for the list as a unit. The list
-must be tight (no blank lines between items) for the marker to bind the whole list.
+to a later extension, so a list carries one stay for the list as a unit.
 
 ```md
 - Retry failed requests with jitter.
 - Cap retries at five attempts.
 <!-- stay:retry-policy -->
 ```
+
+Under the dependency-free baseline the list must be **tight** (no blank lines between
+items) for the marker to bind the whole list; a loose list otherwise binds only its
+last item. The [version 1.1](spec.md#commonmark-tree-attachment-version-11)
+CommonMark-tree mode removes that constraint, binding a loose list (and a fence with
+internal blank lines) as a single block.
 
 ## Code fence
 

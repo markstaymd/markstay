@@ -146,11 +146,11 @@ def _strip_markers(text: str) -> str:
     return MDX_MARKER.sub("", HTML_MARKER.sub("", text))
 
 
-def parse_document(md: str) -> list[Block]:
-    """Parse into content blocks with their attached markers. Blocks are split on
-    blank lines; a chunk that is only markers attaches to the previous block."""
-    text = md.replace("\r\n", "\n").replace("\r", "\n")
-    chunks = []  # (start_line_1based, chunk_text)
+def _segment_blank_line(text: str) -> list[tuple[int, str]]:
+    """Baseline segmenter (SPEC.md §5): a block is a maximal run of non-blank
+    lines bounded by blank lines or the document edges. Dependency-free. Returns
+    (start_line_1based, chunk_text) spans in document order."""
+    chunks: list[tuple[int, str]] = []
     cur, start = [], None
     for idx, ln in enumerate(text.split("\n")):
         if ln.strip() == "":
@@ -163,6 +163,50 @@ def parse_document(md: str) -> list[Block]:
             cur.append(ln)
     if cur:
         chunks.append((start, "\n".join(cur)))
+    return chunks
+
+
+def _segment_commonmark(text: str) -> list[tuple[int, str]]:
+    """CommonMark-tree segmenter (SPEC.md §5.2, v1.1): a block is a node of the
+    CommonMark block tree, so a loose list, a fence with internal blank lines, or
+    a blockquote with internal blank lines is one span regardless of the blank
+    lines inside it. A marker on its own line is its own (html_block) span, which
+    the caller folds into the preceding content block exactly as it folds a
+    blank-line marker-only chunk, so the attach layer above is identical.
+
+    markdown-it-py is imported lazily so the default blank-line path keeps the
+    linter dependency-free; CommonMark mode is the optional extra."""
+    from markdown_it import MarkdownIt  # lazy: optional extra, see SPEC.md §5.2
+
+    lines = text.split("\n")
+    chunks: list[tuple[int, str]] = []
+    for t in MarkdownIt("commonmark").parse(text):
+        # Top-level block tokens carry a source line `map`; container openers
+        # (nesting=1) span the whole container, self-contained tokens (nesting=0)
+        # span themselves. Skip close tokens (nesting<0) and nested children
+        # (level>0) so each block contributes exactly one span.
+        if t.level == 0 and t.nesting >= 0 and t.map is not None:
+            s, e = t.map
+            chunks.append((s + 1, "\n".join(lines[s:e])))
+    return chunks
+
+
+def parse_document(md: str, mode: str = "blank-line") -> list[Block]:
+    """Parse into content blocks with their attached markers.
+
+    `mode='blank-line'` (default, dependency-free) splits on blank lines (SPEC.md
+    §5). `mode='commonmark'` (v1.1, needs markdown-it-py) splits on the CommonMark
+    block tree so loose lists and blank-line-containing fences attach as one block
+    (SPEC.md §5.2). The two agree on every document that keeps lists tight and
+    fences free of internal blank lines. In both modes a chunk that is only
+    markers attaches to the previous content block."""
+    text = md.replace("\r\n", "\n").replace("\r", "\n")
+    if mode == "commonmark":
+        chunks = _segment_commonmark(text)
+    elif mode == "blank-line":
+        chunks = _segment_blank_line(text)
+    else:
+        raise ValueError(f"unknown parse mode: {mode!r} (use 'blank-line' or 'commonmark')")
 
     blocks: list[Block] = []
     cidx = 0
@@ -183,9 +227,9 @@ def parse_document(md: str) -> list[Block]:
 
 # --- checks ---------------------------------------------------------------
 
-def lint_document(md: str) -> tuple[list[Block], list[Finding]]:
+def lint_document(md: str, mode: str = "blank-line") -> tuple[list[Block], list[Finding]]:
     """Well-formedness and intra-document invariants for a single file."""
-    blocks = parse_document(md)
+    blocks = parse_document(md, mode=mode)
     findings: list[Finding] = []
     seen: dict[str, int] = {}
 
@@ -231,12 +275,12 @@ def _id_index(blocks: list[Block]) -> dict[str, list[Block]]:
     return out
 
 
-def lint_diff(before_md: str, after_md: str) -> list[Finding]:
+def lint_diff(before_md: str, after_md: str, mode: str = "blank-line") -> list[Finding]:
     """Regeneration diff: what an edit did to the ids. Catches the AI-rewrite
     failure mode (dropped markers) plus duplication and exact-content relocation."""
-    before = {mid: blks[0] for mid, blks in _id_index(parse_document(before_md)).items()
+    before = {mid: blks[0] for mid, blks in _id_index(parse_document(before_md, mode=mode)).items()
               if len(blks) == 1}
-    after = _id_index(parse_document(after_md))
+    after = _id_index(parse_document(after_md, mode=mode))
     findings: list[Finding] = []
 
     for mid in before:
@@ -318,7 +362,13 @@ def main(argv=None) -> int:
                     help="baseline version; runs a regeneration diff against the "
                          "single FILE given (dropped/duplicated/relocated ids)")
     ap.add_argument("--json", action="store_true", help="emit findings as JSON")
+    ap.add_argument("--commonmark", action="store_true",
+                    help="segment blocks over the CommonMark tree (SPEC.md §5.2, "
+                         "v1.1): loose lists and blank-line fences attach as one "
+                         "block. Needs markdown-it-py; the default is the "
+                         "dependency-free blank-line model")
     args = ap.parse_args(argv)
+    mode = "commonmark" if args.commonmark else "blank-line"
 
     results = []  # (label, findings)
     if args.before:
@@ -327,10 +377,10 @@ def main(argv=None) -> int:
         before_md = Path(args.before).read_text()
         after_md = Path(args.files[0]).read_text()
         results.append((f"{args.before} -> {args.files[0]}",
-                        lint_diff(before_md, after_md)))
+                        lint_diff(before_md, after_md, mode=mode)))
     else:
         for f in args.files:
-            _, findings = lint_document(Path(f).read_text())
+            _, findings = lint_document(Path(f).read_text(), mode=mode)
             results.append((f, findings))
 
     if args.json:
