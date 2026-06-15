@@ -1,5 +1,6 @@
 site/
 .cache/
 .venv/
+.serena/
 __pycache__/
 *.pyc
