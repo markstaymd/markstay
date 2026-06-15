@@ -135,8 +135,11 @@ def find_markers(text: str, line_offset: int = 0) -> list[Marker]:
         idm = ID_RE.search(body)
         hm = HASH_RE.search(body)
         out.append(Marker(
+            # Hex is stored canonically lowercase: SPEC.md §8 makes hash
+            # comparison case-insensitive, so `hash=sha256:ABCD` must not read
+            # as drift against a lowercase computed digest.
             id=idm.group("id") if idm else None,
-            hash=hm.group("hash") if hm else None,
+            hash=hm.group("hash").lower() if hm else None,
             raw=full, syntax=syntax, line=line, malformed=idm is None,
         ))
     return out

@@ -10,7 +10,7 @@ A [reference checker](https://github.com/markstaymd/markstay/tree/master/tools/l
 implements the rules below. Its default path is dependency-free (Python standard
 library only) and fully local: no network, no credentials. It is meant to run as a git
 pre-commit hook or as the post-edit step of an agent that edits markstay documents. The
-code ships with the site repo (`tools/linter/`, 19/19 self-tests in `test_lint.py`).
+code ships with the site repo (`tools/linter/`, 20/20 self-tests in `test_lint.py`).
 The one optional extra is `--commonmark` mode ([version 1.1](spec.md#commonmark-tree-attachment-version-11)),
 which needs `markdown-it-py`.
 

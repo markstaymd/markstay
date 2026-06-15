@@ -26,6 +26,17 @@ def test_clean_doc_with_correct_hash():
     assert not L.has_errors(findings)
 
 
+def test_hash_uppercase_hex_no_drift():
+    # SPEC.md §8: hex comparison is case-insensitive. A marker storing the hash
+    # in uppercase must not be reported as drifted against the lowercase digest.
+    body = "Users authenticate with an API key in the Authorization header."
+    h = L.body_hash(body, 4).upper()
+    md = f"{body}\n<!-- stay:8f24 hash=sha256:{h} -->\n"
+    _, findings = L.lint_document(md)
+    assert codes(findings) == [], codes(findings)
+    assert not L.has_errors(findings)
+
+
 def test_marker_no_blank_line_attaches_to_block():
     md = "Just one paragraph.\n<!-- stay:p1 -->\n"
     blocks = L.parse_document(md)

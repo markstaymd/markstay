@@ -31,7 +31,7 @@ ids with a non-zero exit, so it can gate a git hook or an agent's post-edit step
 
 ```bash
 cd linter
-python3 test_lint.py                       # 19/19 self-tests
+python3 test_lint.py                       # 20/20 self-tests
 python3 markstay_lint.py examples/annotated.md
 python3 markstay_lint.py --before examples/annotated.md examples/regenerated.md
 ```
