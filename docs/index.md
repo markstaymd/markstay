@@ -1,6 +1,7 @@
 # markstay
 
-**A specification for giving logical blocks of Markdown a stable identity that survives editing.**
+A specification for giving logical blocks of Markdown a stable identity that survives editing.
+{ .lead }
 
 markstay is a small, source-native identity layer for Markdown. It gives a logical
 block of content a **stay**: a stable address other tools can point at and keep

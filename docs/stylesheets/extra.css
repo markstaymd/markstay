@@ -1,0 +1,129 @@
+/* markstay , restrained standards-doc theme over Material for MkDocs.
+   Goal: reads like an RFC / specification, not a product landing page.
+   Levers: de-saturated slate palette, documentation typography, less chrome. */
+
+/* ---- Light scheme ------------------------------------------------------ */
+[data-md-color-scheme="default"] {
+  /* Slate header / primary, not the default saturated indigo. */
+  --md-primary-fg-color:        #38444f;
+  --md-primary-fg-color--light: #4a5862;
+  --md-primary-fg-color--dark:  #2a333b;
+  --md-primary-bg-color:        #ffffff;
+  --md-primary-bg-color--light: rgba(255, 255, 255, 0.72);
+
+  /* Restrained blue accent, supports navigation rather than dominating. */
+  --md-accent-fg-color:         #3b6ea5;
+  --md-accent-fg-color--transparent: rgba(59, 110, 165, 0.1);
+
+  /* Warm-white page, near-black text. */
+  --md-default-bg-color:        #fcfcfb;
+  --md-default-fg-color:        rgba(22, 26, 30, 0.87);
+  --md-default-fg-color--light: rgba(22, 26, 30, 0.60);
+  --md-default-fg-color--lighter: rgba(22, 26, 30, 0.32);
+
+  /* Links: a calm spec-blue, distinct from the slate chrome. */
+  --md-typeset-a-color:         #2f6690;
+}
+
+/* ---- Dark scheme ------------------------------------------------------- */
+[data-md-color-scheme="slate"] {
+  /* Neutralise Material's blue-tinted slate toward a plain charcoal. */
+  --md-hue: 215;
+  --md-primary-fg-color:        #2b333b;
+  --md-primary-fg-color--light: #3a444d;
+  --md-primary-fg-color--dark:  #20262c;
+  --md-primary-bg-color:        #e9ecef;
+
+  --md-accent-fg-color:         #7eb0d6;
+  --md-accent-fg-color--transparent: rgba(126, 176, 214, 0.1);
+
+  --md-default-bg-color:        #1b1f24;
+  --md-typeset-a-color:         #82b4dd;
+}
+
+/* ---- Chrome: less app, more document ----------------------------------- */
+.md-header {
+  box-shadow: none;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.10);
+}
+[data-md-color-scheme="slate"] .md-header {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+.md-tabs {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+}
+/* The § logo reads as a glyph, not an icon. */
+.md-header__button.md-logo img {
+  height: 1.4rem;
+  width: auto;
+}
+
+/* ---- Typography: long-form spec reading -------------------------------- */
+.md-typeset {
+  line-height: 1.72;
+  font-size: 0.82rem;
+}
+.md-typeset h1 {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--md-default-fg-color);
+}
+.md-typeset h2 {
+  font-weight: 650;
+  letter-spacing: -0.005em;
+  margin-top: 2.4em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--md-default-fg-color--lighter);
+}
+.md-typeset h3 {
+  font-weight: 600;
+}
+/* A lead paragraph for page intros (applied via attr_list). */
+.md-typeset .lead {
+  font-size: 1.05em;
+  color: var(--md-default-fg-color--light);
+  line-height: 1.6;
+}
+
+/* ---- Tables: spec tables, lighter rules -------------------------------- */
+.md-typeset table:not([class]) {
+  border: 1px solid var(--md-default-fg-color--lighter);
+  box-shadow: none;
+}
+.md-typeset table:not([class]) th {
+  background: rgba(56, 68, 79, 0.05);
+  font-weight: 650;
+}
+[data-md-color-scheme="slate"] .md-typeset table:not([class]) th {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* ---- Code: calmer inline code ------------------------------------------ */
+.md-typeset code {
+  border-radius: 3px;
+}
+
+/* ---- Admonitions: spec notes, not bright callouts ---------------------- */
+/* Retint the default-blue `note` toward the slate chrome so the one callout
+   on a page reads as a specification note rather than a saturated box. */
+.md-typeset .admonition.note,
+.md-typeset details.note {
+  border-color: var(--md-primary-fg-color--light);
+}
+.md-typeset .note > .admonition-title,
+.md-typeset .note > summary {
+  background-color: rgba(56, 68, 79, 0.06);
+}
+[data-md-color-scheme="slate"] .md-typeset .note > .admonition-title,
+[data-md-color-scheme="slate"] .md-typeset .note > summary {
+  background-color: rgba(255, 255, 255, 0.04);
+}
+.md-typeset .note > .admonition-title::before,
+.md-typeset .note > summary::before {
+  background-color: var(--md-primary-fg-color--light);
+}
+
+/* ---- Footer: quieter ---------------------------------------------------- */
+.md-footer {
+  background-color: var(--md-primary-fg-color--dark);
+}
