@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+# markstay adoption hook  (do not edit this line: install.sh / --uninstall match on it)
+#
+# Pre-commit gate for markstay markers, mitigation #2 from the marker-survival
+# eval turned into something a repo installs. For every staged Markdown file it:
+#
+#   - lints the staged version for well-formedness (malformed / orphan / duplicate
+#     id, hash drift), and
+#   - runs a regeneration diff of HEAD -> staged, catching the AI-rewrite failure
+#     mode: a stay dropped, duplicated, or relocated by the edit being committed.
+#
+# Any error-level finding blocks the commit (SPEC.md §16: "exit non-zero so it can
+# gate a commit hook"). Hash drift is a warning and does not block. The linter is
+# the vendored copy at <repo>/.markstay/markstay_lint.py (installed by install.sh),
+# so the hook stays dependency-free; set MARKSTAY_MODE=commonmark to segment over
+# the CommonMark tree (SPEC.md §5.2, needs markdown-it-py). Bypass once with
+# `git commit --no-verify`.
+
+import os
+import subprocess
+import sys
+
+
+def git(*args):
+    return subprocess.run(["git", *args], capture_output=True, text=True)
+
+
+def main() -> int:
+    root = git("rev-parse", "--show-toplevel").stdout.strip()
+    if not root:
+        return 0  # not in a work tree; nothing to do
+
+    sys.path.insert(0, os.path.join(root, ".markstay"))
+    try:
+        import markstay_lint as L
+    except ImportError:
+        sys.stderr.write(
+            "markstay hook: linter not found at .markstay/markstay_lint.py. "
+            "Re-run the markstay install.sh to vendor it, or remove the hook. "
+            "Skipping the markstay check for this commit.\n")
+        return 0
+
+    mode = os.environ.get("MARKSTAY_MODE", "blank-line")
+
+    listing = git("diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z")
+    files = [f for f in listing.stdout.split("\0")
+             if f.endswith((".md", ".markdown"))]
+    if not files:
+        return 0
+
+    reports = []
+    any_error = False
+    for f in files:
+        staged = git("show", f":{f}").stdout
+        head_res = git("show", f"HEAD:{f}")
+        head = head_res.stdout if head_res.returncode == 0 else None
+        try:
+            _, findings = L.lint_document(staged, mode=mode)
+            findings = list(findings)
+            if head is not None:
+                findings += L.lint_diff(head, staged, mode=mode)
+        except ImportError:
+            sys.stderr.write(
+                "markstay hook: MARKSTAY_MODE=commonmark needs markdown-it-py "
+                "(pip install markdown-it-py), or unset MARKSTAY_MODE for the "
+                "dependency-free default.\n")
+            return 1
+        if findings:
+            reports.append(L.render_text(f, findings))
+            if L.has_errors(findings):
+                any_error = True
+
+    if reports:
+        sys.stderr.write("\n".join(reports) + "\n")
+    if any_error:
+        sys.stderr.write(
+            "\nmarkstay: commit blocked, the edit above breaks a stay "
+            "(dropped / duplicated / relocated / malformed). Fix it, or bypass "
+            "once with `git commit --no-verify`.\n")
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
