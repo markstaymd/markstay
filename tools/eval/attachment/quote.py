@@ -29,6 +29,7 @@ Design notes
 from __future__ import annotations
 
 import re
+import string
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 
@@ -37,12 +38,22 @@ from difflib import SequenceMatcher
 # spec records the number this eval measured.
 CONTEXT_CHARS = 48
 
+# §9 matching normalization is pinned to ASCII for exact cross-implementation
+# agreement (SPEC.md §9, SPEC_DECISIONS.md): lowercase only ASCII A-Z and collapse
+# only ASCII whitespace. Non-ASCII characters pass through unchanged and identical
+# in every implementation. Recovery is evidence, not identity (§2.1), so an
+# ASCII-only fold is sufficient and avoids the Unicode casefold / `\s` divergences
+# between languages.
+_ASCII_WS = " \t\n\r\f\v"
+_ASCII_LOWER = str.maketrans(string.ascii_uppercase, string.ascii_lowercase)
+
 
 def normalize(text: str) -> str:
-    """Casefold + collapse whitespace. Matching is over meaning-bearing text, so
-    capitalization and reflowed line breaks (very common after an LLM edit) must
-    not register as differences."""
-    return re.sub(r"\s+", " ", text.strip()).casefold()
+    """Lowercase ASCII letters and collapse ASCII whitespace runs to a single
+    space, then trim (SPEC.md §9). Capitalization and reflowed line breaks (very
+    common after an LLM edit) must not register as differences. ASCII-only so a
+    second implementation reproduces it exactly without Unicode case data."""
+    return re.sub(r"[ \t\n\r\f\v]+", " ", text.strip(_ASCII_WS)).translate(_ASCII_LOWER)
 
 
 @dataclass

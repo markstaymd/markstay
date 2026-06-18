@@ -103,10 +103,14 @@ class Finding:
 
 def normalize_body(text: str) -> str:
     """Normalization for hashing (SPEC.md §8): LF endings, per-line trailing
-    whitespace stripped, leading/trailing blank lines dropped. Markers are
-    excluded upstream (they are stripped before a block's content is hashed)."""
+    ASCII whitespace stripped, leading/trailing blank lines dropped. Markers are
+    excluded upstream (they are stripped before a block's content is hashed).
+
+    The trailing-whitespace set is ASCII (space, tab, form feed, vertical tab),
+    not Python's Unicode `str.rstrip()`, so a second implementation reproduces the
+    hash exactly without an ICU table (SPEC.md §8; see SPEC_DECISIONS.md)."""
     t = text.replace("\r\n", "\n").replace("\r", "\n")
-    lines = [ln.rstrip() for ln in t.split("\n")]
+    lines = [ln.rstrip(" \t\f\v") for ln in t.split("\n")]
     while lines and lines[0] == "":
         lines.pop(0)
     while lines and lines[-1] == "":
@@ -132,14 +136,19 @@ def find_markers(text: str, line_offset: int = 0) -> list[Marker]:
     out = []
     for start, full, syntax, body in raw:
         line = line_offset + text[:start].count("\n") + 1
-        idm = ID_RE.search(body)
+        # `.match` anchors the id to the FIRST token after `stay:` (SPEC.md §4:
+        # the id is positional). `.search` would rescue a later `stay:ID` in a
+        # body whose first token is a bare `k=v` (e.g. `stay:note=hello stay:ok`),
+        # wrongly reading it as well-formed; the first token containing `=` is
+        # malformed and the marker has no id.
+        idm = ID_RE.match(body)
         hm = HASH_RE.search(body)
         out.append(Marker(
             # Hex is stored canonically lowercase: SPEC.md §8 makes hash
             # comparison case-insensitive, so `hash=sha256:ABCD` must not read
             # as drift against a lowercase computed digest.
             id=idm.group("id") if idm else None,
-            hash=hm.group("hash").lower() if hm else None,
+            hash=hm.group("hash").lower() if hm else None,  # see ID_RE.match note
             raw=full, syntax=syntax, line=line, malformed=idm is None,
         ))
     return out
@@ -156,7 +165,7 @@ def _segment_blank_line(text: str) -> list[tuple[int, str]]:
     chunks: list[tuple[int, str]] = []
     cur, start = [], None
     for idx, ln in enumerate(text.split("\n")):
-        if ln.strip() == "":
+        if ln.strip(" \t\f\v") == "":  # blank = only ASCII whitespace (SPEC.md §5)
             if cur:
                 chunks.append((start, "\n".join(cur)))
                 cur, start = [], None
@@ -215,7 +224,7 @@ def parse_document(md: str, mode: str = "blank-line") -> list[Block]:
     cidx = 0
     for start, chunk in chunks:
         markers = find_markers(chunk, line_offset=start - 1)
-        content = _strip_markers(chunk).strip()
+        content = _strip_markers(chunk).strip(" \t\n\r\f\v")  # ASCII strip (SPEC.md §5/§8)
         if content == "":
             # marker-only chunk: attach to the previous content block if any
             if blocks and blocks[-1].index >= 0:
