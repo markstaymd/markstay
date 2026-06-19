@@ -70,6 +70,36 @@ an anchor **outdated** rather than silently reattaching it to a nearby block. ma
 is an attempt to make that same block-id idea source-native and tool-neutral, so it
 lives in the Markdown text instead of a single application's database.
 
+## Block editors with CRDT identity
+
+The richest production analogue is a class of block-based editors. AFFiNE, built on
+the open-source BlockSuite engine, is the clearest example: every document and block
+is a node with a stable id. That is strong evidence the problem is worth solving. An
+editor at that scale needs durable sub-document identity for collaboration, comments,
+and references, and it has it.
+
+The difference is where the id lives. BlockSuite persists block ids in a YJS CRDT
+store, so identity is a property of the editor's data model and is reachable only
+through that runtime. markstay puts the id in the Markdown source itself, so identity
+is a property of the text and survives outside any one editor or database.
+
+That difference is sharpest at the export boundary. BlockSuite serialises content two
+ways: a lossless snapshot (JSON) that carries every block id, and lossy adapters to
+Markdown, HTML, and plain text. In its own words, "adapters may result in data loss
+during the conversion process, as the target format might not support all the
+structures present in the original data." The Markdown adapter builds an ordinary
+CommonMark/GFM tree and stringifies it; that format has no slot for a block id and the
+adapter writes none, so a block's id does not survive export to Markdown. Recovering
+it means returning to the CRDT document, which is why a separate reader library exists
+to walk the store and pull the ids back out.
+
+This is the clearest statement of what markstay is for. A CRDT editor cannot hand you
+a Markdown file whose blocks keep their identity, because the moment the content
+becomes plain text the ids are gone. markstay is the layer that keeps the id in the
+`.md`. The two are not really competitors: one owns identity inside an application,
+the other carries it in portable text. markstay is what lets a block editor's identity
+survive the trip out to a file.
+
 ## Markdown as the AI interchange format
 
 Markdown has become the practical surface for model input and output: it is plain
@@ -97,6 +127,9 @@ markstay probes.
 - **Block-database precedent**: Notion comments parented by block id, plus
   Logseq / Roam block references.
   <https://developers.notion.com/reference/comment-object>
+- **Block editor with CRDT identity**: AFFiNE / BlockSuite, where every block has a
+  stable id persisted in a YJS CRDT store, lost on export to Markdown.
+  <https://blocksuite.io/guide/adapter.html>
 - **Revision / stale-state precedent**: GitHub review comments, anchored by commit,
   path, side, and line, with an outdated state.
   <https://docs.github.com/en/rest/pulls/comments>
