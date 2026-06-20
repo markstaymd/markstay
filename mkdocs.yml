@@ -61,9 +61,11 @@ plugins:
 
 nav:
   - Home: index.md
-  - Prior art: prior-art.md
+  - Get started: get-started.md
   - Specification: spec.md
+  - Implementations: implementations.md
   - Examples: examples.md
+  - Prior art: prior-art.md
   - Findings:
       - LLM marker survival: evaluation.md
       - Reference linter: linter.md

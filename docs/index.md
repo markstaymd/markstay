@@ -12,9 +12,10 @@ This site states the problem, surveys the [prior art](prior-art.md), and gives t
 [specification](spec.md). Version 1 is settled: the marker grammar, attachment
 model, hashing, and recovery behaviour are fixed, and a reference
 [linter](linter.md) and an [evaluation](evaluation.md) back them with runnable code
-and measurements. Version 1.1 adds optional CommonMark-tree attachment, a backward-
-compatible refinement so a loose list or a blank-line-containing fence can carry a
-single stay.
+and measurements. Four conforming [implementations](implementations.md) for Python,
+JavaScript, and Rust back the spec, each gated by the same conformance corpus. Version 1.1 adds
+optional CommonMark-tree attachment, a backward-compatible refinement so a loose list
+or a blank-line-containing fence can carry a single stay.
 
 !!! note "Status: version 1.1, settled"
     The surface is small and stable. It is also young: real-world use and critique

@@ -58,37 +58,13 @@ markstay-lint --json --before OLD.md NEW.md
 markstay-lint --commonmark FILE
 ```
 
-## Adopting it in a repo
+## Install it as a commit hook
 
-The [`tools/adopt/`](https://github.com/markstaymd/markstay/tree/master/tools/adopt)
-directory packages the two mandatory mitigations so a repo can pick them up without
-wiring anything by hand.
-
-**The pre-commit hook** (this checker, mitigation #2). An installer vendors the
-linter into the target repo and installs a git pre-commit hook that lints each
-staged Markdown file and runs the regeneration diff against the committed version,
-so a commit that drops, duplicates, or relocates a stay is blocked before it lands.
-Hash drift is a warning and does not block; files with no markstay markers pass
-silently.
-
-```bash
-cd tools/adopt
-./install.sh /path/to/your/repo        # vendor the linter + install the hook
-# now: edit a .md, drop a stay: marker, `git commit` -> blocked
-```
-
-**The preservation instruction** (mitigation #1). The
-[AI editing contract](spec.md#ai-editing-contract) is only honoured if the editing
-agent is told to honour it, the single biggest lever on whether markers survive a
-rewrite. `markstay_preserve.py` is the canonical source of that instruction:
-
-```bash
-python3 markstay_preserve.py                       # print it (seed a system prompt / AGENTS.md)
-python3 markstay_preserve.py --wrap notes.md       # wrap a doc into a ready editing prompt
-```
-
-Together they are the durable deliverable the [evaluation](evaluation.md) pointed
-at: instruct the agent up front, then catch any silent loss at commit time.
+To wire this checker into a repo as a git pre-commit hook (alongside the §11
+preservation instruction), see [Get started](get-started.md). The
+[`tools/adopt/`](https://github.com/markstaymd/markstay/tree/master/tools/adopt)
+installer vendors the linter and blocks any commit that drops, duplicates, or
+relocates a stay.
 
 ## Scope and conventions
 
