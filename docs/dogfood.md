@@ -98,7 +98,9 @@ corroborate the public-corpus shape at headings-only granularity:
   were marker strips on content that survived.
 
 The private run is useful because it uses actively maintained tracking docs. The public
-FastAPI and Rust Book runs are the evidence to cite and inspect.
+FastAPI and Rust Book runs are the evidence to cite and inspect: the corpus, harness,
+and every per-cell result ship in
+[`tools/eval/dogfood/`](https://github.com/markstaymd/markstay/tree/master/tools/eval/dogfood).
 
 ## The boundary: rows and bullets
 
@@ -140,3 +142,27 @@ blocks or a future intra-block addressing extension.
   are exact; the semantic "did this section survive?" call is an LLM judgment.
 - The public-corpus run used two Claude models. The earlier marker-survival study
   covers more vendor families and shows the same broad instruction effect.
+
+## Reproduce it
+
+The corpus and the per-cell results ship in
+[`tools/eval/dogfood/`](https://github.com/markstaymd/markstay/tree/master/tools/eval/dogfood),
+so the numbers above are inspectable with no clone, no network, and no API key, the
+same way the marker-survival eval ships its `results.json`. A key is only needed to
+re-run the models:
+
+```bash
+pip install markstay                  # the published stamper (or: npm install -g markstay)
+python prepare_public_corpus.py       # rebuild corpus/ from the pinned upstream commits
+
+export ANTHROPIC_API_KEY=...          # only needed to re-run the models
+python run_dogfood.py --docs-dir corpus/fastapi   --sample 12 \
+    --models sonnet,haiku --arms naive,instructed --preserve-file PRESERVE.md
+python run_dogfood.py --docs-dir corpus/rust-book --sample 12 \
+    --models sonnet,haiku --arms naive,instructed --preserve-file PRESERVE.md
+```
+
+The corpus is two pinned, stamped samples (FastAPI docs and the Rust Book; commits and
+attribution in `corpus/manifest.json` and `corpus/NOTICE`). Stamping mints fresh ids
+each run, so a regenerated corpus is structurally identical to the committed copy and
+the results reproduce within model noise.
