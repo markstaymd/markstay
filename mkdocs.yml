@@ -68,6 +68,6 @@ nav:
   - Prior art: prior-art.md
   - Findings:
       - LLM marker survival: evaluation.md
-      - Living-document case study: case-study.md
+      - Public dogfood case study: dogfood.md
       - Reference linter: linter.md
   - FAQ: faq.md

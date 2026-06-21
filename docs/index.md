@@ -19,8 +19,10 @@ or a blank-line-containing fence can carry a single stay.
 
 !!! note "Status: version 1.1, settled"
     The surface is small and stable. It is also young: real-world use and critique
-    will shape later versions (finer-grained, list-item and table-row identity is the
-    named next step). Issues and counter-arguments are welcome.
+    will shape later versions. A dogfood run found row and bullet loss about 30x more
+    often than section loss when those items shared one block-level stay, so
+    finer-grained list-item and table-row identity is the named next step. Issues and
+    counter-arguments are welcome.
 
 ## The problem
 
@@ -62,8 +64,10 @@ be audited afterwards (which ids changed, which were dropped).
 
 This is the case markstay is built around. It is also where the idea is most fragile,
 because the same agents that would *use* the ids are the ones most likely to *destroy*
-them during a rewrite. That risk was measured, not assumed; see
-[the findings](evaluation.md).
+them during a rewrite. That risk was measured, not assumed: see
+[the findings](evaluation.md) on whether markers survive an edit at all, and the
+[public dogfood case study](dogfood.md) on what keeps section ids stable in
+practice (the preservation instruction, more than the post-edit linter).
 
 ## markstay in one example
 
