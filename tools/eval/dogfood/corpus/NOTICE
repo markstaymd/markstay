@@ -1,0 +1,16 @@
+This directory bundles documentation excerpts from third-party open-source
+projects, sampled at the pinned commits in manifest.json and stamped with
+markstay markers for the dogfood study. The files are unmodified except for
+the inserted `<!-- stay:... -->` markers.
+
+fastapi/  (https://github.com/fastapi/fastapi)
+  Copyright (c) 2018 Sebastian Ramirez
+  Licensed under MIT.
+  Commit 0cb4a8e284b450abbccb71c543ad7757de46c0b2
+  License: https://github.com/fastapi/fastapi/blob/master/LICENSE
+
+rust-book/  (https://github.com/rust-lang/book)
+  Copyright (c) 2010 The Rust Project Developers
+  Licensed under MIT OR Apache-2.0.
+  Commit 05d114287b7d6f6c9253d5242540f00fbd6172ab
+  License: https://github.com/rust-lang/book#license

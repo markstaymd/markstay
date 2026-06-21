@@ -1,0 +1,143 @@
+# Generic Types, Traits, and Lifetimes
+<!-- stay:PawyH9n7 hash=sha256:11acebef0e7b -->
+
+Every programming language has tools for effectively handling the duplication
+of concepts. In Rust, one such tool is _generics_: abstract stand-ins for
+concrete types or other properties. We can express the behavior of generics or
+how they relate to other generics without knowing what will be in their place
+when compiling and running the code.
+<!-- stay:pwpOcvp3 hash=sha256:76e902044c09 -->
+
+Functions can take parameters of some generic type, instead of a concrete type
+like `i32` or `String`, in the same way they take parameters with unknown
+values to run the same code on multiple concrete values. In fact, we already
+used generics in Chapter 6 with `Option<T>`, in Chapter 8 with `Vec<T>` and
+`HashMap<K, V>`, and in Chapter 9 with `Result<T, E>`. In this chapter, you’ll
+explore how to define your own types, functions, and methods with generics!
+<!-- stay:T7yh5nva hash=sha256:8b0ef81299e1 -->
+
+First, we’ll review how to extract a function to reduce code duplication. We’ll
+then use the same technique to make a generic function from two functions that
+differ only in the types of their parameters. We’ll also explain how to use
+generic types in struct and enum definitions.
+<!-- stay:E0gEANC8 hash=sha256:67a720fc3ff2 -->
+
+Then, you’ll learn how to use traits to define behavior in a generic way. You
+can combine traits with generic types to constrain a generic type to accept
+only those types that have a particular behavior, as opposed to just any type.
+<!-- stay:EvVhpzld hash=sha256:46f917e73a22 -->
+
+Finally, we’ll discuss _lifetimes_: a variety of generics that give the
+compiler information about how references relate to each other. Lifetimes allow
+us to give the compiler enough information about borrowed values so that it can
+ensure that references will be valid in more situations than it could without
+our help.
+<!-- stay:5YnB5epu hash=sha256:cebcbfce97d3 -->
+
+## Removing Duplication by Extracting a Function
+<!-- stay:UvlMzuKK hash=sha256:c6fe22228b18 -->
+
+Generics allow us to replace specific types with a placeholder that represents
+multiple types to remove code duplication. Before diving into generics syntax,
+let’s first look at how to remove duplication in a way that doesn’t involve
+generic types by extracting a function that replaces specific values with a
+placeholder that represents multiple values. Then, we’ll apply the same
+technique to extract a generic function! By looking at how to recognize
+duplicated code you can extract into a function, you’ll start to recognize
+duplicated code that can use generics.
+<!-- stay:vk6tdgEc hash=sha256:1d927b6e1b91 -->
+
+We’ll begin with the short program in Listing 10-1 that finds the largest
+number in a list.
+<!-- stay:2CA3xuI3 hash=sha256:8072ce17c7c9 -->
+
+<Listing number="10-1" file-name="src/main.rs" caption="Finding the largest number in a list of numbers">
+<!-- stay:Ge8JVxWs hash=sha256:96d210866230 -->
+
+```rust
+{{#rustdoc_include ../listings/ch10-generic-types-traits-and-lifetimes/listing-10-01/src/main.rs:here}}
+```
+<!-- stay:hKb8hg9K hash=sha256:cda1179b0013 -->
+
+</Listing>
+<!-- stay:BfMpY7m5 hash=sha256:b58d16a1f9c0 -->
+
+We store a list of integers in the variable `number_list` and place a reference
+to the first number in the list in a variable named `largest`. We then iterate
+through all the numbers in the list, and if the current number is greater than
+the number stored in `largest`, we replace the reference in that variable.
+However, if the current number is less than or equal to the largest number seen
+so far, the variable doesn’t change, and the code moves on to the next number
+in the list. After considering all the numbers in the list, `largest` should
+refer to the largest number, which in this case is 100.
+<!-- stay:HCzxNXwG hash=sha256:233bda69b454 -->
+
+We’ve now been tasked with finding the largest number in two different lists of
+numbers. To do so, we can choose to duplicate the code in Listing 10-1 and use
+the same logic at two different places in the program, as shown in Listing 10-2.
+<!-- stay:VwFgfBaS hash=sha256:5e755c7ce817 -->
+
+<Listing number="10-2" file-name="src/main.rs" caption="Code to find the largest number in *two* lists of numbers">
+<!-- stay:Ff9rCM0T hash=sha256:1cd7accfe1e0 -->
+
+```rust
+{{#rustdoc_include ../listings/ch10-generic-types-traits-and-lifetimes/listing-10-02/src/main.rs}}
+```
+<!-- stay:FS1enHKJ hash=sha256:ee0725030e47 -->
+
+</Listing>
+<!-- stay:pZ9AVNcE hash=sha256:b58d16a1f9c0 -->
+
+Although this code works, duplicating code is tedious and error-prone. We also
+have to remember to update the code in multiple places when we want to change
+it.
+<!-- stay:EanNiBxH hash=sha256:60ec39e5f908 -->
+
+To eliminate this duplication, we’ll create an abstraction by defining a
+function that operates on any list of integers passed in as a parameter. This
+solution makes our code clearer and lets us express the concept of finding the
+largest number in a list abstractly.
+<!-- stay:Pgc3UU64 hash=sha256:ea83d0c5dfa8 -->
+
+In Listing 10-3, we extract the code that finds the largest number into a
+function named `largest`. Then, we call the function to find the largest number
+in the two lists from Listing 10-2. We could also use the function on any other
+list of `i32` values we might have in the future.
+<!-- stay:iGjPyY3a hash=sha256:fb57538aa9ae -->
+
+<Listing number="10-3" file-name="src/main.rs" caption="Abstracted code to find the largest number in two lists">
+<!-- stay:clFQB5J1 hash=sha256:aa2745e2a54e -->
+
+```rust
+{{#rustdoc_include ../listings/ch10-generic-types-traits-and-lifetimes/listing-10-03/src/main.rs:here}}
+```
+<!-- stay:AOmN72K6 hash=sha256:4d906f3eec5c -->
+
+</Listing>
+<!-- stay:9noKC8JL hash=sha256:b58d16a1f9c0 -->
+
+The `largest` function has a parameter called `list`, which represents any
+concrete slice of `i32` values we might pass into the function. As a result,
+when we call the function, the code runs on the specific values that we pass
+in.
+<!-- stay:DXCfO7pL hash=sha256:a4714176b34d -->
+
+In summary, here are the steps we took to change the code from Listing 10-2 to
+Listing 10-3:
+<!-- stay:eooRtJKk hash=sha256:a8f989c23b89 -->
+
+1. Identify duplicate code.
+1. Extract the duplicate code into the body of the function, and specify the
+   inputs and return values of that code in the function signature.
+1. Update the two instances of duplicated code to call the function instead.
+<!-- stay:s3xiPmv8 hash=sha256:2c8f929c1a3f -->
+
+Next, we’ll use these same steps with generics to reduce code duplication. In
+the same way that the function body can operate on an abstract `list` instead
+of specific values, generics allow code to operate on abstract types.
+<!-- stay:tUbfMUGt hash=sha256:84bc039db689 -->
+
+For example, say we had two functions: one that finds the largest item in a
+slice of `i32` values and one that finds the largest item in a slice of `char`
+values. How would we eliminate that duplication? Let’s find out!
+<!-- stay:ZGCFVNlg hash=sha256:d205421a8a22 -->

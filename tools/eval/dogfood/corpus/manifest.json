@@ -1,0 +1,117 @@
+{
+  "stamp_cmd": "node cli.js",
+  "corpora": {
+    "fastapi": {
+      "repo": "https://github.com/fastapi/fastapi",
+      "commit": "0cb4a8e284b450abbccb71c543ad7757de46c0b2",
+      "subdir": "docs/en/docs",
+      "license": "MIT",
+      "files": [
+        {
+          "doc": "advanced/path-operation-advanced-configuration.md",
+          "stays": 70
+        },
+        {
+          "doc": "advanced/additional-responses.md",
+          "stays": 60
+        },
+        {
+          "doc": "tutorial/extra-models.md",
+          "stays": 82
+        },
+        {
+          "doc": "tutorial/body.md",
+          "stays": 70
+        },
+        {
+          "doc": "tutorial/request-files.md",
+          "stays": 79
+        },
+        {
+          "doc": "tutorial/body-nested-models.md",
+          "stays": 88
+        },
+        {
+          "doc": "how-to/custom-docs-ui-assets.md",
+          "stays": 76
+        },
+        {
+          "doc": "advanced/openapi-callbacks.md",
+          "stays": 79
+        },
+        {
+          "doc": "advanced/events.md",
+          "stays": 80
+        },
+        {
+          "doc": "fastapi-people.md",
+          "stays": 127
+        },
+        {
+          "doc": "tutorial/schema-extra-example.md",
+          "stays": 90
+        },
+        {
+          "doc": "advanced/advanced-dependencies.md",
+          "stays": 81
+        }
+      ]
+    },
+    "rust-book": {
+      "repo": "https://github.com/rust-lang/book",
+      "commit": "05d114287b7d6f6c9253d5242540f00fbd6172ab",
+      "subdir": "src",
+      "license": "MIT OR Apache-2.0",
+      "files": [
+        {
+          "doc": "ch10-00-generics.md",
+          "stays": 28
+        },
+        {
+          "doc": "ch12-01-accepting-command-line-arguments.md",
+          "stays": 29
+        },
+        {
+          "doc": "ch01-01-installation.md",
+          "stays": 47
+        },
+        {
+          "doc": "ch06-03-if-let.md",
+          "stays": 38
+        },
+        {
+          "doc": "ch15-03-drop.md",
+          "stays": 36
+        },
+        {
+          "doc": "ch07-02-defining-modules-to-control-scope-and-privacy.md",
+          "stays": 37
+        },
+        {
+          "doc": "ch20-04-advanced-functions-and-closures.md",
+          "stays": 46
+        },
+        {
+          "doc": "ch09-01-unrecoverable-errors-with-panic.md",
+          "stays": 31
+        },
+        {
+          "doc": "ch18-01-what-is-oo.md",
+          "stays": 29
+        },
+        {
+          "doc": "ch11-02-running-tests.md",
+          "stays": 51
+        },
+        {
+          "doc": "ch13-03-improving-our-io-project.md",
+          "stays": 54
+        },
+        {
+          "doc": "ch03-01-variables-and-mutability.md",
+          "stays": 44
+        }
+      ]
+    }
+  }
+}
