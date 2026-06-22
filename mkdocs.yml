@@ -66,6 +66,7 @@ nav:
   - Specification: spec.md
   - Implementations: implementations.md
   - Examples: examples.md
+  - Plate: plate.md
   - Prior art: prior-art.md
   - Findings:
       - LLM marker survival: evaluation.md
