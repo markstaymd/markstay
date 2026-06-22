@@ -194,6 +194,61 @@ def test_unknown_mode_rejected():
     assert False, "unknown mode must raise ValueError"
 
 
+# --- COLLECTION_SHRANK: opt-in within-collection loss check (SPEC.md §5.1) -----
+# A stay binds the whole table/list, so a dropped row/bullet is normally only a
+# non-blocking HASH_DRIFT. check_collections=True turns net item loss into a
+# blocking finding; it is off by default so existing callers are unaffected.
+
+_TBL = (
+    "| Item | State |\n|------|-------|\n"
+    "| auth | done |\n| orders | wip |\n<!-- stay:tbl -->\n"
+)
+_LST = "- alpha\n- beta\n- gamma\n<!-- stay:lst -->\n"
+
+
+def test_collection_shrank_table_row_drop():
+    after = _TBL.replace("| orders | wip |\n", "")
+    on = L.lint_diff(_TBL, after, check_collections=True)
+    assert "COLLECTION_SHRANK" in codes(on)
+    assert L.has_errors(on)
+    # off by default: the same row drop is only a non-blocking hash drift
+    off = L.lint_diff(_TBL, after)
+    assert "COLLECTION_SHRANK" not in codes(off)
+    assert not L.has_errors(off)
+
+
+def test_collection_shrank_bullet_drop():
+    after = _LST.replace("- beta\n", "")
+    on = L.lint_diff(_LST, after, check_collections=True)
+    assert "COLLECTION_SHRANK" in codes(on)
+    assert L.has_errors(on)
+
+
+def test_collection_shrank_silent_on_inplace_edit_and_growth():
+    edited = _TBL.replace("| orders | wip |", "| orders | done |")
+    grown = _TBL.replace("| orders | wip |\n", "| orders | wip |\n| billing | todo |\n")
+    for after in (edited, grown):
+        on = L.lint_diff(_TBL, after, check_collections=True)
+        assert "COLLECTION_SHRANK" not in codes(on)
+        assert not L.has_errors(on)  # only HASH_DRIFT, a warning
+
+
+def test_collection_shrank_fires_on_consolidation_known_fp():
+    # Merging two rows into one is intended pruning, but a net-count drop trips the
+    # check: a documented false positive (churn-driven, like the section catch).
+    after = _TBL.replace("| auth | done |\n| orders | wip |\n", "| auth+orders | done |\n")
+    assert "COLLECTION_SHRANK" in codes(L.lint_diff(_TBL, after, check_collections=True))
+
+
+def test_collection_shrank_distinct_from_dropped_block():
+    # Dropping the whole table removes its stay -> DROPPED_ID (existing rule), not
+    # SHRANK (which is specifically "block kept, items lost").
+    after = "Some replacement paragraph.\n<!-- stay:other -->\n"
+    cs = codes(L.lint_diff(_TBL, after, check_collections=True))
+    assert "DROPPED_ID" in cs
+    assert "COLLECTION_SHRANK" not in cs
+
+
 def _run_all():
     tests = [v for k, v in sorted(globals().items())
              if k.startswith("test_") and callable(v)]

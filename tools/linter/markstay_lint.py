@@ -287,9 +287,51 @@ def _id_index(blocks: list[Block]) -> dict[str, list[Block]]:
     return out
 
 
-def lint_diff(before_md: str, after_md: str, mode: str = "blank-line") -> list[Finding]:
+# --- within-collection items (SPEC.md §5.1): the opt-in COLLECTION_SHRANK check --
+# A stay binds a whole block, so a table is one stay and a list is one stay. A row
+# or bullet dropped from inside that block leaves the stay in place and only drifts
+# the block hash (a non-blocking warning). When lint_diff is asked to check
+# collections, it counts the table data-rows + list bullets a kept block carries
+# before vs after and reports a blocking COLLECTION_SHRANK when that count falls, so
+# a silently pruned row/bullet is caught the way a dropped block already is.
+
+_ROW_RE = re.compile(r"^\s*\|.*\|\s*$")
+_ROW_SEP_RE = re.compile(r"^\s*\|[\s:|-]+\|\s*$")  # the |---|:--| divider row
+_BULLET_RE = re.compile(r"^\s*[-*+]\s+\S")
+
+
+def _item_count(content: str) -> int:
+    """Count the table data-rows + list bullets in a block's content. The table
+    header (the line directly above a ``|---|`` divider) and the divider itself are
+    excluded; what remains is the within-collection data an edit can prune. Markers
+    are already stripped from ``Block.content``, so a per-item marker line never
+    counts."""
+    lines = content.split("\n")
+    n = len(lines)
+    count = 0
+    for i, ln in enumerate(lines):
+        if _ROW_RE.match(ln):
+            if _ROW_SEP_RE.match(ln):
+                continue
+            if i + 1 < n and _ROW_SEP_RE.match(lines[i + 1]):
+                continue  # header row sits directly above the divider
+            if ln.strip().strip("|").strip():
+                count += 1
+        elif _BULLET_RE.match(ln):
+            count += 1
+    return count
+
+
+def lint_diff(before_md: str, after_md: str, mode: str = "blank-line",
+              check_collections: bool = False) -> list[Finding]:
     """Regeneration diff: what an edit did to the ids. Catches the AI-rewrite
-    failure mode (dropped markers) plus duplication and exact-content relocation."""
+    failure mode (dropped markers) plus duplication and exact-content relocation.
+
+    With ``check_collections=True`` it additionally reports a blocking
+    COLLECTION_SHRANK when a kept stay's block lost table rows or list bullets
+    (SPEC.md §5.1: a stay binds the whole table/list, so a pruned row/bullet is
+    otherwise only a non-blocking hash drift). Off by default, so existing callers
+    and the conformance corpus are unaffected."""
     before = {mid: blks[0] for mid, blks in _id_index(parse_document(before_md, mode=mode)).items()
               if len(blks) == 1}
     after = _id_index(parse_document(after_md, mode=mode))
@@ -340,6 +382,19 @@ def lint_diff(before_md: str, after_md: str, mode: str = "blank-line") -> list[F
                 "warn", "HASH_DRIFT",
                 f"id {mid}: content changed between versions (edited in place)",
                 id=mid))
+
+    if check_collections:
+        for mid, blks in after.items():
+            if mid not in before or len(blks) != 1:
+                continue
+            n0 = _item_count(before[mid].content)
+            n1 = _item_count(blks[0].content)
+            if n0 > 0 and n1 < n0:
+                findings.append(Finding(
+                    "error", "COLLECTION_SHRANK",
+                    f"id {mid}: collection shrank from {n0} to {n1} items "
+                    f"(a table row or list bullet was dropped from inside the block)",
+                    id=mid))
     return findings
 
 
@@ -374,6 +429,9 @@ def main(argv=None) -> int:
                     help="baseline version; runs a regeneration diff against the "
                          "single FILE given (dropped/duplicated/relocated ids)")
     ap.add_argument("--json", action="store_true", help="emit findings as JSON")
+    ap.add_argument("--check-collections", action="store_true", dest="check_collections",
+                    help="with --before, also block when a kept stay's table or list "
+                         "lost rows/bullets (COLLECTION_SHRANK); off by default")
     ap.add_argument("--commonmark", action="store_true",
                     help="segment blocks over the CommonMark tree (SPEC.md §5.2, "
                          "v1.1): loose lists and blank-line fences attach as one "
@@ -389,7 +447,8 @@ def main(argv=None) -> int:
         before_md = Path(args.before).read_text()
         after_md = Path(args.files[0]).read_text()
         results.append((f"{args.before} -> {args.files[0]}",
-                        lint_diff(before_md, after_md, mode=mode)))
+                        lint_diff(before_md, after_md, mode=mode,
+                                  check_collections=args.check_collections)))
     else:
         for f in args.files:
             _, findings = lint_document(Path(f).read_text(), mode=mode)
