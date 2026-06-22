@@ -112,6 +112,16 @@ A companion within-collection run measured this directly on row- and bullet-heav
 tracking docs: **922 of 10,608 rows and bullets, 9%, were dropped**, roughly 30x the
 private section-drop rate. The catch never blocked because of a row or bullet drop.
 
+There is an **opt-in** count-diff catch for that loss (`--check-collections`): it blocks
+when a kept stay's table or list ends up with fewer rows/bullets than it started with.
+Measured precision is the reason it is opt-in, not a default: it is accurate where items
+genuinely churn (≈75% on status refreshes, ≈94% on consolidations) but near-pure noise
+on append/prose edits (≈7%), and it gets *noisier* on the more capable model (84% on
+Haiku, 42% on Sonnet). A raw count cannot tell a benign reflow, two bullets merged into
+one, a row reworded, from a real deletion, and fluent models reflow more. It also cannot
+see a 1-for-1 row swap. So it is a targeted backstop for churn-heavy trackers, not a
+general guard, and true per-row identity still needs the structural fix below.
+
 The practical fix for bullets is structural: make each durable item its own block.
 
 ```text
