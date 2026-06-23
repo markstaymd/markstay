@@ -67,6 +67,7 @@ nav:
   - Implementations: implementations.md
   - Examples: examples.md
   - Plate: plate.md
+  - RAG cache: rag.md
   - Prior art: prior-art.md
   - Findings:
       - LLM marker survival: evaluation.md

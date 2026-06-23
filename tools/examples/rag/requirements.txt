@@ -1,0 +1,10 @@
+# The markstay read + stamp core (the chunker's only non-stdlib dependency
+# besides LangChain). Any 0.2.x carries the read side (lint_document, body_hash,
+# parse_document) and the stamp/restamp the demo replays.
+markstay>=0.2,<0.3
+# LangChain pinned to the versions the cache contract was verified against. The
+# drift-sentinel test (test_cache.py::test_langchain_reembeds_match_decision)
+# catches a behavioural break if you bump these; re-pin here when you do.
+langchain-core==1.4.8
+langchain-text-splitters==1.1.2
+pytest>=8
