@@ -1,0 +1,13 @@
+{
+  "name": "markstay-plate-example",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Worked example: Plate withBlockId <-> markstay bridge (not published). Consumes the published `markstay` package, so run `npm i` before `node --test`.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "markstay": "^0.2.1"
+  }
+}

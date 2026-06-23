@@ -146,6 +146,29 @@ recovery here is zero.
 - The bridge is pinned to a captured `@platejs/markdown` format and re-verified when
   Plate bumps it, so the worked example tracks real Plate output rather than a guess.
 
+## Reproduce it
+
+The bridge, the demo, and their fixtures ship in
+[`tools/examples/plate/`](https://github.com/markstaymd/markstay/tree/master/tools/examples/plate),
+so the before/after above is inspectable with no clone of anything private, no network,
+and no API key. The example consumes the published
+[`markstay` package](implementations.md), the same core the bridge builds on, so it runs
+the way a real Plate user would:
+
+```bash
+git clone https://github.com/markstaymd/markstay
+cd markstay/tools/examples/plate
+npm i                  # pulls the published `markstay` package
+node demo.js           # replay the captured rewrite ($0, no key)
+node --test            # the bridge round-trip, fail-closed, and demo self-tests
+```
+
+`demo.js` replays the same captured Sonnet rewrite the [attachment study](evaluation.md)
+froze into a fixture, so the contrast is a genuine model's output while staying
+deterministic. The `node --test` suite pins the bridge's supported subset (heading,
+paragraph, single-paragraph blockquote, closed fence), its fail-closed rejections of
+everything else, and the demo's headline, so none of it can silently regress.
+
 ## Where this fits
 
 markstay does not change to read `<block id>` as a native marker, that visible wrapper

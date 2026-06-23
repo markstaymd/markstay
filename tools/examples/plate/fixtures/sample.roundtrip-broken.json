@@ -1,0 +1,32 @@
+[
+  {
+    "type": "p",
+    "id": null,
+    "text": "<block id=\"aTitleId01\">\nSetup\n</block>"
+  },
+  {
+    "type": "p",
+    "id": null,
+    "text": "<block id=\"paraId00002\">\nInstall the package first.\n</block>"
+  },
+  {
+    "type": "p",
+    "id": null,
+    "text": "<block id=\"liId00000003\">\nfirst item\n</block>"
+  },
+  {
+    "type": "p",
+    "id": null,
+    "text": "<block id=\"liId00000004\">\nsecond item\n</block>"
+  },
+  {
+    "type": "p",
+    "id": null,
+    "text": "<block id=\"bqId00000005\">\na quote line\n</block>"
+  },
+  {
+    "type": "p",
+    "id": null,
+    "text": "<block id=\"cbId00000006\">\nconst x = 1;\n</block>"
+  }
+]
