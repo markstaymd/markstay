@@ -408,13 +408,24 @@ def has_errors(findings: list[Finding]) -> bool:
     return any(f.level == "error" for f in findings)
 
 
-def render_text(label: str, findings: list[Finding]) -> str:
+def render_text(label: str, findings: list[Finding], show_drift: bool = False) -> str:
+    """Human render. HASH_DRIFT is the dominant, non-actionable line in normal use
+    (it never blocks; it only ever says "you edited things"), so it is hidden by
+    default and collapsed to one discoverable line. `show_drift=True` lists it.
+    The structured channel (`--json`, the return tuples) is unaffected, drift is
+    always carried there. The error/warn/info summary counts the real totals
+    either way, so a hidden drift is still counted as a warn that happened."""
     if not findings:
         return f"{label}: clean (no findings)"
     out = [f"{label}:"]
-    for f in sort_findings(findings):
+    shown = findings if show_drift else [f for f in findings if f.code != "HASH_DRIFT"]
+    n_drift_hidden = len(findings) - len(shown)
+    for f in sort_findings(shown):
         where = f"L{f.line}" if f.line else "-"
         out.append(f"  [{f.level:5}] {f.code:16} {where:>5}  {f.message}")
+    if n_drift_hidden:
+        noun = "finding" if n_drift_hidden == 1 else "findings"
+        out.append(f"  -> {n_drift_hidden} hash-drift {noun} hidden (--show-drift to list)")
     n_err = sum(1 for f in findings if f.level == "error")
     n_warn = sum(1 for f in findings if f.level == "warn")
     n_info = sum(1 for f in findings if f.level == "info")
@@ -429,6 +440,9 @@ def main(argv=None) -> int:
                     help="baseline version; runs a regeneration diff against the "
                          "single FILE given (dropped/duplicated/relocated ids)")
     ap.add_argument("--json", action="store_true", help="emit findings as JSON")
+    ap.add_argument("--show-drift", action="store_true", dest="show_drift",
+                    help="list HASH_DRIFT findings in the text output (hidden by "
+                         "default; --json always carries them)")
     ap.add_argument("--check-collections", action="store_true", dest="check_collections",
                     help="with --before, also block when a kept stay's table or list "
                          "lost rows/bullets (COLLECTION_SHRANK); off by default")
@@ -458,7 +472,8 @@ def main(argv=None) -> int:
         payload = {label: [x.to_dict() for x in sort_findings(fs)] for label, fs in results}
         print(json.dumps(payload, indent=2))
     else:
-        print("\n".join(render_text(label, fs) for label, fs in results))
+        print("\n".join(render_text(label, fs, show_drift=args.show_drift)
+                         for label, fs in results))
 
     return 1 if any(has_errors(fs) for _, fs in results) else 0
 

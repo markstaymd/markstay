@@ -204,6 +204,55 @@ def test_install_backs_up_foreign_hook():
         shutil.rmtree(repo, ignore_errors=True)
 
 
+# --- hash-drift routing (quiet by default, MARKSTAY_SHOW_DRIFT to list) --------
+# Hash drift is non-blocking and non-actionable in the hook channel, so a commit
+# whose only finding is an in-place edit prints nothing; MARKSTAY_SHOW_DRIFT=1
+# surfaces it. The blocking checks are unaffected (covered by the tests above).
+
+def _git_env(repo, env_extra, *args):
+    env = dict(os.environ,
+               GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@e",
+               GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@e",
+               GIT_CONFIG_GLOBAL="/dev/null", GIT_CONFIG_SYSTEM="/dev/null",
+               **env_extra)
+    return subprocess.run(["git", "-C", repo, *args], capture_output=True, text=True, env=env)
+
+
+def test_hook_drift_only_commit_is_silent_and_passes():
+    repo = _fresh_repo()
+    try:
+        _install(repo)
+        _write(repo, "a.md", "Alpha block.\n<!-- stay:a1 -->\n\nBeta block.\n<!-- stay:b2 -->\n")
+        _git(repo, "add", "a.md")
+        assert _git(repo, "commit", "-m", "init").returncode == 0
+        # edit prose in place, keep both markers -> the only finding is hash drift
+        _write(repo, "a.md", "Alpha block, revised.\n<!-- stay:a1 -->\n\nBeta block.\n<!-- stay:b2 -->\n")
+        _git(repo, "add", "a.md")
+        r = _git(repo, "commit", "-m", "reword")
+        assert r.returncode == 0
+        out = r.stdout + r.stderr
+        assert "HASH_DRIFT" not in out          # drift line hidden
+        assert "hash-drift" not in out          # nothing markstay printed at all
+    finally:
+        shutil.rmtree(repo, ignore_errors=True)
+
+
+def test_hook_show_drift_env_lists_the_drift():
+    repo = _fresh_repo()
+    try:
+        _install(repo)
+        _write(repo, "a.md", "Alpha block.\n<!-- stay:a1 -->\n\nBeta block.\n<!-- stay:b2 -->\n")
+        _git(repo, "add", "a.md")
+        assert _git(repo, "commit", "-m", "init").returncode == 0
+        _write(repo, "a.md", "Alpha block, revised.\n<!-- stay:a1 -->\n\nBeta block.\n<!-- stay:b2 -->\n")
+        _git(repo, "add", "a.md")
+        r = _git_env(repo, {"MARKSTAY_SHOW_DRIFT": "1"}, "commit", "-m", "reword")
+        assert r.returncode == 0
+        assert "HASH_DRIFT" in (r.stdout + r.stderr)
+    finally:
+        shutil.rmtree(repo, ignore_errors=True)
+
+
 def _run_all():
     tests = [v for k, v in sorted(globals().items())
              if k.startswith("test_") and callable(v)]

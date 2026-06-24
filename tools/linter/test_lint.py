@@ -249,6 +249,99 @@ def test_collection_shrank_distinct_from_dropped_block():
     assert "COLLECTION_SHRANK" not in cs
 
 
+# --- drift routing: quiet human render, intact structured channel ------------
+# HASH_DRIFT is load-bearing in the structured channel (the RAG chunker treats it
+# as fatal; the Plate contrast counts it) but noise in the default human render
+# (it never blocks, only ever says "you edited things"). The render hides it by
+# default behind --show-drift; the finding, its warn level, and --json are
+# untouched.
+
+import contextlib  # noqa: E402
+import io  # noqa: E402
+import os  # noqa: E402
+import tempfile  # noqa: E402
+
+
+def _tmp_md(text):
+    fh = tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8")
+    fh.write(text)
+    fh.close()
+    return fh.name
+
+
+def _run_cli(argv):
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        rc = L.main(argv)
+    return rc, buf.getvalue()
+
+
+def test_render_hides_drift_by_default_lists_with_flag():
+    _, findings = L.lint_document("Edited.\n<!-- stay:z9 hash=sha256:dead -->\n")
+    assert codes(findings) == ["HASH_DRIFT"]
+    hidden = L.render_text("doc", findings)              # default show_drift=False
+    shown = L.render_text("doc", findings, show_drift=True)
+    assert "HASH_DRIFT" not in hidden                    # drift line dropped
+    assert "hash-drift" in hidden and "--show-drift" in hidden  # collapsed receipt
+    assert "HASH_DRIFT" in shown                         # listed on request
+    assert "hidden (--show-drift" not in shown           # no collapsed line when shown
+    # summary counts the real totals either way (drift is still a warn that happened)
+    assert "0 error, 1 warn, 0 info" in hidden
+    assert "0 error, 1 warn, 0 info" in shown
+
+
+def test_render_keeps_real_findings_and_counts_with_mixed_set():
+    md = ("Edited.\n<!-- stay:z9 hash=sha256:dead -->\n\n"
+          "A para.\n<!-- stay:note=hello -->\n")
+    _, findings = L.lint_document(md)
+    assert sorted(codes(findings)) == ["HASH_DRIFT", "MALFORMED_MARKER"]
+    hidden = L.render_text("doc", findings)
+    shown = L.render_text("doc", findings, show_drift=True)
+    for r in (hidden, shown):
+        assert "1 error, 1 warn, 0 info" in r            # counts unchanged
+        assert "MALFORMED_MARKER" in r                   # the actionable line stays
+    assert "HASH_DRIFT" not in hidden
+    assert "1 hash-drift finding hidden" in hidden       # singular, collapsed
+
+
+def test_json_byte_identical_with_and_without_show_drift():
+    path = _tmp_md("Edited.\n<!-- stay:z9 hash=sha256:dead -->\n")
+    try:
+        _, a = _run_cli(["--json", path])
+        _, b = _run_cli(["--json", "--show-drift", path])
+        assert a == b                                    # structured channel untouched
+        assert "HASH_DRIFT" in a                         # drift still carried in --json
+    finally:
+        os.unlink(path)
+
+
+def test_before_diff_text_path_hides_drift_by_default():
+    before = _tmp_md("Alpha content.\n<!-- stay:aaa -->\n")
+    after = _tmp_md("Alpha content, now revised.\n<!-- stay:aaa -->\n")
+    try:
+        _, hidden = _run_cli(["--before", before, after])
+        _, shown = _run_cli(["--show-drift", "--before", before, after])
+        assert "HASH_DRIFT" not in hidden
+        assert "hash-drift" in hidden                     # collapsed line on the diff path
+        assert "HASH_DRIFT" in shown
+    finally:
+        os.unlink(before)
+        os.unlink(after)
+
+
+def test_hash_drift_stays_warn_in_return_tuples_guardrail():
+    # Guardrail (the invariant the whole change hinges on): the structured channel
+    # must keep HASH_DRIFT at warn, because the RAG chunker's fatal check and the
+    # Plate contrast both read these tuples, not the printed text. Mirror in
+    # impl/py/tests/test_unit.py for the packaged markstay.lint API the chunker imports.
+    _, doc = L.lint_document("Edited.\n<!-- stay:z9 hash=sha256:dead -->\n")
+    doc_drift = [f for f in doc if f.code == "HASH_DRIFT"]
+    assert doc_drift and all(f.level == "warn" for f in doc_drift)
+    diff = L.lint_diff("Alpha.\n<!-- stay:a -->\n", "Alpha, revised.\n<!-- stay:a -->\n")
+    diff_drift = [f for f in diff if f.code == "HASH_DRIFT"]
+    assert diff_drift and all(f.level == "warn" for f in diff_drift)
+
+
 def _run_all():
     tests = [v for k, v in sorted(globals().items())
              if k.startswith("test_") and callable(v)]
