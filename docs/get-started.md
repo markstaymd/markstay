@@ -8,7 +8,8 @@ agent to keep the markers, and catch any silent loss at commit time.
 ## Add a stay to a block
 
 A stay is recorded as a trailing HTML comment, invisible in rendered Markdown and
-preserved in the source:
+preserved in the source ([measured across the common formatters and
+renderers](compat.md), so you can check your toolchain before you stamp):
 
 ```md
 ## Installation

@@ -12,6 +12,7 @@ tools/
   linter/                  reference well-formedness + regeneration-diff checker
   eval/                    marker-survival eval (does the id token survive LLM editing?)
     attachment/            attachment-survival eval (does it stay on the RIGHT block?)
+    render/                render-survival matrix (does it survive a foreign formatter/renderer/sanitizer?)
   adopt/                   adoption surface: preservation-instruction helper +
                            installable pre-commit hook (packages the two mitigations)
 ```
@@ -63,6 +64,28 @@ in the loop. Findings: `eval/attachment/FINDINGS.md`; raw data:
 cd eval/attachment
 python3 test_attach.py                      # 32/32 self-tests
 python3 run_attach_eval.py                  # regenerates results.{json,md}
+```
+
+## eval/render/ , render-survival matrix
+
+Offline, no credentials. Backs the [compatibility page](https://markstay.org/compat/).
+Asks the third question: does the marker survive a *foreign* tool, a formatter that
+reflows the doc (md -> md), a renderer that emits HTML (md -> HTML), or an HTML
+sanitizer over the `rehype-stay` `id=` emit? Two axes, two oracles: the round-trip
+axis reuses the reference linter's regeneration diff (a hash drift on reflow is
+expected, not a failure); the render axis inspects visibility and comment retention.
+The classifier is proven on hand-labelled cases before the matrix is trusted. Findings:
+`eval/render/FINDINGS.md`; matrix: `eval/render/MATRIX.md`; pinned tool versions:
+`eval/render/versions.json`.
+
+Setup needs `mdformat` + `cmarkgfm` (Python) and the pinned JS renderers
+(`cd js && npm install`); `pandoc` and `prettier` are expected on `PATH`. The
+measurement itself is offline.
+
+```bash
+cd eval/render
+python3 test_render.py                      # 15/15 classifier self-tests
+python3 run.py                              # regenerates MATRIX.md + results.json
 ```
 
 ## adopt/ , adoption surface

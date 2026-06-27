@@ -1,0 +1,20 @@
+{
+  "pandoc": "3.1.3",
+  "prettier": "3.8.0",
+  "node": "v22.22.0",
+  "python": "3.12.3",
+  "mdformat": "1.0.0",
+  "cmarkgfm": "2025.10.22",
+  "markdown": "3.5.2",
+  "markdown-it-py": "3.0.0",
+  "npm:markdown-it": "14.1.0",
+  "npm:marked": "16.4.1",
+  "npm:remark-parse": "11.0.0",
+  "npm:remark-stringify": "11.0.0",
+  "npm:remark-mdx": "3.1.1",
+  "npm:@mdx-js/mdx": "3.1.1",
+  "npm:rehype-sanitize": "6.0.0",
+  "npm:dompurify": "3.2.7",
+  "npm:remark-rehype": "11.1.2",
+  "npm:rehype-stringify": "10.0.1"
+}

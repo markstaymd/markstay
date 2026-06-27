@@ -1,0 +1,574 @@
+{
+  "parse_mode": "blank-line",
+  "versions": {
+    "pandoc": "3.1.3",
+    "prettier": "3.8.0",
+    "node": "v22.22.0",
+    "python": "3.12.3",
+    "mdformat": "1.0.0",
+    "cmarkgfm": "2025.10.22",
+    "markdown": "3.5.2",
+    "markdown-it-py": "3.0.0",
+    "npm:markdown-it": "14.1.0",
+    "npm:marked": "16.4.1",
+    "npm:remark-parse": "11.0.0",
+    "npm:remark-stringify": "11.0.0",
+    "npm:remark-mdx": "3.1.1",
+    "npm:@mdx-js/mdx": "3.1.1",
+    "npm:rehype-sanitize": "6.0.0",
+    "npm:dompurify": "3.2.7",
+    "npm:remark-rehype": "11.1.2",
+    "npm:rehype-stringify": "10.0.1"
+  },
+  "cells": [
+    {
+      "key": "prettier",
+      "label": "prettier",
+      "axis": "roundtrip",
+      "verdict": "SURVIVES",
+      "note": "clean; \u00a78 hash drifts on reflow (expected)",
+      "remediation": null,
+      "fixtures": {
+        "blocks": {
+          "verdict": "SURVIVES",
+          "note": "clean; \u00a78 hash drifts on reflow (expected)"
+        },
+        "blocks_trailing": {
+          "verdict": "SURVIVES",
+          "note": "clean; \u00a78 hash drifts on reflow (expected)"
+        },
+        "hash": {
+          "verdict": "SURVIVES",
+          "note": "clean, no drift"
+        }
+      }
+    },
+    {
+      "key": "mdformat",
+      "label": "mdformat",
+      "axis": "roundtrip",
+      "verdict": "SURVIVES",
+      "note": "clean; \u00a78 hash drifts on reflow (expected)",
+      "remediation": null,
+      "fixtures": {
+        "blocks": {
+          "verdict": "SURVIVES",
+          "note": "clean; \u00a78 hash drifts on reflow (expected)"
+        },
+        "blocks_trailing": {
+          "verdict": "SURVIVES",
+          "note": "clean; \u00a78 hash drifts on reflow (expected)"
+        },
+        "hash": {
+          "verdict": "SURVIVES",
+          "note": "clean, no drift"
+        }
+      }
+    },
+    {
+      "key": "remark",
+      "label": "remark + remark-stringify",
+      "axis": "roundtrip",
+      "verdict": "SURVIVES",
+      "note": "clean, no drift",
+      "remediation": null,
+      "fixtures": {
+        "blocks": {
+          "verdict": "SURVIVES",
+          "note": "clean, no drift"
+        },
+        "blocks_trailing": {
+          "verdict": "SURVIVES",
+          "note": "clean, no drift"
+        },
+        "hash": {
+          "verdict": "SURVIVES",
+          "note": "clean, no drift"
+        }
+      }
+    },
+    {
+      "key": "pandoc-gfm",
+      "label": "pandoc (gfm \u2192 gfm)",
+      "axis": "roundtrip",
+      "verdict": "SURVIVES",
+      "note": "clean; \u00a78 hash drifts on reflow (expected)",
+      "remediation": null,
+      "fixtures": {
+        "blocks": {
+          "verdict": "SURVIVES",
+          "note": "clean; \u00a78 hash drifts on reflow (expected)"
+        },
+        "blocks_trailing": {
+          "verdict": "SURVIVES",
+          "note": "clean; \u00a78 hash drifts on reflow (expected)"
+        },
+        "hash": {
+          "verdict": "SURVIVES",
+          "note": "clean; \u00a78 hash drifts on reflow (expected)"
+        }
+      }
+    },
+    {
+      "key": "pandoc-markdown",
+      "label": "pandoc (markdown \u2192 markdown)",
+      "axis": "roundtrip",
+      "verdict": "MANGLED",
+      "note": "marker(s) rewritten to a non-comment form (code span / escaped): l2, p2, q2 (differs on: blocks, hash)",
+      "remediation": "trailing inline markers are rewritten to a `<!-- ... -->`{=html} code span; keep markers on their own line (marker-only chunk) or use the `gfm` writer, which preserves them",
+      "fixtures": {
+        "blocks": {
+          "verdict": "SURVIVES",
+          "note": "clean; \u00a78 hash drifts on reflow (expected)"
+        },
+        "blocks_trailing": {
+          "verdict": "MANGLED",
+          "note": "marker(s) rewritten to a non-comment form (code span / escaped): l2, p2, q2"
+        },
+        "hash": {
+          "verdict": "SURVIVES",
+          "note": "clean; \u00a78 hash drifts on reflow (expected)"
+        }
+      }
+    },
+    {
+      "key": "remark-mdx",
+      "label": "remark-mdx (\u00a73.2 round-trip)",
+      "axis": "roundtrip",
+      "verdict": "SURVIVES",
+      "note": "clean, no drift",
+      "remediation": null,
+      "fixtures": {
+        "mdx": {
+          "verdict": "SURVIVES",
+          "note": "clean, no drift"
+        }
+      }
+    },
+    {
+      "key": "github",
+      "label": "GitHub (cmark-gfm)",
+      "axis": "render",
+      "verdict": "INVISIBLE",
+      "note": "comment dropped from output (invisible)",
+      "remediation": null,
+      "fixtures": {
+        "blocks": {
+          "verdict": "INVISIBLE",
+          "note": "comment dropped from output (invisible)"
+        },
+        "blocks_trailing": {
+          "verdict": "INVISIBLE",
+          "note": "comment dropped from output (invisible)"
+        },
+        "hash": {
+          "verdict": "INVISIBLE",
+          "note": "comment dropped from output (invisible)"
+        }
+      }
+    },
+    {
+      "key": "markdown-it",
+      "label": "markdown-it (html: true)",
+      "axis": "render",
+      "verdict": "INVISIBLE",
+      "note": "comment retained in HTML source (invisible)",
+      "remediation": null,
+      "fixtures": {
+        "blocks": {
+          "verdict": "INVISIBLE",
+          "note": "comment retained in HTML source (invisible)"
+        },
+        "blocks_trailing": {
+          "verdict": "INVISIBLE",
+          "note": "comment retained in HTML source (invisible)"
+        },
+        "hash": {
+          "verdict": "INVISIBLE",
+          "note": "comment retained in HTML source (invisible)"
+        }
+      }
+    },
+    {
+      "key": "markdown-it-default",
+      "label": "markdown-it (default, html: false)",
+      "axis": "render",
+      "verdict": "LEAKED_VISIBLE",
+      "note": "marker(s) rendered as visible text: c1, h1, l1, p1, q1, t1",
+      "remediation": "the default config HTML-escapes the comment to visible text; set `html: true`, or rely on the consumer detecting a missing expected marker",
+      "fixtures": {
+        "blocks": {
+          "verdict": "LEAKED_VISIBLE",
+          "note": "marker(s) rendered as visible text: c1, h1, l1, p1, q1, t1"
+        },
+        "blocks_trailing": {
+          "verdict": "LEAKED_VISIBLE",
+          "note": "marker(s) rendered as visible text: c2, h2, l2, p2, q2, t2"
+        },
+        "hash": {
+          "verdict": "LEAKED_VISIBLE",
+          "note": "marker(s) rendered as visible text: hh1"
+        }
+      }
+    },
+    {
+      "key": "marked",
+      "label": "marked",
+      "axis": "render",
+      "verdict": "INVISIBLE",
+      "note": "comment retained in HTML source (invisible)",
+      "remediation": null,
+      "fixtures": {
+        "blocks": {
+          "verdict": "INVISIBLE",
+          "note": "comment retained in HTML source (invisible)"
+        },
+        "blocks_trailing": {
+          "verdict": "INVISIBLE",
+          "note": "comment retained in HTML source (invisible)"
+        },
+        "hash": {
+          "verdict": "INVISIBLE",
+          "note": "comment retained in HTML source (invisible)"
+        }
+      }
+    },
+    {
+      "key": "python-markdown",
+      "label": "python-markdown (MkDocs)",
+      "axis": "render",
+      "verdict": "INVISIBLE",
+      "note": "comment retained in HTML source (invisible)",
+      "remediation": null,
+      "fixtures": {
+        "blocks": {
+          "verdict": "INVISIBLE",
+          "note": "comment retained in HTML source (invisible)"
+        },
+        "blocks_trailing": {
+          "verdict": "INVISIBLE",
+          "note": "comment retained in HTML source (invisible)"
+        },
+        "hash": {
+          "verdict": "INVISIBLE",
+          "note": "comment retained in HTML source (invisible)"
+        }
+      }
+    },
+    {
+      "key": "mdx",
+      "label": "MDX (@mdx-js/mdx)",
+      "axis": "render",
+      "verdict": "INVISIBLE",
+      "note": "compiles; marker hoisted to a JS comment, renders as an empty expression; blocks fixture: ERROR",
+      "remediation": "the HTML-comment form is invalid MDX and is rejected at compile; use the \u00a73.2 `{/* stay:id */}` form (which compiles away invisibly)",
+      "fixtures": {
+        "mdx": {
+          "verdict": "INVISIBLE",
+          "note": "compiles; marker hoisted to a JS comment, renders as an empty expression"
+        },
+        "blocks": {
+          "verdict": "ERROR",
+          "note": "HTML-comment marker is invalid MDX (use the \u00a73.2 {/* */} form)"
+        }
+      }
+    },
+    {
+      "key": "rehype-sanitize",
+      "label": "rehype-sanitize",
+      "axis": "sanitize",
+      "verdict": "ID_PREFIXED",
+      "note": "id kept but renamed (e.g. user-content-): #id deep link breaks",
+      "remediation": "GitHub's schema clobbers `id` to `user-content-<id>`, so the anchor survives but the `doc.md#stay-id` deep link must target the prefixed id (or the consumer re-derives it)",
+      "fixtures": {
+        "blocks": {
+          "verdict": "ID_PREFIXED",
+          "note": "id kept but renamed (e.g. user-content-): #id deep link breaks"
+        },
+        "blocks_trailing": {
+          "verdict": "ID_PREFIXED",
+          "note": "id kept but renamed (e.g. user-content-): #id deep link breaks"
+        }
+      }
+    },
+    {
+      "key": "dompurify",
+      "label": "DOMPurify",
+      "axis": "sanitize",
+      "verdict": "ID_SURVIVES",
+      "note": "id preserved verbatim",
+      "remediation": null,
+      "fixtures": {
+        "blocks": {
+          "verdict": "ID_SURVIVES",
+          "note": "id preserved verbatim"
+        },
+        "blocks_trailing": {
+          "verdict": "ID_SURVIVES",
+          "note": "id preserved verbatim"
+        }
+      }
+    }
+  ],
+  "records": [
+    {
+      "tool": "prettier",
+      "axis": "roundtrip",
+      "fixture": "blocks",
+      "verdict": "SURVIVES",
+      "note": "clean; \u00a78 hash drifts on reflow (expected)"
+    },
+    {
+      "tool": "prettier",
+      "axis": "roundtrip",
+      "fixture": "blocks_trailing",
+      "verdict": "SURVIVES",
+      "note": "clean; \u00a78 hash drifts on reflow (expected)"
+    },
+    {
+      "tool": "prettier",
+      "axis": "roundtrip",
+      "fixture": "hash",
+      "verdict": "SURVIVES",
+      "note": "clean, no drift"
+    },
+    {
+      "tool": "mdformat",
+      "axis": "roundtrip",
+      "fixture": "blocks",
+      "verdict": "SURVIVES",
+      "note": "clean; \u00a78 hash drifts on reflow (expected)"
+    },
+    {
+      "tool": "mdformat",
+      "axis": "roundtrip",
+      "fixture": "blocks_trailing",
+      "verdict": "SURVIVES",
+      "note": "clean; \u00a78 hash drifts on reflow (expected)"
+    },
+    {
+      "tool": "mdformat",
+      "axis": "roundtrip",
+      "fixture": "hash",
+      "verdict": "SURVIVES",
+      "note": "clean, no drift"
+    },
+    {
+      "tool": "remark",
+      "axis": "roundtrip",
+      "fixture": "blocks",
+      "verdict": "SURVIVES",
+      "note": "clean, no drift"
+    },
+    {
+      "tool": "remark",
+      "axis": "roundtrip",
+      "fixture": "blocks_trailing",
+      "verdict": "SURVIVES",
+      "note": "clean, no drift"
+    },
+    {
+      "tool": "remark",
+      "axis": "roundtrip",
+      "fixture": "hash",
+      "verdict": "SURVIVES",
+      "note": "clean, no drift"
+    },
+    {
+      "tool": "pandoc-gfm",
+      "axis": "roundtrip",
+      "fixture": "blocks",
+      "verdict": "SURVIVES",
+      "note": "clean; \u00a78 hash drifts on reflow (expected)"
+    },
+    {
+      "tool": "pandoc-gfm",
+      "axis": "roundtrip",
+      "fixture": "blocks_trailing",
+      "verdict": "SURVIVES",
+      "note": "clean; \u00a78 hash drifts on reflow (expected)"
+    },
+    {
+      "tool": "pandoc-gfm",
+      "axis": "roundtrip",
+      "fixture": "hash",
+      "verdict": "SURVIVES",
+      "note": "clean; \u00a78 hash drifts on reflow (expected)"
+    },
+    {
+      "tool": "pandoc-markdown",
+      "axis": "roundtrip",
+      "fixture": "blocks",
+      "verdict": "SURVIVES",
+      "note": "clean; \u00a78 hash drifts on reflow (expected)"
+    },
+    {
+      "tool": "pandoc-markdown",
+      "axis": "roundtrip",
+      "fixture": "blocks_trailing",
+      "verdict": "MANGLED",
+      "note": "marker(s) rewritten to a non-comment form (code span / escaped): l2, p2, q2"
+    },
+    {
+      "tool": "pandoc-markdown",
+      "axis": "roundtrip",
+      "fixture": "hash",
+      "verdict": "SURVIVES",
+      "note": "clean; \u00a78 hash drifts on reflow (expected)"
+    },
+    {
+      "tool": "remark-mdx",
+      "axis": "roundtrip",
+      "fixture": "mdx",
+      "verdict": "SURVIVES",
+      "note": "clean, no drift"
+    },
+    {
+      "tool": "github",
+      "axis": "render",
+      "fixture": "blocks",
+      "verdict": "INVISIBLE",
+      "note": "comment dropped from output (invisible)"
+    },
+    {
+      "tool": "github",
+      "axis": "render",
+      "fixture": "blocks_trailing",
+      "verdict": "INVISIBLE",
+      "note": "comment dropped from output (invisible)"
+    },
+    {
+      "tool": "github",
+      "axis": "render",
+      "fixture": "hash",
+      "verdict": "INVISIBLE",
+      "note": "comment dropped from output (invisible)"
+    },
+    {
+      "tool": "markdown-it",
+      "axis": "render",
+      "fixture": "blocks",
+      "verdict": "INVISIBLE",
+      "note": "comment retained in HTML source (invisible)"
+    },
+    {
+      "tool": "markdown-it",
+      "axis": "render",
+      "fixture": "blocks_trailing",
+      "verdict": "INVISIBLE",
+      "note": "comment retained in HTML source (invisible)"
+    },
+    {
+      "tool": "markdown-it",
+      "axis": "render",
+      "fixture": "hash",
+      "verdict": "INVISIBLE",
+      "note": "comment retained in HTML source (invisible)"
+    },
+    {
+      "tool": "markdown-it-default",
+      "axis": "render",
+      "fixture": "blocks",
+      "verdict": "LEAKED_VISIBLE",
+      "note": "marker(s) rendered as visible text: c1, h1, l1, p1, q1, t1"
+    },
+    {
+      "tool": "markdown-it-default",
+      "axis": "render",
+      "fixture": "blocks_trailing",
+      "verdict": "LEAKED_VISIBLE",
+      "note": "marker(s) rendered as visible text: c2, h2, l2, p2, q2, t2"
+    },
+    {
+      "tool": "markdown-it-default",
+      "axis": "render",
+      "fixture": "hash",
+      "verdict": "LEAKED_VISIBLE",
+      "note": "marker(s) rendered as visible text: hh1"
+    },
+    {
+      "tool": "marked",
+      "axis": "render",
+      "fixture": "blocks",
+      "verdict": "INVISIBLE",
+      "note": "comment retained in HTML source (invisible)"
+    },
+    {
+      "tool": "marked",
+      "axis": "render",
+      "fixture": "blocks_trailing",
+      "verdict": "INVISIBLE",
+      "note": "comment retained in HTML source (invisible)"
+    },
+    {
+      "tool": "marked",
+      "axis": "render",
+      "fixture": "hash",
+      "verdict": "INVISIBLE",
+      "note": "comment retained in HTML source (invisible)"
+    },
+    {
+      "tool": "python-markdown",
+      "axis": "render",
+      "fixture": "blocks",
+      "verdict": "INVISIBLE",
+      "note": "comment retained in HTML source (invisible)"
+    },
+    {
+      "tool": "python-markdown",
+      "axis": "render",
+      "fixture": "blocks_trailing",
+      "verdict": "INVISIBLE",
+      "note": "comment retained in HTML source (invisible)"
+    },
+    {
+      "tool": "python-markdown",
+      "axis": "render",
+      "fixture": "hash",
+      "verdict": "INVISIBLE",
+      "note": "comment retained in HTML source (invisible)"
+    },
+    {
+      "tool": "mdx",
+      "axis": "render",
+      "fixture": "mdx",
+      "verdict": "INVISIBLE",
+      "note": "compiles; marker hoisted to a JS comment, renders as an empty expression"
+    },
+    {
+      "tool": "mdx",
+      "axis": "render",
+      "fixture": "blocks",
+      "verdict": "ERROR",
+      "note": "HTML-comment marker is invalid MDX (use the \u00a73.2 {/* */} form)"
+    },
+    {
+      "tool": "rehype-sanitize",
+      "axis": "sanitize",
+      "fixture": "blocks",
+      "verdict": "ID_PREFIXED",
+      "note": "id kept but renamed (e.g. user-content-): #id deep link breaks"
+    },
+    {
+      "tool": "rehype-sanitize",
+      "axis": "sanitize",
+      "fixture": "blocks_trailing",
+      "verdict": "ID_PREFIXED",
+      "note": "id kept but renamed (e.g. user-content-): #id deep link breaks"
+    },
+    {
+      "tool": "dompurify",
+      "axis": "sanitize",
+      "fixture": "blocks",
+      "verdict": "ID_SURVIVES",
+      "note": "id preserved verbatim"
+    },
+    {
+      "tool": "dompurify",
+      "axis": "sanitize",
+      "fixture": "blocks_trailing",
+      "verdict": "ID_SURVIVES",
+      "note": "id preserved verbatim"
+    }
+  ]
+}

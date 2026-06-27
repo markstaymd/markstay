@@ -65,6 +65,7 @@ nav:
   - Demo: demo.md
   - Specification: spec.md
   - Implementations: implementations.md
+  - Compatibility: compat.md
   - Examples: examples.md
   - Plate: plate.md
   - RAG cache: rag.md
