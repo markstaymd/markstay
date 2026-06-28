@@ -1,17 +1,16 @@
-# RAG: a cache key that survives the edit
+# RAG: stable block identity for LangChain indexes
 
-Every RAG framework re-ingests Markdown constantly, and the leading ones already ship
-an incremental indexer so a re-ingest only re-embeds what changed.
-[LangChain](https://python.langchain.com/)'s `index()` pairs a `RecordManager` with a
-`key_encoder`: it hashes each chunk a splitter produced and skips re-embedding the ones
-whose key is unchanged, deleting the ones that vanished. That is the near-miss markstay
-completes, the same shape as [Plate one ecosystem over](plate.md).
+[LangChain](https://python.langchain.com/)'s `index()` already does useful
+incremental ingestion: it hashes chunks, skips unchanged ones, and deletes records for
+chunks that vanished. markstay does not replace that machinery, and it does not beat a
+good content-hash pipeline on embedding count. It adds the missing identity layer for
+Markdown blocks: duplicate blocks stay distinct, edited blocks keep a durable handle,
+and moved blocks keep the same record.
 
-The flaw is in what gets hashed. The splitter's boundaries are byte- and size-derived,
-so an edit early in a document reflows the chunks after it: their text changes, their
-keys flip, and they re-embed even though their *content* did not. markstay supplies the
-other half, a [stable block id](spec.md) that is the cache key and a
-[body hash](spec.md) that flips only on a real content change.
+The short version: a content hash is good cache invalidation, but it is not identity.
+It changes when the text changes, and byte-identical blocks share the same key.
+markstay supplies a [stable block id](spec.md) plus a [body hash](spec.md): the id says
+"same logical block," and the hash says "this block's body changed."
 
 !!! success "Headline (framing it honestly)"
     markstay's body hash *is* a content hash, so against the strongest honest baseline,
@@ -29,11 +28,11 @@ other half, a [stable block id](spec.md) that is the cache key and a
       unchanged while its body hash moves. A content hash is not an identity; it changes
       the instant the text does. The id is a durable handle (vector-store metadata, deep
       links, an i18n source-to-target map).
-    - **Movement is free.** A section reorder re-embeds **0** chunks. This is a parity
-      property, true for the content-hash baseline too, so it is reported as a property,
-      not a markstay-exclusive win.
+    - **Movement stays cheap without giving up identity.** A section reorder re-embeds
+      **0** chunks. This is a parity property, true for the content-hash baseline too,
+      so it is reported as a property, not a markstay-exclusive win.
 
-## What the native indexer does, and where it is blind
+## Where content hashes stop
 
 `index()` with a content-hash `key_encoder` is genuinely good at the common case: edit
 one block, re-embed one block. markstay ties it there and cannot beat it. The blind
@@ -46,24 +45,49 @@ spots are not about *count*, they are about *identity*:
   key, so the store keeps one record and silently drops the other. Repeated boilerplate
   (a shared note, an identical step) loses a retrievable unit. markstay keeps each block
   distinct because the id, not the text, is the key.
-- **Offset splitters reflow.** A `RecursiveCharacterTextSplitter` re-embeds far more than
-  the edited block because the edit shifts every downstream chunk boundary, and the
-  amount is set by `chunk_size`, not by how much actually changed (quantified below).
+- **Offset splitters reflow.** A `RecursiveCharacterTextSplitter` can re-embed far more
+  than the edited block because the edit shifts every downstream chunk boundary. That is
+  real, but the number depends on `chunk_size`, so it is context, not the headline.
+
+For the duplicate case, content hashing cannot tell these apart:
+
+```md
+Terms and conditions apply.
+<!-- stay:a1 hash=sha256:... -->
+
+Terms and conditions apply.
+<!-- stay:b7 hash=sha256:... -->
+```
+
+The text is identical, so a pure content key sees one record. The stay ids are distinct,
+so markstay sees two logical blocks.
 
 ## The adapter
 
-A framework-neutral chunker emits **one chunk per stayed block**, so the cache key is
-the stay id directly and a one-block edit invalidates exactly one chunk. The LangChain
-binding is thin: it maps each chunk to a `Document` and sets
+A framework-neutral chunker emits **one chunk per stayed block** in the demo so the
+identity behavior is visible: one block, one id, one body hash. The LangChain binding
+is thin: it maps each chunk to a `Document` and sets
 
 ```python
 key_encoder = lambda doc: f"{doc.metadata['source']}:{doc.metadata['stay_id']}:{doc.metadata['body_hash']}"
 ```
 
+LangChain detail: `index()` has no separate "stable id" field plus "content hash"
+field for this. The adapter therefore uses a composite key:
+
+- `source` scopes document-local stay ids.
+- `stay_id` is the durable identity.
+- `body_hash` is the invalidation trigger.
+
 The `source` scope is load-bearing: a stay id is unique only *within* a document
 ([spec section 12](spec.md)), so two documents sharing an id and hash would otherwise
 collapse to one vector record. Movement-immunity is unaffected, the source is constant
 when a block moves inside its own document.
+
+In production, one stayed block is often too fine-grained for retrieval. The production
+shape is an aggregating splitter: group related blocks, then key the aggregate from the
+member `{stay_id, body_hash}` pairs. The demo keeps the one-block shape because it makes
+the identity contract inspectable.
 
 The chunker is **lint-first and fail-closed**. It runs the
 [reference linter](linter.md) before any cache decision and rejects the whole document
@@ -130,11 +154,12 @@ markstay tracks the content-hash baseline exactly. That is the point of leading 
 markstay is not selling fewer embeddings.
 
 **The correctness matrix (section 2).** This is what the count misses. A section reorder
-costs **0** re-embeds for both. Two byte-identical blocks are kept as **two** records by
-markstay and collapsed to **one** by the content-hash key, so the baseline silently loses
-a retrievable block. A reworded block keeps its id while its body hash moves, so a handle
-stored against that id (a citation, a translation link, a piece of vector metadata)
-survives the edit. None of these is a savings number; all three are correctness.
+costs **0** re-embeds for both, so movement is cheap without giving up identity. Two
+byte-identical blocks are kept as **two** records by markstay and collapsed to **one** by
+the content-hash key, so the baseline silently loses a retrievable block. A reworded
+block keeps its id while its body hash moves, so a handle stored against that id (a
+citation, a translation link, a piece of vector metadata) survives the edit. None of
+these is a savings number; all three are correctness.
 
 **The strawman (section 3).** The large "savings vs `RecursiveCharacterTextSplitter`"
 number you could quote is config-inflatable: the *same* edit re-embeds 15, 21, or 35
@@ -143,6 +168,10 @@ as context and never as the headline.
 
 ## Honest scope
 
+- **This is not a cheaper embedding strategy than a good block-content-hash pipeline.**
+  It is a stable identity layer for Markdown blocks.
+- **This is not a replacement for LangChain's `index()`.** The adapter uses `index()`
+  directly and supplies a better key for Markdown block identity.
 - **Block-as-chunk is a clean demo granularity, not the production one.** One chunk per
   block makes the cache key the stay id directly, which is what makes the count legible.
   But on real prose the block sizes are bimodal: a heading is its own tiny block, a
