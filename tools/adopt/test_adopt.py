@@ -253,6 +253,220 @@ def test_hook_show_drift_env_lists_the_drift():
         shutil.rmtree(repo, ignore_errors=True)
 
 
+# --- install into a repo whose hooks git actually runs -------------------------
+
+def test_install_honours_core_hookspath():
+    """husky and lefthook set core.hooksPath, and git then never runs
+    .git/hooks/pre-commit. Installing there would report success and check
+    nothing."""
+    repo = _fresh_repo()
+    try:
+        _git(repo, "config", "core.hooksPath", ".husky")
+        _install(repo)
+        assert os.access(os.path.join(repo, ".husky", "pre-commit"), os.X_OK)
+        assert not os.path.exists(os.path.join(repo, ".git", "hooks", "pre-commit"))
+        # and it really gates: the check runs where git looks for it
+        _write(repo, "a.md", "Alpha block.\n<!-- stay:a1 -->\n")
+        _git(repo, "add", "a.md")
+        assert _git(repo, "commit", "-m", "init").returncode == 0
+        _write(repo, "a.md", "Alpha block, rewritten with no marker.\n")
+        _git(repo, "add", "a.md")
+        blocked = _git(repo, "commit", "-m", "drop a1")
+        assert blocked.returncode != 0
+        assert "DROPPED_ID" in (blocked.stdout + blocked.stderr)
+    finally:
+        shutil.rmtree(repo, ignore_errors=True)
+
+
+def test_install_refuses_to_clobber_a_managed_hook():
+    """Overwriting husky's own pre-commit would silently drop every other check the
+    repo runs, so the installer integrates instead of taking the file."""
+    repo = _fresh_repo()
+    try:
+        os.makedirs(os.path.join(repo, ".husky"))
+        husky = os.path.join(repo, ".husky", "pre-commit")
+        with open(husky, "w") as fh:
+            fh.write("#!/bin/sh\necho '[husky] other checks'\n")
+        os.chmod(husky, 0o755)
+        _git(repo, "config", "core.hooksPath", ".husky")
+
+        r = subprocess.run(["bash", os.path.join(HERE, "install.sh"), repo],
+                           capture_output=True, text=True)
+        out = r.stdout + r.stderr
+        assert r.returncode != 0, out                      # loud, not a silent pass
+        assert "ACTION REQUIRED" in out, out
+        assert "[husky] other checks" in open(husky).read()  # untouched
+        assert os.path.exists(os.path.join(repo, ".markstay", "hook.py"))
+    finally:
+        shutil.rmtree(repo, ignore_errors=True)
+
+
+def test_install_fails_loudly_when_the_hook_source_is_missing():
+    """The published tools/ tree shipped without hooks/pre-commit for five weeks and
+    the installer still printed 'markstay adoption installed'."""
+    stage = tempfile.mkdtemp(prefix="markstay-partial-")
+    repo = _fresh_repo()
+    try:
+        # an adopt/ copy with everything EXCEPT the hook
+        for f in ("install.sh", "markstay_preserve.py"):
+            shutil.copy(os.path.join(HERE, f), os.path.join(stage, f))
+        shutil.copy(os.path.join(HERE, os.pardir, "linter", "markstay_lint.py"),
+                    os.path.join(stage, "markstay_lint.py"))
+        r = subprocess.run(["bash", os.path.join(stage, "install.sh"), repo],
+                           capture_output=True, text=True)
+        out = r.stdout + r.stderr
+        assert r.returncode != 0, out
+        assert "adoption installed" not in out, out
+        assert "cannot find the hook" in out, out
+    finally:
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.rmtree(repo, ignore_errors=True)
+
+
+def test_install_keeps_bytecode_out_of_the_adopters_commits():
+    repo = _fresh_repo()
+    try:
+        _install(repo)
+        assert "__pycache__" in open(os.path.join(repo, ".markstay", ".gitignore")).read()
+        _write(repo, "a.md", "Alpha block.\n<!-- stay:a1 -->\n")
+        _git(repo, "add", "-A")
+        assert _git(repo, "commit", "-m", "adopt").returncode == 0
+        tracked = _git(repo, "ls-files").stdout
+        assert "__pycache__" not in tracked, tracked
+    finally:
+        shutil.rmtree(repo, ignore_errors=True)
+
+
+# --- baseline pairing: the document, not the path ------------------------------
+# A stay's identity is not positional, so neither is the hook's baseline. These
+# cover the cases path-keyed pairing gets wrong.
+
+def _doc(n, prefix="s"):
+    """A stamped document with n sections, ids <prefix>0..<prefix>n-1."""
+    return "# Doc\n\n" + "\n".join(
+        f"## Section {i}\n\nBody text for section {i}, long enough to hash.\n"
+        f"<!-- stay:{prefix}{i} -->\n" for i in range(n))
+
+
+def test_hook_blocks_drop_hidden_by_a_rename():
+    """The failure this pairing exists for: git scores the rewrite too low to call
+    it a rename, records delete + create, and path-keyed pairing finds no
+    baseline. A measured real case scored 2% similarity."""
+    repo = _fresh_repo()
+    try:
+        _install(repo)
+        _write(repo, "STATUS.md", _doc(9))
+        _git(repo, "add", "-A")
+        assert _git(repo, "commit", "-m", "init").returncode == 0
+
+        _git(repo, "mv", "STATUS.md", "PHASE1.md")
+        _write(repo, "PHASE1.md",
+               "# Doc\n\n## Phase 1 (complete)\n\nAll nine done.\n<!-- stay:s0 -->\n")
+        _git(repo, "add", "-A")
+        # git itself sees no rename here, which is the whole point
+        assert "R" not in _git(repo, "diff", "--cached", "--name-status").stdout.split()[0]
+
+        blocked = _git(repo, "commit", "-m", "collapse into a renamed file")
+        out = blocked.stdout + blocked.stderr
+        assert blocked.returncode != 0, out
+        assert out.count("DROPPED_ID") == 8, out
+        assert "baseline STATUS.md" in out, out   # says where the ids came from
+    finally:
+        shutil.rmtree(repo, ignore_errors=True)
+
+
+def test_hook_allows_pure_rename():
+    repo = _fresh_repo()
+    try:
+        _install(repo)
+        _write(repo, "STATUS.md", _doc(5))
+        _git(repo, "add", "-A")
+        assert _git(repo, "commit", "-m", "init").returncode == 0
+        _git(repo, "mv", "STATUS.md", "RENAMED.md")
+        _git(repo, "add", "-A")
+        r = _git(repo, "commit", "-m", "pure rename")
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert "DROPPED_ID" not in (r.stdout + r.stderr)
+    finally:
+        shutil.rmtree(repo, ignore_errors=True)
+
+
+def test_hook_reports_cross_document_move_without_blocking():
+    """A stay that moved to another document in the same commit is not lost, so a
+    deliberate reorganisation must not block."""
+    repo = _fresh_repo()
+    try:
+        _install(repo)
+        moved = ("## Section 2\n\nBody text for section 2, long enough to hash.\n"
+                 "<!-- stay:s2 -->\n")
+        _write(repo, "a.md", _doc(3))
+        _write(repo, "b.md", _doc(2, "t"))
+        _git(repo, "add", "-A")
+        assert _git(repo, "commit", "-m", "init").returncode == 0
+
+        _write(repo, "a.md", _doc(3).replace(moved, ""))
+        _write(repo, "b.md", _doc(2, "t") + "\n" + moved)
+        _git(repo, "add", "-A")
+        r = _git(repo, "commit", "-m", "move a section between documents")
+        out = r.stdout + r.stderr
+        assert r.returncode == 0, out
+        assert "DROPPED_ID" not in out, out
+        assert "s2: moved out of a.md into b.md" in out, out
+    finally:
+        shutil.rmtree(repo, ignore_errors=True)
+
+
+def test_hook_notes_stays_lost_to_a_deletion_without_blocking():
+    repo = _fresh_repo()
+    try:
+        _install(repo)
+        _write(repo, "doomed.md", _doc(4, "d"))
+        _write(repo, "keep.md", _doc(1, "k"))
+        _git(repo, "add", "-A")
+        assert _git(repo, "commit", "-m", "init").returncode == 0
+        _git(repo, "rm", "-q", "doomed.md")
+        r = _git(repo, "commit", "-m", "remove the document")
+        out = r.stdout + r.stderr
+        assert r.returncode == 0, out
+        assert "deleted with 4 stay(s)" in out, out
+    finally:
+        shutil.rmtree(repo, ignore_errors=True)
+
+
+def test_hook_ignores_its_own_vendored_files():
+    """The first thing an adopter does after install is commit .markstay/, which the
+    README asks for. PRESERVE.md shows the marker form twice, so linting the
+    installer's own output would block that first commit with DUPLICATE_ID."""
+    repo = _fresh_repo()
+    try:
+        _install(repo)
+        _write(repo, "a.md", "Alpha block.\n<!-- stay:a1 -->\n")
+        _git(repo, "add", "-A")               # sweeps in .markstay/PRESERVE.md
+        r = _git(repo, "commit", "-m", "adopt markstay")
+        out = r.stdout + r.stderr
+        assert r.returncode == 0, out
+        assert "DUPLICATE_ID" not in out, out
+    finally:
+        shutil.rmtree(repo, ignore_errors=True)
+
+
+def test_hook_treats_a_genuinely_new_file_as_having_no_baseline():
+    repo = _fresh_repo()
+    try:
+        _install(repo)
+        _write(repo, "keep.md", _doc(1, "k"))
+        _git(repo, "add", "-A")
+        assert _git(repo, "commit", "-m", "init").returncode == 0
+        _write(repo, "brand-new.md", _doc(3, "n"))
+        _git(repo, "add", "-A")
+        r = _git(repo, "commit", "-m", "add a new document")
+        out = r.stdout + r.stderr
+        assert r.returncode == 0, out
+        assert "DROPPED_ID" not in out and "baseline" not in out, out
+    finally:
+        shutil.rmtree(repo, ignore_errors=True)
+
+
 def _run_all():
     tests = [v for k, v in sorted(globals().items())
              if k.startswith("test_") and callable(v)]
