@@ -19,6 +19,39 @@ pip install markstay         # PyPI
 cargo install markstay       # crates.io, a single static binary
 ```
 
+## Add a stay to a block
+
+A stay is recorded as a trailing HTML comment, invisible in rendered Markdown and
+preserved in the source ([measured across the common formatters and
+renderers](compat.md), so you can check your toolchain before you stamp):
+
+```md
+## Installation
+Install the package.
+<!-- stay:install-step -->
+```
+
+Write markers by hand, or mint them with the CLI:
+
+```bash
+markstay stamp FILE -w      # mint a stay for each unmarked block
+```
+
+### Which blocks should carry a stay?
+
+Add a stay to a block when something will point at it or detect its loss, not to
+every block by reflex. Two coverage models:
+
+- **Authored landmarks (the default for hand-written docs).** Mark only the blocks
+  that are durable units worth addressing, a tracked item, an instruction, a section
+  other documents link to. Human-readable ids (`stay:install-step`) read well here.
+- **Dense automatic coverage (for tooling).** A tool that wants to address every
+  block can `stamp` the whole document; short generated ids keep that cheap.
+
+A marker earns its keep only when there is a consumer for the address. The two
+mitigations below are the first ones: they give every stay a reason to exist by
+keeping it attached through an edit, and reporting the moment one vanishes anyway.
+
 ## 1. Tell the editing agent (the lever)
 
 The [AI editing contract](spec.md#ai-editing-contract) is only honoured if the agent
@@ -43,39 +76,6 @@ byte-identical across all three packages, held there by the
 [shared conformance corpus](implementations.md) rather than by convention.
 
 If you do one thing on this page, do this one.
-
-## Add a stay to a block
-
-A stay is recorded as a trailing HTML comment, invisible in rendered Markdown and
-preserved in the source ([measured across the common formatters and
-renderers](compat.md), so you can check your toolchain before you stamp):
-
-```md
-## Installation
-Install the package.
-<!-- stay:install-step -->
-```
-
-Write markers by hand, or mint them with the npm CLI:
-
-```bash
-npx markstay stamp FILE -w      # mint a stay for each unmarked block
-```
-
-### Which blocks should carry a stay?
-
-Add a stay to a block when something will point at it or detect its loss, not to
-every block by reflex. Two coverage models:
-
-- **Authored landmarks (the default for hand-written docs).** Mark only the blocks
-  that are durable units worth addressing, a tracked item, an instruction, a section
-  other documents link to. Human-readable ids (`stay:install-step`) read well here.
-- **Dense automatic coverage (for tooling).** A tool that wants to address every
-  block can `stamp` the whole document; short generated ids keep that cheap.
-
-A marker earns its keep only when there is a consumer for the address. The
-pre-commit hook below is the simplest one: it gives every stay a reason to exist by
-catching the moment one silently vanishes.
 
 ## 2. Catch what gets through (the backstop)
 
