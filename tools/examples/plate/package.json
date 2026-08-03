@@ -2,12 +2,16 @@
   "name": "markstay-plate-example",
   "version": "0.0.0",
   "private": true,
-  "description": "Worked example: Plate withBlockId <-> markstay bridge (not published). Consumes the published `markstay` package, so run `npm i` before `node --test`.",
+  "description": "Worked example + source for plate-stay: the withBlockId <-> markstay string bridge (bridge.js) and the editor-native plate-stay/plugin (plugin.js). Consumes the published `markstay` package; the plugin drives real Plate. Run `npm i` before `node --test`.",
   "type": "module",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "demo": "node demo.js",
+    "plugin-demo": "node plugin-demo.js"
   },
   "dependencies": {
-    "markstay": "^0.2.1"
+    "@platejs/markdown": "53.2.2",
+    "markstay": "^0.2.1",
+    "platejs": "53.2.4"
   }
 }

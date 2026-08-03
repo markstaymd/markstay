@@ -8,6 +8,7 @@ The helper tests are pure. The hook tests spin up a throwaway git repo, run
 install.sh against it, and drive real `git commit`s, so they need `git` and
 `bash` on PATH (no API credentials, no network)."""
 
+import json
 import os
 import shutil
 import subprocess
@@ -19,8 +20,52 @@ sys.path.insert(0, HERE)
 
 import markstay_preserve as P  # noqa: E402
 
+# The shared conformance corpus. This file has two homes: the umbrella (where the
+# corpus sits beside it) and the published tools/ tree (where it does not). The
+# umbrella is identified by SPEC.md, which the published copy never carries, so
+# the skip below can only fire in the published tree. Keying the skip on the
+# corpus file itself would have made deleting that file turn this test green.
+_PARENT = os.path.dirname(HERE)
+_IN_UMBRELLA = os.path.exists(os.path.join(_PARENT, "SPEC.md"))
+_CORPUS = os.path.join(_PARENT, "conformance", "spec", "preserve.json")
+
+
+def _corpus_vectors():
+    if not _IN_UMBRELLA:
+        return None
+    assert os.path.exists(_CORPUS), (
+        f"running in the umbrella but {_CORPUS} is missing; the vendored instruction "
+        "is unguarded"
+    )
+    with open(_CORPUS, encoding="utf-8") as fh:
+        return json.load(fh)["vectors"]
+
 
 # --- preservation instruction (mitigation #1) -----------------------------
+
+def test_vendored_copy_matches_the_shared_corpus():
+    """This file is the standalone copy an adopter vendors; the same text and the
+    same composition ship as `markstay preserve` in three packages. The corpus is
+    what holds them byte-identical, so drift here is a test failure rather than a
+    silently divergent instruction, which is the exact failure class markstay
+    exists to catch."""
+    vectors = _corpus_vectors()
+    if vectors is None:
+        return  # published tools/ copy: no corpus ships beside it
+    checked = 0
+    for v in vectors:
+        if v["fn"] == "instruction":
+            got = P.INSTRUCTION
+        elif v["fn"] == "return_only":
+            got = P.RETURN_ONLY
+        elif v["fn"] == "wrap":
+            got = P.wrap(v["doc"], v.get("task"))
+        else:
+            raise AssertionError(f"unknown preserve fn: {v['fn']!r}")
+        assert got == v["expected"], f"drift on corpus vector {v['name']!r}"
+        checked += 1
+    assert checked, "corpus carried no preserve vectors"
+
 
 def test_instruction_covers_the_contract():
     text = P.INSTRUCTION.lower()

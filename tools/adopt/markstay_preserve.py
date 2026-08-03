@@ -14,6 +14,12 @@ the wording the eval measured as effective ("preserve every marker exactly as
 written and in place; do not remove, alter, renumber, or relocate them") so the
 adopted instruction is the one shown to work, not a paraphrase of it.
 
+This file is the standalone copy, vendored into an adopter's repo by `install.sh`
+so the instruction is reachable with nothing installed. The same text and the same
+prompt composition ship as `markstay preserve` in all three packages (npm, PyPI,
+crates.io); every copy is held byte-identical by the shared conformance corpus
+(`conformance/spec/preserve.json`), so a drift here fails the umbrella's tests.
+
 Dependency-free (Python 3.8+ stdlib only); no API credentials, no network.
 
 Usage:
@@ -56,17 +62,28 @@ Return the edited Markdown with every original marker still present and in place
 
 RETURN_ONLY = "Return only the resulting Markdown, with no commentary and no code fence around it."
 
+# The ASCII whitespace set SPEC.md pins for §8 hashing and §9 matching. Trimming
+# the same set here (rather than each language's native strip/trim) is what lets
+# the Python, JavaScript, and Rust copies compose byte-identical prompts: Python's
+# bare `str.strip()` also eats U+001C-U+001F and NBSP, JavaScript's `trim()` eats
+# NBSP and U+FEFF, and Rust's eats every Unicode White_Space. Non-ASCII whitespace
+# in a document is content and survives the wrap.
+_ASCII_WS = " \t\n\r\f\v"
+
 
 def wrap(doc: str, task: str | None = None) -> str:
     """Compose a ready-to-send editing prompt: optional task, then the
     preservation instruction, then the document. Mirrors the eval's prompt
-    builder (`../eval/run_eval.py`), the shape that measured 100% survival."""
+    builder (`../eval/run_eval.py`), the shape that measured 100% survival.
+    A task that is empty or only ASCII whitespace is treated as absent."""
     parts: list[str] = []
-    if task:
-        parts.append(task.strip())
+    if task is not None:
+        trimmed = task.strip(_ASCII_WS)
+        if trimmed:
+            parts.append(trimmed)
     parts.append(INSTRUCTION)
     parts.append(RETURN_ONLY)
-    parts.append("---\n\n" + doc.strip() + "\n")
+    parts.append("---\n\n" + doc.strip(_ASCII_WS) + "\n")
     return "\n\n".join(parts)
 
 
