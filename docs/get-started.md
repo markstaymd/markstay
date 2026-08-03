@@ -5,6 +5,45 @@ markstay is two things: a [specification](spec.md) and a set of
 mandatory mitigations the [evaluation](evaluation.md) settled on, tell the editing
 agent to keep the markers, and catch any silent loss at commit time.
 
+They are not equal partners, so this page does them in the order the evidence puts
+them. The instruction prevents loss; the commit check only reports it afterwards.
+
+## Install
+
+Same CLI, same subcommands, three ecosystems. Pick whichever your repo already has.
+
+```bash
+npx markstay --help          # npm, no install
+npm install -g markstay      # or globally
+pip install markstay         # PyPI
+cargo install markstay       # crates.io, a single static binary
+```
+
+## 1. Tell the editing agent (the lever)
+
+The [AI editing contract](spec.md#ai-editing-contract) is only honoured if the agent
+is told to honour it. This is the single biggest control on whether markers survive a
+rewrite, and it is not close: a naive "clean this up" rewrite keeps about **5%** of
+markers, the same rewrite carrying the instruction keeps **~96-100%**, measured
+[across five models and three vendors](evaluation.md). That gap is far wider than the
+gap between a cheap model and a frontier one, so the instruction matters more than
+which model you use.
+
+```bash
+markstay preserve                       # print it: paste into AGENTS.md,
+                                        #   CLAUDE.md, or a system prompt
+markstay preserve --wrap notes.md       # the instruction wrapped around a document,
+                                        #   as a complete editing prompt
+markstay preserve --wrap notes.md --task "Rewrite this to be clearer."
+```
+
+The same text is available as a library constant (`PRESERVE_INSTRUCTION`) with a
+composer (`preserve_wrap` / `preserveWrap`) for building the prompt in code. It is
+byte-identical across all three packages, held there by the
+[shared conformance corpus](implementations.md) rather than by convention.
+
+If you do one thing on this page, do this one.
+
 ## Add a stay to a block
 
 A stay is recorded as a trailing HTML comment, invisible in rendered Markdown and
@@ -38,37 +77,69 @@ A marker earns its keep only when there is a consumer for the address. The
 pre-commit hook below is the simplest one: it gives every stay a reason to exist by
 catching the moment one silently vanishes.
 
-## Install the safety net in a repo
+## 2. Catch what gets through (the backstop)
 
-The [`tools/adopt/`](https://github.com/markstaymd/markstay/tree/master/tools/adopt)
-directory packages both mitigations so a repo can pick them up without wiring
-anything by hand.
+`check-staged` reads the commit you are about to make and compares each document
+against the version it is replacing, so a commit that drops, duplicates, or relocates
+a stay is blocked before it lands. Hash drift is a warning and never blocks; files
+with no markstay markers pass silently.
 
-**The pre-commit hook** (mitigation #2). An installer vendors the
-[reference linter](linter.md) into the target repo and installs a git pre-commit
-hook that lints each staged Markdown file and runs the regeneration diff against the
-committed version, so a commit that drops, duplicates, or relocates a stay is blocked
-before it lands. Hash drift is a warning and does not block; files with no markstay
-markers pass silently.
+It works on a commit rather than on files because catching a dropped stay means
+diffing against the same document *before* the edit, and only git knows what that
+was. It resolves each document's baseline by stay id rather than by filename, which
+is what makes it survive a rewrite git records as a delete plus a create. The
+[agent loop](agent-loop.md) page explains why that distinction decides whether the
+check works at all.
+
+Wire it into the hook manager your repo already runs.
+
+=== "npm (husky + lint-staged)"
+
+    ```jsonc
+    // package.json
+    {
+      "lint-staged": {
+        "*.{md,markdown}": "markstay check-staged"
+      }
+    }
+    ```
+
+    ```bash
+    # .husky/pre-commit
+    npx lint-staged
+    ```
+
+=== "Python (pre-commit framework)"
+
+    ```yaml
+    # .pre-commit-config.yaml
+    repos:
+      - repo: https://github.com/markstaymd/markstay-py
+        rev: v0.5.0
+        hooks:
+          - id: markstay
+    ```
+
+Either way: edit a `.md`, drop a `stay:` marker, `git commit` is blocked.
+
+There is also `check-worktree`, the same check against the files on disk whether or
+not they are staged. That is the one to run as an agent's post-edit step, because it
+reports the loss while the agent is still in the loop rather than at the next commit.
+See [the agent loop](agent-loop.md).
+
+If your repo has neither hook manager, the
+[`tools/adopt/`](https://github.com/markstaymd/markstay/tree/master/tools/adopt)
+installer vendors the [reference linter](linter.md) and writes a plain git
+pre-commit hook, with no npm or pip dependency:
 
 ```bash
 cd tools/adopt
-./install.sh /path/to/your/repo        # vendor the linter + install the hook
-# now: edit a .md, drop a stay: marker, `git commit` -> blocked
+./install.sh /path/to/your/repo
 ```
 
-**The preservation instruction** (mitigation #1). The
-[AI editing contract](spec.md#ai-editing-contract) is only honoured if the editing
-agent is told to honour it, the single biggest lever on whether markers survive a
-rewrite. `markstay_preserve.py` is the canonical source of that instruction:
-
-```bash
-python3 markstay_preserve.py                   # print it (seed a system prompt / AGENTS.md)
-python3 markstay_preserve.py --wrap notes.md   # wrap a doc into a ready editing prompt
-```
-
-Together they are the durable deliverable the [evaluation](evaluation.md) pointed
-at: instruct the agent up front, then catch any silent loss at commit time.
+Together the two mitigations are the durable deliverable the
+[evaluation](evaluation.md) pointed at: instruct the agent up front, then catch any
+silent loss at commit time.
 
 ## Build on it in code
 
