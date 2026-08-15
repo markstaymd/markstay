@@ -172,8 +172,8 @@ everything else, and the demo's headline, so none of it can silently regress.
 ## Where this fits
 
 markstay does not change to read `<block id>` as a native marker, that visible wrapper
-contradicts the invisible-comment design and would reopen the locked
-[v1.1 spec](spec.md). The bridge consumes Plate's id as foreign input and produces
+contradicts the invisible-comment design and would reopen the settled
+[spec](spec.md). The bridge consumes Plate's id as foreign input and produces
 standard markstay markers, no new syntax. The core it builds on is the published
 [`markstay` package](implementations.md); start with [Get started](get-started.md) to
 stamp your own documents.

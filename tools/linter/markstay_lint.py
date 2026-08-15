@@ -184,6 +184,84 @@ def _strip_markers(text: str) -> str:
     return MDX_MARKER.sub("", HTML_MARKER.sub("", text))
 
 
+_FRONTMATTER_OPEN_RE = re.compile(r"^---[ \t]*$")
+_FRONTMATTER_CLOSE_RE = re.compile(r"^(?:---|\.\.\.)[ \t]*$")
+# One payload line that could only be YAML, never Markdown prose: a mapping key or
+# a list item. Used to tell real frontmatter from a leading thematic break that
+# happens to be followed by another one. A YAML comment (`# ...`) is deliberately
+# NOT accepted: it is byte-identical to an ATX heading, so accepting it lets
+# `---` / `# Heading` / `---` be read as frontmatter and silently destroys the
+# heading. Comment-only frontmatter therefore is not skipped, which is the safe
+# direction to be wrong in.
+#
+# `[^\x00-\x20\x7f]` is "not an ASCII control character and not a space", written
+# out rather than as `\S`. Whitespace is ASCII-pinned here exactly as it is for
+# hashing (§8) and matching (§9), because Python, ECMAScript and Rust each define
+# Unicode whitespace differently: U+001C is whitespace to Python only, U+0085 to
+# Python and Rust only, U+00A0 to Python and ECMAScript only, U+FEFF to ECMAScript
+# only. A `\S` here therefore makes four conforming implementations skip different
+# spans, which for a rule that DELETES a span from the document is the one kind of
+# divergence that loses data.
+_YAMLISH_LINE_RE = re.compile(
+    r"^[ \t]*(?:-[ \t]+[^\x00-\x20\x7f]|[^\x00-\x20\x7f:#][^:]*:(?:[ \t]|$))"
+)
+
+
+def _blank_frontmatter(text: str) -> str:
+    """Blank a leading YAML frontmatter block so neither segmenter sees it as
+    content (SPEC.md §5).
+
+    Frontmatter is document metadata, not a block: it carries no prose to identify,
+    and hashing it makes a metadata edit (`status: draft` -> `status: done`) drift a
+    content hash. It also has to be removed *before* segmentation rather than
+    filtered after, because the two segmenters disagree about what it is , the
+    baseline reads the whole fenced span as one block, while CommonMark reads the
+    opening `---` as a thematic break and the closing one as a setext underline,
+    turning the metadata into an H2. Leaving it in puts a document that is inside
+    §5.4's agreement subset outside the set the two segmenters actually agree on.
+
+    Recognition is deliberately conservative, because `---` is also a thematic break
+    and a setext underline, so a loose rule silently eats real content. All four
+    must hold:
+
+    1. line 1 is exactly `---`;
+    2. a later line is exactly `---` or `...` (the closing fence). Without one the
+       opener is an ordinary thematic break;
+    3. the payload between the fences is non-empty and contains **no blank line**.
+       This is what stops `---` / blank / `Intro.` / blank / `---` , two thematic
+       breaks around a paragraph , from being read as frontmatter that swallows the
+       paragraph;
+    4. at least one payload line is unambiguously YAML (a `key:` or a `- item`).
+       This is what stops `---` / `Title` / `---` , a thematic break followed by a
+       setext heading , from being read as frontmatter. A YAML comment does not
+       count, because `# x` is also an ATX heading and accepting it would swallow
+       `---` / `# Heading` / `---`.
+
+    Conditions 3 and 4 confine the ambiguity rather than removing it. Any blank-free
+    payload that reads as YAML is *also* ordinary Markdown: `---` / `- Keep this` /
+    `---` is a list between two thematic breaks, `---` / `title: v` / `---` is a
+    setext heading under one. Both satisfy all four conditions and their content *is*
+    excluded. Frontmatter wins, the same call every mainstream site generator makes.
+    A document that fails any of the four conditions falls through to ordinary
+    Markdown, where the worst case is that frontmatter is not skipped (a hash-drift
+    warning) rather than content being silently discarded.
+
+    Lines are replaced one-for-one with empty lines, so every line number the caller
+    reports is unchanged."""
+    lines = text.split("\n")
+    if not lines or not _FRONTMATTER_OPEN_RE.match(lines[0]):
+        return text
+    for i in range(1, len(lines)):
+        if _FRONTMATTER_CLOSE_RE.match(lines[i]):
+            payload = lines[1:i]
+            if not payload or any(ln.strip(" \t\f\v") == "" for ln in payload):
+                return text
+            if not any(_YAMLISH_LINE_RE.match(ln) for ln in payload):
+                return text
+            return "\n".join([""] * (i + 1) + lines[i + 1 :])
+    return text
+
+
 def _segment_blank_line(text: str) -> list[tuple[int, str]]:
     """Baseline segmenter (SPEC.md §5): a block is a maximal run of non-blank
     lines bounded by blank lines or the document edges. Dependency-free. Returns
@@ -407,10 +485,13 @@ def parse_document(
     `mode='blank-line'` (default, dependency-free) splits on blank lines (SPEC.md
     §5). `mode='commonmark'` (v1.1, needs markdown-it-py) splits on the CommonMark
     block tree so loose lists and blank-line-containing fences attach as one block
-    (SPEC.md §5.2). The two agree on every document that keeps lists tight and
-    fences free of internal blank lines. In both modes a chunk that is only
-    markers attaches to the previous content block."""
-    text = md.replace("\r\n", "\n").replace("\r", "\n")
+    (SPEC.md §5.2). The two agree on every document in SPEC.md §5.4's agreement
+    subset. In both modes a leading YAML frontmatter
+    block is metadata rather than content and is skipped before segmentation (see
+    `_blank_frontmatter`, without which frontmatter is a counterexample to that
+    agreement), and a chunk that is only markers attaches to the previous content
+    block."""
+    text = _blank_frontmatter(md.replace("\r\n", "\n").replace("\r", "\n"))
     if mode == "commonmark":
         chunks = _segment_commonmark(text)
     elif mode == "blank-line":
@@ -1139,6 +1220,25 @@ def main(argv=None) -> int:
     )
     args = ap.parse_args(argv)
     mode = "commonmark" if args.commonmark else "blank-line"
+
+    if args.commonmark:
+        # The one optional dependency. A missing parser is a setup answer, not a
+        # stack trace out of the segmenter. The hint names the parser rather than
+        # the packaged extra (`pip install 'markstay[commonmark]'`, which is what
+        # the CLI in impl/py prints), because this file runs as a standalone
+        # script whose user need not have the package installed at all.
+        # find_spec rather than an import: it answers "is it installed" without
+        # executing the module, so a parser that is present but broken still
+        # raises its own error instead of being reported as absent.
+        import importlib.util
+
+        if importlib.util.find_spec("markdown_it") is None:
+            print(
+                "error: --commonmark needs the CommonMark parser.\n"
+                "       install it with:  pip install markdown-it-py",
+                file=sys.stderr,
+            )
+            return 2
 
     results = []  # (label, findings)
     if args.before:

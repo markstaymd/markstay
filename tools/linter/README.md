@@ -132,7 +132,42 @@ in a pipeline, read `--json` or the return tuple.
  blank lines by default (dependency-free); `--commonmark` / `parse_document(...,
  mode="commonmark")` splits over the CommonMark tree instead, so a loose list or a
  blank-line-containing fence attaches as one block (`../SPEC.md` §5.2, v1.1). The
- two modes agree on documents with tight lists and blank-line-free fences.
+ two modes agree on the documents `../SPEC.md` §5.4 calls the agreement subset:
+ every maximal run of non-blank lines is exactly one CommonMark node. In practice
+ that means blank lines between constructs, tight lists, fenced rather than
+ indented code, and no link reference definitions.
+- **Leading YAML frontmatter is metadata, not a block.** It is skipped by both
+ segmenters: never a block, never stamped, never hashed. Without this, a
+ metadata-only edit (`status: draft` -> `status: done`) drifts a content hash, and
+ the two segmenters disagree about the span , the baseline reads it as one block
+ while CommonMark reads the closing fence as a setext underline and turns the
+ metadata into an H2.
+
+ Recognition is conservative, because `---` is also a thematic break and a setext
+ underline. A span counts as frontmatter only when **all** of: line 1 is exactly
+ `---`; a later line is exactly `---` or `...`; the payload between them is
+ non-empty and has no blank line; and at least one payload line is unambiguously
+ YAML (a `key:` or a `- item`). A YAML **comment does not count**, since `# x` is
+ also an ATX heading. "Unambiguously YAML" is judged with ASCII whitespace, as everywhere else in the spec (§8/§9): the runtimes' own Unicode whitespace sets disagree with each other, and a rule that DELETES a span must not vary by implementation. Conditions 3 and 4 confine the ambiguity rather
+ than removing it: a blank-free payload that reads as YAML is also ordinary Markdown,
+ as a sequence (`---`/`- Keep this`/`---`, a list between two thematic breaks) or as
+ a mapping (`---`/`title: v`/`---`, a setext heading under one). Both satisfy all
+ four conditions and their content **is** excluded (frontmatter wins, as it does in
+ every mainstream site generator). A document that fails any of the four conditions
+ falls through to "not frontmatter", where the worst case is a stray hash-drift
+ warning rather than silently discarded content. Spans
+ left alone as ordinary Markdown therefore include `---` with no closing fence,
+ any `---` fence that is not at line 1, `---`/blank/prose/blank/`---` (two thematic
+ breaks), `---`/`Title`/`---` (a setext heading), and comment-only payloads.
+
+ A marker stamped onto frontmatter **before** this behaviour existed sits after the
+ closing fence, and usually raises `ORPHAN_MARKER`: it has no block to attach to.
+ Delete it. The exception is a marker with **no blank line** between it and the
+ content below, which blank-line segmentation reads as one run and binds to that
+ content, so it stays live and must not be deleted , lint first
+ (`frontmatter-marker-binds-forward-with-no-blank-line` pins the shape). A marker written *inside* the payload is blanked with the rest of
+ the frontmatter and raises nothing; no tool writes one there, since the stamper
+ always writes after the block.
 - **Hash normalization** is `../SPEC.md` §8. `normalize_body` implements it (LF
  endings, per-line trailing whitespace stripped, leading/trailing blank lines
  dropped, marker excluded) and always compares at the precision recorded in the

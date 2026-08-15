@@ -10,7 +10,7 @@ A [reference checker](https://github.com/markstaymd/markstay/tree/master/tools/l
 implements the rules below. Its default path is dependency-free (Python standard
 library only) and fully local: no network, no credentials. It is meant to run as a git
 pre-commit hook or as the post-edit step of an agent that edits markstay documents. The
-code ships with the site repo (`tools/linter/`, 20/20 self-tests in `test_lint.py`).
+code ships with the site repo (`tools/linter/`, 59 self-tests in `test_lint.py`).
 The one optional extra is `--commonmark` mode ([version 1.1](spec.md#commonmark-tree-attachment-version-11)),
 which needs `markdown-it-py`.
 
@@ -37,6 +37,15 @@ which needs `markdown-it-py`.
 
 Any error-level finding exits non-zero, so the check gates a hook or an agent step
 directly.
+
+One `ORPHAN_MARKER` is worth naming, because it is the only thing
+[version 1.2](spec.md#document-metadata-leading-yaml-frontmatter-version-12) can
+turn from silent into loud: a document stamped by a pre-1.2 tool may carry a marker
+on its YAML frontmatter. Frontmatter is no longer a block, so that marker usually has
+nothing to attach to. Delete the ones reported here; the blocks below them keep their
+ids. Delete only those: a frontmatter marker with no blank line between it and the
+content below binds forward to that content and is not reported, because it is still
+doing its job.
 
 ## Usage
 

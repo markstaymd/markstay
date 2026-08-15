@@ -1,12 +1,14 @@
-# Specification (version 1.1)
+# Specification (version 1.2)
 
-!!! note "This is the standard, version 1.1"
+!!! note "This is the standard, version 1.2"
     The marker grammar, attachment model, hashing, and recovery behaviour below
     are settled. A conforming document and a conforming tool agree on this
     document. The reference [linter](linter.md) and the resolver behind the
-    [attachment evaluation](evaluation.md) implement it. Version 1.1 adds optional
-    CommonMark-tree attachment (a loose list or a blank-line-containing fence can
-    carry a single stay); the version 1 grammar and identity are unchanged.
+    [attachment evaluation](evaluation.md) implement it. Version 1.2 excludes
+    leading YAML frontmatter from segmentation, so a `status:` flip is not a
+    content edit, and states the condition under which the two segmenters agree
+    (version 1.1 stated it too narrowly). The grammar, identity, hashing, and
+    recovery are unchanged since version 1.
 
 The key words MUST, SHOULD, MAY, and their negatives are used as in RFC 2119.
 
@@ -89,8 +91,8 @@ A marker MUST carry an `id`, SHOULD carry a `hash`, and MAY carry the
 ## Attachment model
 
 Attachment binds each marker to the block it follows. A conforming tool segments a
-document into blocks one of two ways, which agree on every document that keeps lists
-tight and fences free of internal blank lines:
+document into blocks one of two ways, which draw the same block boundaries on every
+document in the [agreement subset](#the-agreement-subset-version-12) below:
 
 - **Blank-line segmentation** is the baseline and the reference default. A **block**
   is a maximal run of non-blank lines bounded by blank lines or the document edges.
@@ -102,6 +104,9 @@ tight and fences free of internal blank lines:
 
 Both segmenters share the rest:
 
+- **Leading YAML frontmatter** is document metadata, not content: it is excluded
+  before segmentation, so it is never a block, never hashed, and never a host a
+  marker can bind to ([below](#document-metadata-leading-yaml-frontmatter-version-12)).
 - A marker binds to the block **immediately preceding** it. It MAY sit on the
   block's last line or as its own chunk after the block.
 - A marker with no preceding content block is an **orphan** (an error).
@@ -133,12 +138,135 @@ whole-block granularity above holds for them too. It changes only *what counts a
 block*; the grammar, identity model, hashing, and the quote/margin recovery rule are
 unchanged.
 
-It is a **conservative extension**. On the subset where lists are tight and fences
-hold no blank lines the two segmenters produce identical blocks, so every document
-that was well-defined under version 1 resolves identically; CommonMark mode only adds
+It is a **conservative extension**, and it changes nothing at all for a baseline
+tool. On the [agreement subset](#the-agreement-subset-version-12) the two segmenters
+draw the same block boundaries, so a document in the subset segments identically
+under either; outside it they can differ, and always could. CommonMark mode only adds
 defined single-stay attachment for the loose lists and blank-line fences version 1
 left out of scope. Because it needs a CommonMark parser it is an optional extra: a
 tool MAY implement either or both, and the dependency-free baseline stays the default.
+
+### Document metadata: leading YAML frontmatter (version 1.2)
+
+A **leading YAML frontmatter block** is document metadata, not content. A conforming
+tool MUST exclude it from the document before segmentation, under both segmenters. It
+is never a block: it carries no stay and is never hashed, so flipping `status: draft`
+to `status: done` is not a content edit and drifts no hash. Excluding it MUST NOT
+change the blocks, the block order, or the line numbers of the rest of the document.
+
+**Recognition**, after line endings are normalised to LF, needs all four of:
+
+1. **Line 1 is exactly `---`** (trailing spaces or tabs allowed; `----` is not a
+   fence).
+2. **Some later line is exactly `---` or `...`** (trailing spaces or tabs allowed
+   here too); the first such line closes the span.
+3. **The payload** between them is non-empty and holds **no blank line**.
+4. **At least one payload line reads as YAML rather than as prose**, which means,
+   after any leading spaces or tabs, either:
+     - a **sequence item**: `-`, then one or more spaces or tabs, then a character
+       outside `\x00-\x20` and not `\x7f`; or
+     - a **mapping key**: a first character outside `\x00-\x20`, not `\x7f`, and
+       neither `:` nor `#`; then zero or more characters that are not `:`; then `:`;
+       then a space, a tab, or end of line.
+
+   A YAML *comment* (`# …`) does not count, because it is byte-identical to an ATX
+   heading.
+
+The closing line is fixed by condition 2 alone. If that span then fails 3 or 4 the
+document simply has no frontmatter; a tool MUST NOT rescan for a later fence that
+would satisfy them, which is what stops `---` / `Title` / `---` / `title: t` / `---`
+from swallowing a document. Conditions 3 and 4 are load-bearing for the same reason:
+`---` is also a thematic break and a setext underline, and a looser rule destroys
+content. Condition 3 is what stops `---` / blank / `Intro.` / blank / `---` (two
+thematic breaks around a paragraph) from reading as frontmatter that swallows the
+paragraph; condition 4 is what stops `---` / `Title` / `---` (a thematic break plus a
+setext heading) from doing the same.
+
+The whitespace sets are ASCII, spelled out as character ranges rather than delegated
+to a language's "whitespace" class, because Python, JavaScript and Rust each classify
+a different set and a rule that *removes* a span cannot afford that divergence.
+
+**Recognition is a heuristic over a genuinely ambiguous construct, and this spec says
+so rather than pretending otherwise.** A document that opens with a thematic break,
+carries one blank-free run of content, and closes with another has two legitimate
+readings, and no rule can separate them from the bytes:
+
+```md
+---
+- Keep this content
+---
+```
+
+That is a list between two thematic breaks *and* a YAML sequence, and conditions 1 to
+4 accept it, so the content is excluded. **Frontmatter wins**, which is the same call
+every mainstream Markdown site generator makes on the same bytes. What conditions 3
+and 4 buy is not the absence of false positives, it is that the ambiguity is confined
+to documents of exactly this shape: an opening thematic break, no blank line before
+the closer, and a payload line that reads as YAML. A mapping payload is the same
+case, not a safer one: `---` / `title: v` / `---` is equally a setext heading under a
+thematic break. Everything outside that shape fails towards ordinary Markdown, where
+the worst case is a spurious block and a stray drift warning.
+
+Two consequences worth knowing:
+
+- **A marker stamped onto frontmatter by an older tool usually becomes an orphan**
+  (an error), because nothing precedes it any more. Delete that one marker. **The
+  exception, and it matters before you delete anything:** a marker with no blank line
+  between it and the content below is read as one run by blank-line segmentation and
+  binds *forward* to that content, so it is live rather than orphaned and deleting it
+  drops a working id. Lint first and delete what the linter actually reports.
+- **The exclusion is a source span, not a block.** `...` is a legal YAML end marker
+  but not a setext underline, so a CommonMark parser can produce one paragraph node
+  that begins inside the metadata and ends outside it. A tree-based tool MUST trim
+  such a node to the part after the span rather than dropping it.
+
+Out of scope, deliberately: TOML (`+++`) and JSON frontmatter are not recognised, a
+`---` fence anywhere but line 1 is not frontmatter, and whether the metadata itself
+should be addressable is left open rather than refused.
+
+### The agreement subset (version 1.2)
+
+A document is in the **agreement subset** when, after the frontmatter span is
+excluded, its **maximal runs of non-blank lines and its top-level CommonMark block
+nodes cover the same spans of lines**: every run is covered by exactly one node, and
+every node covers exactly one whole run. Top-level means outermost: a list item
+inside a list, or a paragraph inside a blockquote, is not counted separately. On this
+subset the two segmenters draw the same block boundaries, so the document segments
+identically under any conforming tool.
+
+Read that as an equality of line spans, **not** as "each run parses to one node on
+its own". Parsing a run in isolation asks a different question and gives the wrong
+answer: `- a` / blank / `- b` is a one-item list twice when each run is parsed alone,
+and a single loose list when the document is parsed whole. The condition is also
+necessary, not merely sufficient, so a lint or stamp that happens to agree outside
+the subset (a marker-only chunk can fold a boundary difference out of the final block
+list) is a coincidence rather than evidence of agreement.
+
+Three ways a document leaves the subset, all of them common:
+
+1. **A block boundary with no blank line at it.** CommonMark starts a new node at a
+   heading, fence, quote, list, or thematic break whether or not a blank line
+   precedes it; blank-line segmentation cannot see one. `# Heading` / `Body.` is one
+   block under the baseline and two under CommonMark.
+2. **A blank line inside one node**: a loose list, a fence or HTML block with an
+   internal blank line, indented code. Two constructs of the same kind also merge
+   across the blank line meant to separate them. This is the case CommonMark-tree
+   attachment was written for.
+3. **A run no single node covers**: a CommonMark parser consumes link reference
+   definitions (`[label]: /url`) and emits no node, so a run of them is a block to
+   the baseline and nothing to the tree segmenter.
+
+**For authors**: put a blank line between block-level constructs, keep lists tight,
+prefer fenced code and keep fences and HTML blocks free of internal blank lines, do
+not place two lists of the same kind back to back, keep link reference definitions
+out of a stayed document, and keep marker-shaped text out of code (a source-scanning
+tool finds `<!-- stay:x -->` inside a fence; a tree-based one declines to bind it).
+
+Version 1.1 stated this condition as "lists tight and fences free of internal blank
+lines", which is case 2 alone: documents that plainly diverge, `# Heading` / `Body.`
+first among them, were inside the stated subset while being outside the real one.
+Version 1.2 does not change either segmenter to close cases 1 to 3; it states the
+condition correctly and leaves the constraint with the author.
 
 ## IDs
 
@@ -251,6 +379,10 @@ in-document stay and its address form.
   duplicates.
 - **Granularity disagreement**: granularity pinned to whole blocks; loose lists and
   blank-line fences are handled by CommonMark-tree attachment (version 1.1).
+- **Metadata read as content** (a `status:` flip drifts a hash; the two segmenters
+  disagree about what frontmatter even is): leading YAML frontmatter is excluded from
+  segmentation under both segmenters (version 1.2), so it is never stamped and never
+  hashed.
 - **Scope creep into an annotation product**: core stays at identity + resolution;
   annotation is a separate, layered spec.
 
@@ -277,3 +409,15 @@ version 1 non-goal; version 1.1 resolves it with CommonMark-tree attachment.)
   with an outdated state).
 
 See [prior art](prior-art.md) for the full survey and source links.
+
+## Version history
+
+| Version | What it changed |
+|---------|-----------------|
+| **1.2** | Excludes leading YAML frontmatter from segmentation under both segmenters, and restates the two segmenters' agreement condition as the agreement subset, which version 1.1 stated too narrowly. Normative change to the attachment model; grammar, identity, hashing, and recovery unchanged. A marker already stamped onto frontmatter usually becomes an orphan error. |
+| **1.1** | Adds CommonMark-tree attachment as an optional segmenter, so a loose list, a blank-line fence, or a blockquote with an internal blank line can carry a single stay. Adds no requirement to a baseline tool and changes no marker's meaning; its statement of when the two segmenters agree was corrected in 1.2. |
+| **1.0** | The marker grammar, the identity model, blank-line attachment, hash normalisation, quote recovery and the commit rule, the detached state, and the AI editing contract. |
+
+markstay does **not** offer a compatibility guarantee across versions at this stage.
+Where a version corrects a defect, it corrects it rather than carrying the defect
+forward behind a flag.

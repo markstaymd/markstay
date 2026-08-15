@@ -72,6 +72,24 @@ blocks something needs to reference (authored landmarks) rather than every block
 automatic coverage is for tooling that wants to address everything; a human author can
 use a handful of human-readable ids.
 
+## What happens to my YAML frontmatter?
+
+Nothing: it is metadata, not a block. Since [version 1.2](spec.md#document-metadata-leading-yaml-frontmatter-version-12)
+a conforming tool excludes a leading `---` fenced span before segmenting, so it is
+never stamped and never hashed, and flipping `status: draft` to `status: done` is not
+a content edit. Recognition is deliberately conservative, because `---` is also a
+thematic break and a setext underline, and it confines the ambiguity rather than
+removing it: an opening `---`, a blank-free payload that reads as YAML, and a closing
+fence is genuinely both readings, and frontmatter wins there, as it does in every
+mainstream site generator. Everything outside that shape is treated as ordinary
+Markdown.
+
+If a document was stamped by a pre-1.2 tool and carries a marker on the frontmatter,
+that marker usually has nothing before it and lints as an orphan error; delete it.
+Check the lint output before you do, though: a marker with no blank line between it
+and the content below binds forward to that content instead, so it is still working
+and deleting it would drop a live id.
+
 ## What about MDX?
 
 HTML comments are invalid in MDX v2, so MDX uses a profile: the same marker written as

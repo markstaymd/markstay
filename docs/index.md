@@ -15,9 +15,10 @@ model, hashing, and recovery behaviour are fixed, and a reference
 and measurements. Four conforming [implementations](implementations.md) for Python,
 JavaScript, and Rust back the spec, each gated by the same conformance corpus. Version 1.1 adds
 optional CommonMark-tree attachment, a backward-compatible refinement so a loose list
-or a blank-line-containing fence can carry a single stay.
+or a blank-line-containing fence can carry a single stay. Version 1.2 excludes leading
+YAML frontmatter from segmentation, so editing `status:` is not a content edit.
 
-!!! note "Status: version 1.1, settled"
+!!! note "Status: version 1.2, settled"
     The surface is small and stable. It is also young: real-world use and critique
     will shape later versions. A dogfood run found row and bullet loss about 30x more
     often than section loss when those items shared one block-level stay, so

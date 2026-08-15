@@ -218,7 +218,7 @@ silently regress.
 ## Where this fits
 
 markstay adds no syntax for this: the adapter reads standard `stay:` markers and the body
-hash the [v1.1 spec](spec.md) already defines, and consumes the published
+hash the [spec](spec.md) already defines, and consumes the published
 [`markstay` package](implementations.md) as a library. A LlamaIndex binding over the same
 framework-neutral chunker, and the aggregating splitter above, are the named follow-ups.
 To stamp your own corpus and try it, start with [Get started](get-started.md).

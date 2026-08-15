@@ -512,6 +512,203 @@ def test_hash_drift_stays_warn_in_return_tuples_guardrail():
     assert diff_drift and all(f.level == "warn" for f in diff_drift)
 
 
+# --- leading YAML frontmatter is metadata, not a block (SPEC.md §5) -----------
+
+_FM_DOC = "---\nstatus: active\nowner: tim\n---\n\n# Heading\n\nBody para.\n"
+
+
+def _blocks(md, mode):
+    return [(b.index, b.line, b.content) for b in L.parse_document(md, mode=mode)]
+
+
+def test_frontmatter_is_not_a_block():
+    blocks = L.parse_document(_FM_DOC)
+    assert [b.content for b in blocks] == ["# Heading", "Body para."], [
+        b.content for b in blocks
+    ]
+    assert not any("status: active" in b.content for b in blocks)
+
+
+def test_frontmatter_does_not_shift_line_numbers():
+    # blanking is line-for-line, so reported lines stay true to the source
+    assert [(b.index, b.line) for b in L.parse_document(_FM_DOC)] == [(0, 6), (1, 8)]
+
+
+def test_frontmatter_segmenters_agree():
+    """The regression this whole change exists for: before the frontmatter skip,
+    this document (no lists, no fences, squarely inside SPEC.md §5's stated
+    agreement subset) segmented as 3 blocks under blank-line and 4 under
+    CommonMark, because CommonMark reads the closing --- as a setext underline."""
+    assert _blocks(_FM_DOC, "blank-line") == _blocks(_FM_DOC, "commonmark")
+
+
+def test_frontmatter_metadata_edit_does_not_drift_a_hash():
+    """A metadata-only edit must not read as a content edit. This is the noise the
+    dogfood hit: flipping `status:` used to drift the frontmatter block's hash."""
+    before = [L.body_hash(b.content) for b in L.parse_document(_FM_DOC)]
+    after = [
+        L.body_hash(b.content)
+        for b in L.parse_document(_FM_DOC.replace("status: active", "status: complete"))
+    ]
+    assert before == after
+
+
+def test_frontmatter_with_no_closing_fence_is_a_thematic_break():
+    md = "---\n\n# Heading\n\nBody para.\n"
+    assert [b.content for b in L.parse_document(md)] == ["---", "# Heading", "Body para."]
+
+
+def test_frontmatter_does_not_swallow_two_thematic_breaks():
+    """Regression, found by external review: a doc opening with a horizontal rule
+    and containing another one later must not have everything between them read as
+    frontmatter. The naive first-closing-fence rule silently ate `Intro.`"""
+    md = "---\n\nIntro paragraph.\n\n---\n\nBody.\n"
+    contents = [b.content for b in L.parse_document(md)]
+    assert "Intro paragraph." in contents, contents
+    assert contents == ["---", "Intro paragraph.", "---", "Body."], contents
+
+
+def test_frontmatter_does_not_swallow_a_setext_heading():
+    """Regression, found by external review: `---` / `Title` / `---` is a thematic
+    break followed by a setext H2, not frontmatter with the payload `Title`. The
+    payload has to look like YAML before the span is treated as metadata."""
+    md = "---\nTitle\n---\n\nBody.\n"
+    contents = [b.content for b in L.parse_document(md)]
+    assert "Title" in "\n".join(contents), contents
+
+
+def test_frontmatter_payload_with_a_blank_line_is_not_skipped():
+    """Fails towards ordinary Markdown: not skipping is a hash-drift warning, while
+    over-skipping silently destroys content."""
+    md = "---\nstatus: active\n\nowner: tim\n---\n\nBody.\n"
+    assert any("status: active" in b.content for b in L.parse_document(md))
+
+
+def test_frontmatter_yamlish_forms_are_recognized():
+    for payload in ("status: active", "- one\n- two", "empty:", "nested:\n  a: 1"):
+        md = f"---\n{payload}\n---\n\nBody.\n"
+        assert [b.content for b in L.parse_document(md)] == ["Body."], payload
+
+
+def test_frontmatter_does_not_swallow_an_atx_heading():
+    """Regression, found by external review: a YAML comment and an ATX heading are
+    byte-identical, so `#` cannot be the evidence that a span is frontmatter. The
+    cost is that comment-only frontmatter is not skipped, which is the safe
+    direction: a stray hash-drift warning beats a destroyed heading."""
+    md = "---\n# Heading\n---\nBody.\n"
+    assert "# Heading" in "\n".join(b.content for b in L.parse_document(md))
+    md_comment_only = "---\n# just a comment\n---\n\nBody.\n"
+    assert "# just a comment" in "\n".join(
+        b.content for b in L.parse_document(md_comment_only)
+    )
+
+
+def test_frontmatter_empty_payload_is_not_skipped():
+    md = "---\n---\n\nBody.\n"
+    assert any("---" in b.content for b in L.parse_document(md))
+
+
+def test_frontmatter_closing_fence_tolerates_trailing_whitespace():
+    md = "---\nkey: v\n---   \n\nBody.\n"
+    assert [b.content for b in L.parse_document(md)] == ["Body."]
+
+
+def test_frontmatter_crlf_normalizes_before_detection():
+    md = "---\r\nkey: v\r\n---\r\n\r\n# H\r\n\r\nBody.\r\n"
+    assert [b.content for b in L.parse_document(md)] == ["# H", "Body."]
+
+
+def test_frontmatter_yamlish_whitespace_is_ascii_pinned():
+    """Cross-language agreement, found by external review of the port: `\\S` means
+    three different things in Python, ECMAScript and Rust, so the rule spells the
+    ASCII set out. An ASCII control character is not a key start (the span stays
+    ordinary Markdown); an exotic non-ASCII space is, exactly as for hashing (§8),
+    where NBSP is content rather than whitespace."""
+    # not a key start -> not frontmatter -> the span survives as content
+    md = "---\n\x1ckey: v\n---\n\nBody.\n"
+    assert any("key: v" in b.content for b in L.parse_document(md)), md
+
+    # a key start -> frontmatter -> skipped. Each of these is Unicode whitespace to
+    # at least one of the three runtimes and not to the others.
+    for ch in ("\xa0", "\x85", "\ufeff"):
+        md = f"---\n{ch}key: v\n---\n\nBody.\n"
+        assert [b.content for b in L.parse_document(md)] == ["Body."], repr(ch)
+        md_item = f"---\n- {ch}\n---\n\nBody.\n"
+        assert [b.content for b in L.parse_document(md_item)] == ["Body."], repr(ch)
+
+
+def test_marker_after_closing_fence_is_an_orphan():
+    """The visible consequence for a doc stamped before this change: its
+    frontmatter marker now has no block to attach to, and says so loudly."""
+    _, findings = L.lint_document("---\nkey: v\n---\n<!-- stay:x -->\n\nBody.\n")
+    assert "ORPHAN_MARKER" in codes(findings), codes(findings)
+
+
+def test_marker_inside_frontmatter_payload_is_dropped():
+    """Pins actual behaviour, flagged by external review: a marker *inside* the
+    payload is blanked with the rest of the frontmatter and raises nothing. No tool
+    puts a marker there (the stamper always writes after the block), so this is
+    documented rather than defended. Change this test if that stops being true."""
+    _, findings = L.lint_document("---\nkey: v\n<!-- stay:x -->\n---\n\nBody.\n")
+    assert codes(findings) == [], codes(findings)
+
+
+def test_frontmatter_only_at_document_start():
+    md = "# Heading\n\n---\ntitle: not frontmatter\n---\n\nBody.\n"
+    contents = [b.content for b in L.parse_document(md)]
+    assert "title: not frontmatter" in "\n".join(contents), contents
+
+
+def test_frontmatter_closed_by_yaml_end_marker():
+    md = "---\ntitle: t\n...\n\n# Heading\n\nBody.\n"
+    assert [b.content for b in L.parse_document(md)] == ["# Heading", "Body."]
+
+
+def test_frontmatter_absent_document_is_unchanged():
+    md = "# Heading\n\nBody para.\n\n- a\n- b\n"
+    assert _blocks(md, "blank-line") == _blocks(md, "commonmark")
+    assert [b.content for b in L.parse_document(md)] == [
+        "# Heading",
+        "Body para.",
+        "- a\n- b",
+    ]
+
+
+def test_frontmatter_no_blank_line_before_content():
+    """A doc with no blank line after the closing fence still splits correctly,
+    which a filter-the-chunks-afterwards implementation would get wrong."""
+    md = "---\ntitle: t\n---\n# Heading\n\nBody.\n"
+    assert [b.content for b in L.parse_document(md)] == ["# Heading", "Body."]
+    assert _blocks(md, "blank-line") == _blocks(md, "commonmark")
+
+
+def test_commonmark_without_the_parser_is_an_error_not_a_traceback():
+    """`--commonmark` is the one optional dependency. Missing it must exit 2 with
+    an install line, not surface a ModuleNotFoundError out of the segmenter."""
+    import contextlib
+    import importlib.util
+    import io
+    import tempfile
+
+    with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as fh:
+        fh.write("Body.\n<!-- stay:a1b2 -->\n")
+        path = fh.name
+
+    real = importlib.util.find_spec
+    importlib.util.find_spec = lambda name, *a, **k: (
+        None if name == "markdown_it" else real(name, *a, **k)
+    )
+    err = io.StringIO()
+    try:
+        with contextlib.redirect_stderr(err):
+            rc = L.main(["--commonmark", path])
+    finally:
+        importlib.util.find_spec = real
+
+    assert rc == 2, rc
+    assert "markdown-it-py" in err.getvalue(), err.getvalue()
+
+
 def _run_all():
     tests = [
         v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)
