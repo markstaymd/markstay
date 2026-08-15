@@ -10,6 +10,7 @@ install.sh against it, and drive real `git commit`s, so they need `git` and
 
 import json
 import os
+import runpy
 import shutil
 import subprocess
 import sys
@@ -28,6 +29,7 @@ import markstay_preserve as P  # noqa: E402
 _PARENT = os.path.dirname(HERE)
 _IN_UMBRELLA = os.path.exists(os.path.join(_PARENT, "SPEC.md"))
 _CORPUS = os.path.join(_PARENT, "conformance", "spec", "preserve.json")
+_CHECK_CORPUS = os.path.join(_PARENT, "conformance", "spec", "check.json")
 
 
 def _corpus_vectors():
@@ -95,6 +97,55 @@ def test_cli_print_emits_instruction():
                          capture_output=True, text=True)
     assert out.returncode == 0
     assert "stay:" in out.stdout and "MUST" in out.stdout
+
+
+def test_vendored_hook_matches_the_shared_check_corpus():
+    """The standalone hook owns a fourth baseline resolver. Drive the same
+    commit-shaped vectors through it so package parity cannot leave adopters on a
+    silently different algorithm."""
+    if not _IN_UMBRELLA:
+        return  # published tools/ copy: no corpus ships beside it
+    assert os.path.exists(_CHECK_CORPUS), (
+        f"running in the umbrella but {_CHECK_CORPUS} is missing; the hook's "
+        "baseline resolver is unguarded"
+    )
+
+    linter_dir = os.path.join(_PARENT, "linter")
+    sys.path.insert(0, linter_dir)
+    try:
+        import markstay_lint as L
+    finally:
+        sys.path.pop(0)
+    hook = runpy.run_path(os.path.join(HERE, "hooks", "pre-commit"))
+    check_entries = hook["check_entries"]
+    with open(_CHECK_CORPUS, encoding="utf-8") as fh:
+        vectors = json.load(fh)["vectors"]
+
+    for vector in vectors:
+        entries = [(
+            e["status"], e["src"], e["dst"], e.get("before"), e.get("after")
+        ) for e in vector["entries"]]
+        result = check_entries(entries, L, scope=vector.get("scope"))
+        got = {
+            "pairings": [{"path": path, "baseline": baseline}
+                         for path, baseline in result["pairings"]],
+            "reports": [
+                {
+                    "label": label,
+                    "findings": [
+                        {"level": finding.level, "code": finding.code,
+                         "id": finding.id, "line": finding.line}
+                        for finding in L.sort_findings(findings)
+                    ],
+                }
+                for label, findings in result["reports"]
+            ],
+            "notes": result["notes"],
+            "hasErrors": result["has_errors"],
+        }
+        assert got == vector["expected"], (
+            f"hook drift on check vector {vector['name']!r}: got={got}"
+        )
 
 
 # --- pre-commit hook (mitigation #2) --------------------------------------
@@ -474,6 +525,22 @@ def test_hook_notes_stays_lost_to_a_deletion_without_blocking():
         out = r.stdout + r.stderr
         assert r.returncode == 0, out
         assert "deleted with 4 stay(s)" in out, out
+    finally:
+        shutil.rmtree(repo, ignore_errors=True)
+
+
+def test_hook_notes_a_rename_out_of_markdown_without_blocking():
+    repo = _fresh_repo()
+    try:
+        _install(repo)
+        _write(repo, "notes.md", _doc(2))
+        _git(repo, "add", "-A")
+        assert _git(repo, "commit", "-m", "init").returncode == 0
+        _git(repo, "mv", "notes.md", "notes.txt")
+        r = _git(repo, "commit", "-m", "leave markdown tracking")
+        out = r.stdout + r.stderr
+        assert r.returncode == 0, out
+        assert "renamed to notes.txt, leaving Markdown tracking" in out, out
     finally:
         shutil.rmtree(repo, ignore_errors=True)
 

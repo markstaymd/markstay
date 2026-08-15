@@ -148,5 +148,54 @@ check("strip_markers: mdx gone",
       "stay:" not in LA.strip_markers("x\n{/* stay:z hash=sha256:ab */}"))
 
 
+# 11. Item granularity: the child pipeline, offline.
+sys.path.insert(0, str(Path(__file__).parent))
+import run_llm_attach_eval as RUN  # noqa: E402
+
+_ITEM_DOC = RUN.annotate_items(RUN.load_doc("list_tracker"), "list_tracker")
+
+check("item: fixtures carry parent and child markers",
+      "subhash=sha256:" in _ITEM_DOC and "hash=sha256:" in _ITEM_DOC)
+
+# Identity rewrite: markers preserved perfectly, so every id has clean gold and
+# the stripped doc still resolves. This is the pipeline's floor, not its result.
+_identity = LA.score_document_items(_ITEM_DOC, _ITEM_DOC)
+check("item: identity rewrite scores every child",
+      len(_identity) > 15 and all(r.cat == "correct" for r in _identity))
+
+# A dropped bullet has no trustworthy gold label and must be excluded, never
+# guessed at: `no_truth`, not `wrong`.
+_lines = _ITEM_DOC.split("\n")
+_dropped = "\n".join(l for l in _lines if "Retire the alpha node" not in l)
+_after_drop = LA.score_document_items(_ITEM_DOC, _dropped)
+check("item: dropped bullet excluded as no_truth",
+      any(r.cat == "no_truth" for r in _after_drop))
+check("item: dropping one bullet never manufactures a false attachment",
+      not any(r.cat == "wrong" for r in _after_drop))
+
+# The prompt must name the child marker form, or the model has no way to know
+# the inline `subhash=` tokens are load-bearing.
+_prompt = LA.build_item_prompt("restructure", _ITEM_DOC)
+check("item: prompt describes the subhash marker form",
+      "subhash=sha256:HEX" in _prompt)
+check("item: prompt pins lists one-to-one",
+      "same list items in the same" in _prompt)
+
+# A rewrite that merges two bullets breaks the one-to-one mapping the eval
+# depends on. Whatever the pipeline does with it, the one unacceptable outcome
+# is scoring a merged item as a confident attachment.
+_merged = _ITEM_DOC.replace(
+    "- Deploy the beta ingestion service to the staging cluster.",
+    "  and also the beta ingestion service.",
+)
+try:
+    _after_merge = LA.score_document_items(_ITEM_DOC, _merged)
+    check("item: merged bullets never score as a false attachment",
+          not any(r.cat == "wrong" for r in _after_merge))
+except AssertionError:
+    # Segmentation drift detected and refused, which is the stricter outcome.
+    check("item: merged bullets never score as a false attachment", True)
+
+
 print(f"\n{PASS} passed, {FAIL} failed")
 sys.exit(1 if FAIL else 0)

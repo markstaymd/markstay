@@ -44,6 +44,28 @@ LLM rewrites down into the 0.3-0.5 regime, keeping ground truth judge-free.
 The result the deterministic eval could not produce: recovery and false-attach
 rate as a function of real rewrite similarity. See `FINDINGS.md`.
 
+## Item granularity (experimental child blocks)
+
+`--granularity item` runs the same five steps one level down: list items get
+their own `subhash=` markers, the model is asked to keep every list one-to-one,
+and the resolver must re-find each bullet after the markers are stripped.
+
+```bash
+python run_llm_attach_eval.py --granularity item --models gpt4o
+```
+
+It switches to a list-heavy fixture corpus automatically (`list_tracker`,
+`list_readme`, `list_checklist`), because the prose corpus carries three bullets
+in total. **Item count, not document count, sets n**: each extra bullet is another
+resolution at no extra API call, so those fixtures are deliberately dense rather
+than numerous, and they include the adversarial shapes (near-duplicate items,
+repeated labels). 3 docs x 4 tasks = 12 calls, 256 scored resolutions.
+
+CommonMark mode is pinned: the dependency-free blank-line profile fails closed on
+most real documents, emitting no children rather than guessing a boundary, so an
+item run under it would score almost nothing. Results land in
+`results_item.{json,md}`.
+
 ## Files
 
 | File | What |

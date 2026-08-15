@@ -28,6 +28,10 @@ python3 markstay_lint.py --show-drift FILE
 # CommonMark-tree attachment (SPEC.md §5.2, v1.1): a loose list or a fence with
 # internal blank lines attaches as one block. Needs markdown-it-py.
 python3 markstay_lint.py --commonmark FILE
+
+# Experimental direct list-item identity and before/after recovery.
+python3 markstay_lint.py --child-blocks --commonmark FILE
+python3 markstay_lint.py --child-blocks --commonmark --before OLD.md NEW.md
 ```
 
 Exit status is `1` if any **error**-level finding is reported, `0` otherwise, so
@@ -43,6 +47,7 @@ Single-document (`FILE`):
 | `ORPHAN_MARKER` | error | a marker with no preceding block to attach to |
 | `DUPLICATE_ID` | error | the same id used by two markers in one document |
 | `HASH_DRIFT` | warn | a marker's stored `hash=` no longer matches its block's content (hidden from text output by default, see [Hash drift](#hash-drift)) |
+| `ORPHAN_CHILD` | warn | an opt-in child marker has no stayed parent list |
 
 Regeneration diff (`--before OLD.md NEW.md`):
 
@@ -53,6 +58,50 @@ Regeneration diff (`--before OLD.md NEW.md`):
 | `RELOCATED_ID` | error | an id now sits on content that previously carried a *different* id (markers swapped/relocated) |
 | `HASH_DRIFT` | warn | id present in both, content edited in place (hidden from text output by default, see [Hash drift](#hash-drift)) |
 | `NEW_ID` | info | id present only after the edit |
+| `CHILD_DROPPED` | error | an opt-in child id cannot be recovered from its parent, exact child hash, or sibling-scoped quote evidence |
+
+## Experimental child blocks
+
+`--child-blocks` enables the list-item identity prototype. It is off by default
+and is **not** part of the v1.1 standard, which defers item identity at `../SPEC.md`
+§5.1. A direct list item carries an ordinary stay id and stores its item hash
+under `subhash=sha256:...`:
+
+```md
+- Ship the linter <!-- stay:a7c1 subhash=sha256:9d2f -->
+- Ship the hook <!-- stay:b3e0 subhash=sha256:41ac -->
+<!-- stay:parent hash=sha256:8a77 -->
+```
+
+The child hash body cuts stay markers, removes the first line's indentation, list
+marker, and following syntactic gap, then removes the equivalent content
+indentation from continuation lines. Bullet-glyph changes and ordered-list
+renumbering therefore do not drift a child. Nested source remains part of the
+direct item's body.
+
+CommonMark mode reads direct `listItem` source spans, including loose and
+multi-paragraph lists. The dependency-free blank-line mode deliberately accepts
+only a restricted profile: flat, tight, single-paragraph items, with continuation
+lines using the exact content indentation. It emits no child blocks for loose
+lists, lazy continuations, nested blocks, tabs, fences, mixed list delimiters, or
+other unclear boundaries. Those documents fall back to existing whole-block
+attachment.
+
+Recovery resolves the parent first, then applies child marker, unchanged-parent
+ordinal, unique sibling hash, unique document hash, and sibling-scoped quote tiers.
+Ordinal never changes the quote score or commit margin. Identical baseline siblings
+without a surviving marker detach rather than guess.
+
+Attachment safety is measured from two independent directions, both at 0% false
+attachment: a deterministic matrix of 6 list shapes x 9 edit operations (0/324, 95%
+Clopper-Pearson upper bound 0.92%) and real LLM rewrites of list-heavy documents
+(0/256 on gpt4o, bound 1.16%). Recovery is 95.0% and 92.2% respectively, and the
+similarity band where an item is attached at all lands on the `../SPEC.md` §9
+constants. See `../eval/attachment/README.md`.
+
+The prototype stays opt-in regardless, because safety is not the same as worth:
+catch precision on real item drops is unmeasured, so no v1.2 spec text,
+cross-language parity, or conformance category follows from it yet.
 
 ## Hash drift
 
@@ -102,6 +151,7 @@ recovery (`../SPEC.md` §9), handled by the attachment-survival eval
 
 `parse_document`, `lint_document`, and `lint_diff` are importable and all take a
 `mode=` argument (`"blank-line"` default, `"commonmark"` for the §5.2 segmenter).
+They also accept `child_blocks=True` for the experimental profile above.
 The attachment-survival eval reuses `parse_document` (block + marker extraction)
 and `lint_diff` (before/after id accounting) rather than reimplement marker
 parsing, so it inherits the same mode switch.

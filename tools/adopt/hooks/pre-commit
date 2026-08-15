@@ -92,6 +92,115 @@ def head_text(path):
     return res.stdout if res.returncode == 0 else None
 
 
+def check_entries(entries, L, scope=None, mode="blank-line", check_collections=False):
+    """Check materialized commit entries without reading Git.
+
+    Each entry is ``(status, src, dst, before, after)``. The package CLIs expose
+    the same seam, and the shared ``check`` corpus drives all four copies so the
+    standalone hook cannot drift silently from them.
+    """
+    result = {"reports": [], "notes": [], "pairings": [], "has_errors": False}
+    changed = [e for e in entries if e[0] != "D" and is_md(e[2])]
+    deleted = [e for e in entries
+               if ((e[0] == "D" and is_md(e[1]))
+                   or (e[0] == "R" and is_md(e[1]) and not is_md(e[2])))]
+    if not changed and not deleted:
+        return result
+
+    def ids_of(text):
+        # Degrade to no pairing rather than crashing on a vendored linter old
+        # enough to predate the helper (the hook can outrun .markstay/).
+        index = getattr(L, "_id_index", None)
+        if index is None or text is None:
+            return set()
+        try:
+            return set(index(L.parse_document(text, mode=mode)))
+        except Exception:
+            return set()
+
+    staged_text = {dst: after or "" for _, _, dst, _, after in changed}
+    staged_ids = {path: ids_of(text) for path, text in staged_text.items()}
+    committed_ids = set()
+    for ids in staged_ids.values():
+        committed_ids |= ids
+
+    deleted_ids = {src: ids_of(before) for _, src, _, before, _ in deleted}
+    deleted_text = {src: before for _, src, _, before, _ in deleted}
+    claimed = set()
+
+    def baseline_for(entry):
+        status, src, dst, before, _ = entry
+        if status == "R" and is_md(src) and before is not None:
+            return before, src
+        if status not in ("C", "R") and before is not None:
+            return before, dst
+        mine = staged_ids.get(dst, set())
+        best, best_n = None, 0
+        for candidate, candidate_ids in deleted_ids.items():
+            if candidate in claimed:
+                continue
+            overlap = len(mine & candidate_ids)
+            if overlap > best_n:
+                best, best_n = candidate, overlap
+        if best is not None:
+            claimed.add(best)
+            return deleted_text[best], best
+        return None, None
+
+    wanted = set(scope or ())
+    diff_kwargs = {"mode": mode}
+    if check_collections:
+        diff_kwargs["check_collections"] = True
+
+    for entry in changed:
+        _, _, dst, _, _ = entry
+        staged = staged_text[dst]
+        baseline, origin = baseline_for(entry)
+        result["pairings"].append((dst, origin))
+        _, findings = L.lint_document(staged, mode=mode)
+        findings = list(findings)
+        if baseline is not None:
+            findings += L.lint_diff(baseline, staged, **diff_kwargs)
+
+        kept = []
+        for finding in findings:
+            if finding.code == "DROPPED_ID" and finding.id in committed_ids:
+                elsewhere = sorted(path for path, ids in staged_ids.items()
+                                   if path != dst and finding.id in ids)
+                result["notes"].append(
+                    f"{finding.id}: moved out of {origin or dst} into "
+                    f"{', '.join(elsewhere)} (still in this commit, not blocking)")
+                continue
+            kept.append(finding)
+
+        if wanted and dst not in wanted:
+            continue
+        if kept:
+            label = dst if origin in (None, dst) else f"{dst} (baseline {origin})"
+            result["reports"].append((label, kept))
+            if L.has_errors(kept):
+                result["has_errors"] = True
+
+    for entry in deleted:
+        _, path, _, _, _ = entry
+        if path in claimed:
+            continue
+        gone = sorted(deleted_ids.get(path, set()) - committed_ids)
+        if gone:
+            shown = ", ".join(gone[:6]) + (", ..." if len(gone) > 6 else "")
+            if entry[0] == "R":
+                result["notes"].append(
+                    f"{path}: renamed to {entry[2]}, leaving Markdown tracking "
+                    f"with {len(gone)} stay(s) not carried by another Markdown "
+                    f"file ({shown})")
+            else:
+                result["notes"].append(
+                    f"{path}: deleted with {len(gone)} stay(s) that no staged file "
+                    f"carries ({shown})")
+
+    return result
+
+
 def main() -> int:
     root = git("rev-parse", "--show-toplevel").stdout.strip()
     if not root:
@@ -117,128 +226,42 @@ def main() -> int:
     # hidden by default; MARKSTAY_SHOW_DRIFT=1 lists it.
     show_drift = os.environ.get("MARKSTAY_SHOW_DRIFT", "").lower() in (
         "1", "true", "yes", "on")
-    diff_kwargs = {"mode": mode}
-    if check_collections:
-        diff_kwargs["check_collections"] = True
-
-    def ids_of(text):
-        """The well-formed stay ids in a document."""
-        # Degrade to no pairing rather than crashing on a vendored linter old
-        # enough to predate the helper (the hook can outrun .markstay/).
-        index = getattr(L, "_id_index", None)
-        if index is None or text is None:
-            return set()
-        try:
-            return set(index(L.parse_document(text, mode=mode)))
-        except Exception:
-            return set()
-
-    entries = staged_entries()
-    changed = [(st, src, dst) for st, src, dst in entries
-               if st != "D" and is_md(dst)]
-    deleted = [src for st, src, _ in entries if st == "D" and is_md(src)]
-    if not changed and not deleted:
-        return 0
-
-    staged_text = {dst: git("show", f":{dst}").stdout for _, _, dst in changed}
-    staged_ids = {p: ids_of(t) for p, t in staged_text.items()}
-    # Union over the whole commit: an id present anywhere in the staged tree has
-    # not been lost, wherever it ended up.
-    committed_ids = set()
-    for s in staged_ids.values():
-        committed_ids |= s
-
-    # Baseline id sets for the documents this commit deletes, so an added file can
-    # be paired with the document it was renamed from.
-    deleted_ids = {p: ids_of(head_text(p)) for p in deleted}
-    claimed = set()
-
-    def baseline_for(status, src, dst):
-        """(text, origin_path) for the document this staged file came from."""
-        if status == "R":
-            text = head_text(src)
-            if text is not None:
-                return text, src
-        elif status != "C":
-            text = head_text(dst)
-            if text is not None:
-                return text, dst
-        # No blob at this path in HEAD (added, or a rename git scored as
-        # delete + create). Pair on shared stay ids instead of on the filename.
-        mine = staged_ids.get(dst, set())
-        best, best_n = None, 0
-        for cand, cand_ids in deleted_ids.items():
-            if cand in claimed:
-                continue
-            n = len(mine & cand_ids)
-            if n > best_n:
-                best, best_n = cand, n
-        if best is not None:
-            claimed.add(best)
-            return head_text(best), best
-        return None, None
+    raw_entries = staged_entries()
+    entries = []
+    for status, src, dst in raw_entries:
+        tracked = (is_md(src) if status == "D" else
+                   (is_md(src) or is_md(dst)) if status == "R" else
+                   is_md(dst))
+        if not tracked:
+            continue
+        before_path = src if status in ("R", "C", "D") else dst
+        before = head_text(before_path)
+        after = None if status == "D" else git("show", f":{dst}").stdout
+        entries.append((status, src, dst, before, after))
+    try:
+        result = check_entries(
+            entries, L, mode=mode, check_collections=check_collections)
+    except ImportError:
+        sys.stderr.write(
+            "markstay hook: MARKSTAY_MODE=commonmark needs markdown-it-py "
+            "(pip install markdown-it-py), or unset MARKSTAY_MODE for the "
+            "dependency-free default.\n")
+        return 1
 
     reports = []
-    notes = []
-    any_error = False
-    for status, src, dst in changed:
-        staged = staged_text[dst]
-        baseline, origin = baseline_for(status, src, dst)
-        try:
-            _, findings = L.lint_document(staged, mode=mode)
-            findings = list(findings)
-            if baseline is not None:
-                findings += L.lint_diff(baseline, staged, **diff_kwargs)
-        except ImportError:
-            sys.stderr.write(
-                "markstay hook: MARKSTAY_MODE=commonmark needs markdown-it-py "
-                "(pip install markdown-it-py), or unset MARKSTAY_MODE for the "
-                "dependency-free default.\n")
-            return 1
-
-        # A stay that moved to another document in this commit is not lost. Report
-        # the move and drop the finding, so reorganising documents does not block.
-        kept = []
-        for fd in findings:
-            if fd.code == "DROPPED_ID" and fd.id in committed_ids:
-                elsewhere = sorted(p for p, s in staged_ids.items()
-                                   if p != dst and fd.id in s)
-                notes.append(
-                    f"  {fd.id}: moved out of {origin or dst} into "
-                    f"{', '.join(elsewhere)} (still in this commit, not blocking)")
-                continue
-            kept.append(fd)
-        findings = kept
-
-        if findings:
-            # Skip a file whose only findings are hidden drift, so a commit that
-            # merely edited stamped blocks in place prints nothing (it does not
-            # block, matching the fact drift is non-actionable here).
-            if show_drift or any(fd.code != "HASH_DRIFT" for fd in findings):
-                label = dst if origin in (None, dst) else f"{dst} (baseline {origin})"
-                reports.append(L.render_text(label, findings, show_drift=show_drift))
-            if L.has_errors(findings):
-                any_error = True
-
-    # A deleted document nothing was paired with: its stays left the repo. That is
-    # usually deliberate, so it is a note rather than a blocking finding, but it is
-    # said out loud instead of passing in silence.
-    for path in deleted:
-        if path in claimed:
-            continue
-        gone = deleted_ids.get(path, set()) - committed_ids
-        if gone:
-            notes.append(
-                f"  {path}: deleted with {len(gone)} stay(s) that no staged file "
-                f"carries ({', '.join(sorted(gone)[:6])}"
-                f"{', ...' if len(gone) > 6 else ''})")
+    for label, findings in result["reports"]:
+        # Skip a file whose only findings are hidden drift, so a commit that
+        # merely edited stamped blocks in place prints nothing.
+        if show_drift or any(fd.code != "HASH_DRIFT" for fd in findings):
+            reports.append(L.render_text(label, findings, show_drift=show_drift))
+    notes = result["notes"]
 
     if reports:
         sys.stderr.write("\n".join(reports) + "\n")
     if notes:
         sys.stderr.write("markstay: stays that changed document (not blocking):\n"
-                         + "\n".join(notes) + "\n")
-    if any_error:
+                         + "\n".join(f"  {note}" for note in notes) + "\n")
+    if result["has_errors"]:
         sys.stderr.write(
             "\nmarkstay: commit blocked, the edit above breaks a stay "
             "(dropped / duplicated / relocated / malformed). Fix it, or bypass "

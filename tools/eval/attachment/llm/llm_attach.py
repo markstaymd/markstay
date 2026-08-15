@@ -243,6 +243,119 @@ def score_document(before_md: str, after_with_markers: str,
 
 # --- aggregation ------------------------------------------------------------
 
+# --- item granularity (experimental child blocks) ---------------------------
+# Same judge-free trick, one level down: the gold label for "where did this
+# bullet go" is the child marker the instructed rewrite kept on it. The child
+# ladder is CommonMark-only in practice, because the dependency-free blank-line
+# profile fails closed on most real documents (it emits no children rather than
+# guess a boundary), so every item-granularity run pins mode="commonmark".
+
+ITEM_MODE = "commonmark"
+
+PRESERVE_ITEMS = (
+    "\n\nThe document contains marker comments of two forms: block markers "
+    "`<!-- stay:ID hash=sha256:HEX -->` on their own line after a block, and "
+    "item markers `<!-- stay:ID subhash=sha256:HEX -->` inline at the end of a "
+    "list item's own text. Preserve every marker of both kinds exactly as "
+    "written, and keep each one attached to the same block or the same list "
+    "item it currently follows. Do not remove, alter, renumber, relocate, or "
+    "add markers."
+)
+
+ITEM_STRUCTURE = (
+    "\n\nAlso keep every list one-to-one: the same list items in the same "
+    "order. Do not split, merge, add, reorder, or delete list items. Reword an "
+    "item's text as the task directs, but each item must remain exactly one "
+    "item, carrying its own marker."
+)
+
+
+def build_item_prompt(task_key: str, annotated_md: str) -> str:
+    return (TASKS[task_key] + STRUCTURE + ITEM_STRUCTURE + PRESERVE_ITEMS
+            + RETURN_ONLY + "\n\n---\n\n" + annotated_md)
+
+
+@dataclass
+class ChildGroundTruth:
+    id_to_idx: dict[str, int]   # gold: original child id -> after child index
+    dropped: set[str]           # ids the rewrite lost (no gold; excluded)
+    after_bodies: list[str]     # child bodies of the stripped after-doc
+
+
+def child_ground_truth(before_md: str, after_with_markers: str) -> ChildGroundTruth:
+    """Gold child mapping from the item markers the instructed rewrite kept.
+
+    `CHILD_DROPPED` is the child-level analogue of `DROPPED_ID`: a kept parent
+    that lost one of its item markers. Those ids have no trustworthy label, so
+    they are excluded from scoring rather than guessed at."""
+
+    diff = L.lint_diff(before_md, after_with_markers, mode=ITEM_MODE,
+                       child_blocks=True)
+    dropped = {f.id for f in diff if f.code in ("CHILD_DROPPED", "DROPPED_ID") and f.id}
+
+    marked = [
+        child
+        for block in L.parse_document(after_with_markers, mode=ITEM_MODE,
+                                      child_blocks=True)
+        for child in block.children
+    ]
+    id_to_idx: dict[str, int] = {}
+    for child in marked:
+        for mk in child.markers:
+            if mk.id and not mk.malformed and mk.id not in dropped:
+                id_to_idx.setdefault(mk.id, child.index)
+
+    stripped = strip_markers(after_with_markers)
+    stripped_children = [
+        child
+        for block in L.parse_document(stripped, mode=ITEM_MODE, child_blocks=True)
+        for child in block.children
+    ]
+    # A rewrite that changes list *segmentation* (splitting one list in two, or
+    # letting a marker fall outside its item) breaks the index correspondence the
+    # gold map depends on. Fail loudly: silently mis-indexed gold would read as a
+    # false attachment and corrupt the headline number.
+    if len(stripped_children) != len(marked):
+        raise AssertionError(
+            f"child-count mismatch after stripping markers: "
+            f"{len(stripped_children)} vs {len(marked)}")
+
+    return ChildGroundTruth(id_to_idx, dropped,
+                            [c.content for c in stripped_children])
+
+
+def score_document_items(before_md: str, after_with_markers: str) -> list[IdResult]:
+    """Resolve every original child id against the stripped rewrite and score it
+    against the preserved-marker gold mapping."""
+
+    anchors = list(L._build_child_anchors(before_md, ITEM_MODE))
+    gt = child_ground_truth(before_md, after_with_markers)
+    stripped = strip_markers(after_with_markers)
+    resolved = L._resolve_children(anchors, stripped, ITEM_MODE)
+
+    before_body = {a.id: a.quote for a in anchors}
+    out: list[IdResult] = []
+    for anchor in anchors:
+        method, target = resolved.get(anchor.id, ("detached", None))
+        gold = gt.id_to_idx.get(anchor.id)
+        if gold is None:
+            out.append(IdResult(anchor.id, "no_truth", method, 0.0, 0.0,
+                                target, None))
+            continue
+        sim = similarity(before_body[anchor.id], gt.after_bodies[gold])
+        if method == "detached":
+            cat = "missed"
+        elif target == gold:
+            cat = "correct"
+        else:
+            cat = "wrong"
+        out.append(IdResult(anchor.id, cat, method, 1.0 if cat == "correct" else 0.0,
+                            sim, target, gold))
+    return out
+
+
+# --- aggregation ------------------------------------------------------------
+
 def recovery_falserate(cats: dict[str, int]) -> tuple[float, float, int]:
     """recovery = correct / scored; false-rate = wrong / scored. `scored` excludes
     no_truth ids. Returns (recovery, false_rate, scored_n)."""

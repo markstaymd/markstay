@@ -134,6 +134,7 @@ def test_diff_inplace_edit_is_drift_not_relocation():
 # mode (where each is one block carrying the stay). commonmark mode needs
 # markdown-it-py; the default path stays dependency-free.
 
+
 def _content_blocks(md, mode):
     return [b for b in L.parse_document(md, mode=mode) if b.index >= 0]
 
@@ -181,8 +182,10 @@ def test_commonmark_loose_list_lint_clean_with_hash():
 def test_commonmark_agrees_with_blank_line_on_simple_doc():
     # No loose lists / blank-line fences -> both modes produce identical blocks.
     md = "Para one.\n<!-- stay:a -->\n\nPara two.\n<!-- stay:b -->\n"
-    shape = lambda mode: [(b.content, [m.id for m in b.markers], b.index)
-                          for b in L.parse_document(md, mode=mode)]
+    shape = lambda mode: [
+        (b.content, [m.id for m in b.markers], b.index)
+        for b in L.parse_document(md, mode=mode)
+    ]
     assert shape("blank-line") == shape("commonmark")
 
 
@@ -236,8 +239,12 @@ def test_collection_shrank_silent_on_inplace_edit_and_growth():
 def test_collection_shrank_fires_on_consolidation_known_fp():
     # Merging two rows into one is intended pruning, but a net-count drop trips the
     # check: a documented false positive (churn-driven, like the section catch).
-    after = _TBL.replace("| auth | done |\n| orders | wip |\n", "| auth+orders | done |\n")
-    assert "COLLECTION_SHRANK" in codes(L.lint_diff(_TBL, after, check_collections=True))
+    after = _TBL.replace(
+        "| auth | done |\n| orders | wip |\n", "| auth+orders | done |\n"
+    )
+    assert "COLLECTION_SHRANK" in codes(
+        L.lint_diff(_TBL, after, check_collections=True)
+    )
 
 
 def test_collection_shrank_distinct_from_dropped_block():
@@ -247,6 +254,165 @@ def test_collection_shrank_distinct_from_dropped_block():
     cs = codes(L.lint_diff(_TBL, after, check_collections=True))
     assert "DROPPED_ID" in cs
     assert "COLLECTION_SHRANK" not in cs
+
+
+# --- experimental direct list-item identity ---------------------------------
+
+
+def _child_marker(mid, body):
+    return f"<!-- stay:{mid} subhash=sha256:{L.body_hash(body, 12)} -->"
+
+
+def _child_doc():
+    return (
+        f"- Ship the linter {_child_marker('a', 'Ship the linter')}\n"
+        f"- Document the command {_child_marker('b', 'Document the command')}\n"
+        f"- Publish package {_child_marker('c', 'Publish package')}\n"
+        "<!-- stay:parent -->\n"
+    )
+
+
+def _child_anchors(md, mode="blank-line"):
+    return {a.id: a for a in L._build_child_anchors(md, mode)}.values()
+
+
+def test_child_parse_and_orphan_warning_are_opt_in():
+    md = f"- Alpha {_child_marker('child', 'Alpha')}\n"
+    legacy, legacy_findings = L.lint_document(md)
+    assert legacy[0].children == [] and legacy_findings == []
+    blocks, findings = L.lint_document(md, child_blocks=True)
+    assert [c.content for c in blocks[0].children] == ["Alpha"]
+    assert [(f.code, f.level) for f in findings] == [("ORPHAN_CHILD", "warn")]
+
+
+def test_child_boundaries_agree_inside_restricted_profile_and_fail_closed_outside():
+    inside = "1. Alpha\n2. Beta\n"
+    blank = L.parse_document(inside, child_blocks=True)
+    common = L.parse_document(inside, mode="commonmark", child_blocks=True)
+    assert [c.content for c in blank[0].children] == ["Alpha", "Beta"]
+    assert [c.content for c in common[0].children] == ["Alpha", "Beta"]
+    multiline = "- Alpha\n  continuation\n- Beta\n"
+    assert [
+        c.content for c in L.parse_document(multiline, child_blocks=True)[0].children
+    ] == [
+        c.content
+        for c in L.parse_document(multiline, mode="commonmark", child_blocks=True)[
+            0
+        ].children
+    ]
+    lazy = "- Alpha\nlazy continuation\n- Beta\n"
+    assert L.parse_document(lazy, child_blocks=True)[0].children == []
+    loose = "- Alpha\n\n- Beta\n"
+    assert all(not b.children for b in L.parse_document(loose, child_blocks=True))
+
+
+def test_child_drop_blocks_but_markerless_reword_recovers():
+    before = _child_doc()
+    dropped = (
+        "\n".join(
+            line for line in before.splitlines() if not line.startswith("- Document")
+        )
+        + "\n"
+    )
+    assert "CHILD_DROPPED" in codes(L.lint_diff(before, dropped, child_blocks=True))
+    reworded = (
+        "\n".join(
+            "- Document the CLI clearly" if line.startswith("- Document") else line
+            for line in before.splitlines()
+        )
+        + "\n"
+    )
+    assert "CHILD_DROPPED" not in codes(
+        L.lint_diff(before, reworded, child_blocks=True)
+    )
+
+
+def test_child_surviving_marker_precedes_parent_hash_ordinal():
+    before = _child_doc()
+    lines = before.splitlines()
+    marker_a = lines[0].split(" <!--", 1)[1]
+    marker_b = lines[1].split(" <!--", 1)[1]
+    after = "\n".join(
+        [
+            f"- Ship the linter <!--{marker_b}",
+            f"- Document the command <!--{marker_a}",
+            lines[2],
+            lines[3],
+            "",
+        ]
+    )
+    findings = L.lint_diff(before, after, child_blocks=True)
+    assert "CHILD_DROPPED" not in codes(findings)
+
+
+def test_child_surviving_marker_outlives_an_unresolvable_parent():
+    """The parent's block-level marker is a standalone line an edit drops
+    easily, while child markers ride inline in the bullet text being rewritten.
+    A failed inference about the container must not discard stored child ids."""
+
+    before = _child_doc()
+    after = (
+        "\n".join(line for line in before.splitlines() if line != "<!-- stay:parent -->")
+        .replace("Ship the linter", "Roll out the ingestion pipeline")
+        .replace("Document the command", "Smoke-test downstream consumers")
+        .replace("Publish package", "Cut the release candidate")
+        + "\n"
+    )
+    resolved = L._resolve_children(_child_anchors(before), after, "blank-line")
+    assert [resolved[cid][0] for cid in ("a", "b", "c")] == ["marker"] * 3
+
+
+def test_child_near_duplicate_parent_cannot_capture_a_deleted_sibling_list():
+    """Exclusive assignment: the surviving list claims its own block by exact
+    hash, so the deleted near-duplicate cannot quote-match onto it and drag its
+    children along."""
+
+    before = (
+        f"- Deploy alpha service {_child_marker('a1', 'Deploy alpha service')}\n"
+        f"- Verify alpha service {_child_marker('a2', 'Verify alpha service')}\n"
+        "<!-- stay:pa -->\n\n"
+        "Interlude.\n<!-- stay:mid -->\n\n"
+        f"- Deploy beta service {_child_marker('b1', 'Deploy beta service')}\n"
+        f"- Verify beta service {_child_marker('b2', 'Verify beta service')}\n"
+        "<!-- stay:pb -->\n"
+    )
+    after = "Interlude.\n\n- Deploy beta service\n- Verify beta service\n"
+    resolved = L._resolve_children(_child_anchors(before), after, "blank-line")
+    assert [resolved[cid][0] for cid in ("a1", "a2")] == ["detached", "detached"]
+
+
+def test_child_markerless_cross_parent_move_uses_document_hash():
+    before = (
+        f"- Alpha {_child_marker('a', 'Alpha')}\n"
+        f"- Move me {_child_marker('move', 'Move me')}\n"
+        "<!-- stay:p1 -->\n\nInterlude.\n\n"
+        f"- Gamma {_child_marker('g', 'Gamma')}\n"
+        f"- Delta {_child_marker('d', 'Delta')}\n"
+        "<!-- stay:p2 -->\n"
+    )
+    moved = next(line for line in before.splitlines() if line.startswith("- Move me"))
+    lines = [line for line in before.splitlines() if line != moved]
+    at = next(i for i, line in enumerate(lines) if line.startswith("- Delta")) + 1
+    lines.insert(at, "- Move me")
+    findings = L.lint_diff(before, "\n".join(lines) + "\n", child_blocks=True)
+    assert not [f for f in findings if f.code == "CHILD_DROPPED" and f.id == "move"]
+
+
+def test_child_identical_sibling_loss_detaches_safely():
+    before = (
+        f"- Done {_child_marker('d1', 'Done')}\n"
+        f"- Done {_child_marker('d2', 'Done')}\n"
+        f"- Pending {_child_marker('p', 'Pending')}\n"
+        "<!-- stay:parent -->\n"
+    )
+    first = before.splitlines()[0]
+    after = before.replace(first + "\n", "", 1)
+    dropped = [
+        f.id
+        for f in L.lint_diff(before, after, child_blocks=True)
+        if f.code == "CHILD_DROPPED"
+    ]
+    assert "d1" in dropped
 
 
 # --- drift routing: quiet human render, intact structured channel ------------
@@ -279,29 +445,31 @@ def _run_cli(argv):
 def test_render_hides_drift_by_default_lists_with_flag():
     _, findings = L.lint_document("Edited.\n<!-- stay:z9 hash=sha256:dead -->\n")
     assert codes(findings) == ["HASH_DRIFT"]
-    hidden = L.render_text("doc", findings)              # default show_drift=False
+    hidden = L.render_text("doc", findings)  # default show_drift=False
     shown = L.render_text("doc", findings, show_drift=True)
-    assert "HASH_DRIFT" not in hidden                    # drift line dropped
+    assert "HASH_DRIFT" not in hidden  # drift line dropped
     assert "hash-drift" in hidden and "--show-drift" in hidden  # collapsed receipt
-    assert "HASH_DRIFT" in shown                         # listed on request
-    assert "hidden (--show-drift" not in shown           # no collapsed line when shown
+    assert "HASH_DRIFT" in shown  # listed on request
+    assert "hidden (--show-drift" not in shown  # no collapsed line when shown
     # summary counts the real totals either way (drift is still a warn that happened)
     assert "0 error, 1 warn, 0 info" in hidden
     assert "0 error, 1 warn, 0 info" in shown
 
 
 def test_render_keeps_real_findings_and_counts_with_mixed_set():
-    md = ("Edited.\n<!-- stay:z9 hash=sha256:dead -->\n\n"
-          "A para.\n<!-- stay:note=hello -->\n")
+    md = (
+        "Edited.\n<!-- stay:z9 hash=sha256:dead -->\n\n"
+        "A para.\n<!-- stay:note=hello -->\n"
+    )
     _, findings = L.lint_document(md)
     assert sorted(codes(findings)) == ["HASH_DRIFT", "MALFORMED_MARKER"]
     hidden = L.render_text("doc", findings)
     shown = L.render_text("doc", findings, show_drift=True)
     for r in (hidden, shown):
-        assert "1 error, 1 warn, 0 info" in r            # counts unchanged
-        assert "MALFORMED_MARKER" in r                   # the actionable line stays
+        assert "1 error, 1 warn, 0 info" in r  # counts unchanged
+        assert "MALFORMED_MARKER" in r  # the actionable line stays
     assert "HASH_DRIFT" not in hidden
-    assert "1 hash-drift finding hidden" in hidden       # singular, collapsed
+    assert "1 hash-drift finding hidden" in hidden  # singular, collapsed
 
 
 def test_json_byte_identical_with_and_without_show_drift():
@@ -309,8 +477,8 @@ def test_json_byte_identical_with_and_without_show_drift():
     try:
         _, a = _run_cli(["--json", path])
         _, b = _run_cli(["--json", "--show-drift", path])
-        assert a == b                                    # structured channel untouched
-        assert "HASH_DRIFT" in a                         # drift still carried in --json
+        assert a == b  # structured channel untouched
+        assert "HASH_DRIFT" in a  # drift still carried in --json
     finally:
         os.unlink(path)
 
@@ -322,7 +490,7 @@ def test_before_diff_text_path_hides_drift_by_default():
         _, hidden = _run_cli(["--before", before, after])
         _, shown = _run_cli(["--show-drift", "--before", before, after])
         assert "HASH_DRIFT" not in hidden
-        assert "hash-drift" in hidden                     # collapsed line on the diff path
+        assert "hash-drift" in hidden  # collapsed line on the diff path
         assert "HASH_DRIFT" in shown
     finally:
         os.unlink(before)
@@ -337,14 +505,17 @@ def test_hash_drift_stays_warn_in_return_tuples_guardrail():
     _, doc = L.lint_document("Edited.\n<!-- stay:z9 hash=sha256:dead -->\n")
     doc_drift = [f for f in doc if f.code == "HASH_DRIFT"]
     assert doc_drift and all(f.level == "warn" for f in doc_drift)
-    diff = L.lint_diff("Alpha.\n<!-- stay:a -->\n", "Alpha, revised.\n<!-- stay:a -->\n")
+    diff = L.lint_diff(
+        "Alpha.\n<!-- stay:a -->\n", "Alpha, revised.\n<!-- stay:a -->\n"
+    )
     diff_drift = [f for f in diff if f.code == "HASH_DRIFT"]
     assert diff_drift and all(f.level == "warn" for f in diff_drift)
 
 
 def _run_all():
-    tests = [v for k, v in sorted(globals().items())
-             if k.startswith("test_") and callable(v)]
+    tests = [
+        v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)
+    ]
     failed = 0
     for t in tests:
         try:
@@ -362,4 +533,5 @@ def _run_all():
 
 if __name__ == "__main__":
     import sys
+
     sys.exit(1 if _run_all() else 0)

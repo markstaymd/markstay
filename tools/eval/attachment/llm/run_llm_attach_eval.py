@@ -30,22 +30,56 @@ import perturb as PB  # noqa: E402
 import resolver as R  # noqa: E402
 import providers as P  # noqa: E402
 
+sys.path.insert(0, str(_EVAL.parent / "impl" / "py" / "src"))
+from markstay.stamp import stamp as stamp_doc  # noqa: E402
+
 HERE = Path(__file__).parent
 DOCS_DIR = _EVAL / "docs"
 ADV_DOC = _EVAL / "attachment" / "fixtures" / "near_dups.md"
 
 
-async def run_cell(sem, cell, threshold, margin):
-    base = (DOCS_DIR / f"{cell['doc']}.md").read_text() if cell["doc"] != "near_dups" \
-        else ADV_DOC.read_text()
-    before_md, _ = PB.annotate(base)
-    prompt = LA.build_prompt(cell["task"], before_md)
+FIXTURES = _EVAL / "attachment" / "fixtures"
+# List-heavy corpus for item granularity. Item count, not document count, drives
+# n here: every extra bullet adds a resolution at no extra API call, so these are
+# deliberately dense rather than numerous.
+ITEM_DOCS = ["list_tracker", "list_readme", "list_checklist"]
+
+
+def load_doc(name: str) -> str:
+    if name == "near_dups" or name.startswith("list_"):
+        return (FIXTURES / f"{name}.md").read_text()
+    return (DOCS_DIR / f"{name}.md").read_text()
+
+
+def annotate_items(base_md: str, doc: str) -> str:
+    """Stamp parents and list items, with ids traceable back to their document."""
+    n = 0
+
+    def next_id():
+        nonlocal n
+        n += 1
+        return f"{doc.removeprefix('list_')[:4]}{n:03d}"
+
+    return stamp_doc(base_md, mode=LA.ITEM_MODE, child_blocks=True,
+                     new_id=next_id).text
+
+
+async def run_cell(sem, cell, threshold, margin, granularity="block"):
+    base = load_doc(cell["doc"])
+    if granularity == "item":
+        before_md = annotate_items(base, cell["doc"])
+        prompt = LA.build_item_prompt(cell["task"], before_md)
+    else:
+        before_md, _ = PB.annotate(base)
+        prompt = LA.build_prompt(cell["task"], before_md)
     async with sem:
         for attempt in range(2):
             try:
                 raw = await P.complete(cell["model"], prompt, max_tokens=4000)
                 after = LA.strip_outer_fence(raw)
-                results = LA.score_document(before_md, after, threshold, margin)
+                results = (LA.score_document_items(before_md, after)
+                           if granularity == "item"
+                           else LA.score_document(before_md, after, threshold, margin))
                 cell["results"] = [r.__dict__ for r in results]
                 cell["ok"] = True
                 return cell
@@ -171,10 +205,18 @@ async def main():
     ap.add_argument("--margin", type=float, default=R.DEFAULT_MARGIN)
     ap.add_argument("--concurrency", type=int, default=6)
     ap.add_argument("--smoke", action="store_true", help="one cell only")
-    ap.add_argument("--out", default=str(HERE / "results"))
+    ap.add_argument("--granularity", choices=("block", "item"), default="block",
+                    help="item: experimental list-item identity on the list-heavy corpus")
+    ap.add_argument("--out", default=None)
     args = ap.parse_args()
+    if args.out is None:
+        args.out = str(HERE / ("results_item" if args.granularity == "item" else "results"))
 
     models = args.models.split(",")
+    # Item granularity needs list-heavy documents; the prose corpus carries three
+    # bullets total, which is far too few to say anything.
+    if args.granularity == "item" and args.docs == ap.get_default("docs"):
+        args.docs = ",".join(ITEM_DOCS)
     docs = args.docs.split(",")
     if args.adversarial:
         docs = docs + ["near_dups"]
@@ -191,7 +233,8 @@ async def main():
 
     print(f"running {len(cells)} cells across {len(models)} model(s) ...")
     sem = asyncio.Semaphore(args.concurrency)
-    coros = [run_cell(sem, c, args.threshold, args.margin) for c in cells]
+    coros = [run_cell(sem, c, args.threshold, args.margin, args.granularity)
+             for c in cells]
     done = 0
     for fut in asyncio.as_completed(coros):
         await fut
@@ -204,6 +247,7 @@ async def main():
     rows = [r for r in rows if r["cat"] != "no_truth"]
 
     meta = {"models": args.models, "docs": ",".join(docs), "tasks": tasks,
+            "granularity": args.granularity,
             "threshold": args.threshold, "margin": args.margin,
             "n_cells": len(cells), "n_ok": n_ok, "n_failed": len(cells) - n_ok}
     Path(args.out + ".json").write_text(json.dumps(

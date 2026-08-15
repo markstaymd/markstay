@@ -117,3 +117,51 @@ marker syntax.
   meaning-preserving rewrites rarely drift that far). Pushing into sub-0.3 would need
   rewrites that change meaning, at which point "correct attachment" stops being
   well-defined.
+
+---
+
+# Item granularity (experimental child blocks), 2026-08-14
+
+Same judge-free method one level down, on a list-heavy corpus
+(`list_tracker`, `list_readme`, `list_checklist`), run on **gpt4o**: a
+deliberately cross-family choice, since a format claim is stronger when it holds
+on a model the format was never designed against.
+
+**256 scored resolutions, 92.2% recovery, 0.0% false attachment**, 95%
+Clopper-Pearson upper bound **1.16%**. Zero exclusions: gpt4o preserved every
+marker in all 12 cells, including the two most aggressive rewrite tasks, which is
+a §11 preservation result at item granularity in its own right.
+
+| measured similarity | scored | recovery | false-attach |
+|---------------------|-------:|---------:|-------------:|
+| 0.0-0.3 | 10 | 0% | 0% |
+| 0.3-0.5 | 7 | 0% | 0% |
+| 0.5-0.7 | 48 | 98% | 0% |
+| 0.7-0.9 | 97 | 98% | 0% |
+| 0.9-1.0 | 94 | 99% | 0% |
+
+**The bands land on the §9 constants.** The lowest similarity ever attached is
+0.51, against a commit threshold of 0.5; nothing below it was attached, and
+nothing at any similarity was misattached. Degradation is entirely by detaching,
+which is §10's "surface, don't guess" behaving as specified rather than as an
+aspiration. The highest-similarity detach sits at 0.94, where the margin guard
+refuses a tie between repeated bullets: threshold governs the floor, margin
+governs ambiguity, and one run shows both.
+
+**The quote tier carries item granularity.** Tier shares are quote 64%, hash 15%,
+detached 8%, inverting the block-level result where exact hash did 81% of the
+work. Rewording a bullet changes its text, so the hash rarely survives and the
+near-duplicate-prone tier does the heavy lifting. It still produced zero false
+attachments, which is the specific fear §5.1 recorded when it deferred item
+identity.
+
+By task, recovery tracks rewrite intensity as expected: copyedit 100%, rewrite
+97%, reword 88%, restructure 83% (all 0% false-attach). By document,
+`list_checklist` is weakest at 82%, entirely through safe detaches on its
+repeated `Done`/`Pending` labels: the designed degradation, measured rather than
+asserted.
+
+**Scope.** One model, one family, 12 calls. It is evidence that the ladder holds
+under real rewrites, not a substitute for the deterministic matrix
+(`../item_eval.py`, 324 resolutions) that certifies the false-attach bar. Claude
+models were not run: no local API credential exists, by design.
