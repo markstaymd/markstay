@@ -53,15 +53,21 @@ def run_case(
     strip: bool,
     threshold: float,
     margin: float = R.DEFAULT_MARGIN,
+    resolve_kw: dict | None = None,
 ) -> dict:
+    """One (document, operator, strip) cell. `resolve_kw` passes the
+    experimental resolver arguments through; empty is the shipped resolver."""
     before_md, pblocks = PB.annotate(base_md)
     anchors = R.build_anchors(before_md)
-    after_pblocks, adj = PB.OPERATORS[op_name](pblocks)
+    # Lookup spans both registries; which operators a *report* iterates is the
+    # caller's choice, so the default report's operator list stays as it was.
+    after_pblocks, adj = {**PB.OPERATORS, **PB.SECTION_OPERATORS}[op_name](pblocks)
     after_md = PB.serialize(after_pblocks, strip=strip)
     truth = PB.default_truth(after_pblocks)
     truth.update(adj)
 
-    resolutions = R.resolve(anchors, after_md, threshold=threshold, margin=margin)
+    resolutions = R.resolve(anchors, after_md, threshold=threshold, margin=margin,
+                            **(resolve_kw or {}))
     cats: dict[str, int] = {}
     methods: dict[str, int] = {}
     detail = []
@@ -213,10 +219,10 @@ def write_report(path, sec):
     Path(path).write_text("\n".join(L) + "\n")
 
 
-def op_rows(bases, strip, threshold, margin):
+def op_rows(bases, strip, threshold, margin, ops=None, resolve_kw=None):
     rows = []
-    for op in PB.OPERATORS:
-        cells = [run_case(b, op, strip, threshold, margin) for b in bases]
+    for op in ops or PB.OPERATORS:
+        cells = [run_case(b, op, strip, threshold, margin, resolve_kw) for b in bases]
         rows.append(
             {
                 "op": op,
@@ -228,6 +234,110 @@ def op_rows(bases, strip, threshold, margin):
     return rows
 
 
+def fixture_shape(base_md, n_ops):
+    """Count what the fixture actually contains, rather than asserting it.
+
+    A block is a *relevant* case only when something else in the document scores
+    at or over the commit threshold against it AND sits under a different
+    heading path: that is the only arrangement a heading-path signal can act on.
+    Blocks whose only rivals share their section are the negative control, and
+    the ~1% false-attach bar this project holds itself to needs the relevant
+    count (not the total) to reach ~300 before a clean run can certify it."""
+    import markstay_lint as lint      # `L` is the report-lines name in this module
+    from quote import Selector, body_score
+
+    blocks = [b for b in lint.parse_document(base_md) if b.index >= 0]
+    paths = [tuple(lint.canonical_heading(t) for t in p)
+             for p in lint.heading_paths(base_md, blocks)]
+    bodies = [b.content for b in blocks]
+    cross = same = 0
+    for i, body in enumerate(bodies):
+        sel = Selector(quote=body)
+        rivals = [j for j in range(len(bodies))
+                  if j != i and body_score(sel, bodies[j]) >= R.DEFAULT_THRESHOLD]
+        if any(paths[j] != paths[i] for j in rivals):
+            cross += 1
+        elif rivals:
+            same += 1
+    return {
+        "blocks": len(blocks),
+        "distinct_heading_paths": len(set(paths)),
+        "cross_section_blocks": cross,
+        "cross_section_resolutions": cross * n_ops,
+        "same_section_only_blocks": same,
+        "same_section_only_resolutions": same * n_ops,
+        "uncontested_blocks": len(bodies) - cross - same,
+    }
+
+
+def run_cross_section(out, threshold, margin, resolve_kw=None):
+    """Control baseline for the multi-section fixture, recorded before any
+    heading-path arm exists so the arms have something to be measured against.
+
+    Runs the within-section operators *and* `PB.SECTION_OPERATORS`, which move
+    the heading structure itself. Deliberately writes its own artifact: folding
+    it into `results.md` would move the project's published headline numbers as a
+    side effect of adding a fixture."""
+    fixture = HERE / "fixtures" / "cross_section_dups.md"
+    if not fixture.exists():
+        # This runner is published to the site's tools tree; the fixture is not
+        # on that allowlist yet. Say so instead of raising, so a reader of the
+        # public copy learns what is missing rather than reading a traceback.
+        raise SystemExit(
+            f"missing {fixture.name}: the multi-section fixture is not part of "
+            "this copy. Run this from the markstay umbrella, or add "
+            "fixtures/cross_section_dups.md to sync-site-tools.sh.")
+    base = fixture.read_text()
+    ops = {**PB.OPERATORS, **PB.SECTION_OPERATORS}
+    rows = op_rows([base], True, threshold, margin, ops=ops, resolve_kw=resolve_kw)
+    shape = fixture_shape(base, len(ops))
+
+    agg = merge_counts(rows, "cats")
+    rec, fr, _, total = recovery_and_falserate(agg)
+    L = ["# Cross-section fixture: control baseline\n"]
+    L.append(
+        f"Fixture: `fixtures/cross_section_dups.md`  |  operators: "
+        f"{len(ops)} ({len(PB.SECTION_OPERATORS)} of them structural)  |  "
+        f"threshold {threshold}, margin {margin}  |  markers stripped\n")
+    L.append(
+        "Recorded **before** any heading-path arm is written, so a later arm is "
+        "compared against a number that was fixed in advance. The structural "
+        "operators are the half the older fixtures cannot express: "
+        "`cross_section_move` and `heading_delete` change a block's section "
+        "while keeping its text, which is the cost side of treating section "
+        "position as evidence, and `SPEC.md` §2.2 requires a stay to survive "
+        "both.\n")
+    L.append("\n## What the fixture contains\n")
+    L.append("| | count |")
+    L.append("|---|---:|")
+    L.append(f"| content blocks | {shape['blocks']} |")
+    L.append(f"| distinct heading paths | {shape['distinct_heading_paths']} |")
+    L.append(f"| blocks with a **cross-section** rival at or over threshold | "
+             f"{shape['cross_section_blocks']} "
+             f"(**{shape['cross_section_resolutions']}** resolutions) |")
+    L.append(f"| blocks whose only rivals are **same-section** (negative control) | "
+             f"{shape['same_section_only_blocks']} "
+             f"({shape['same_section_only_resolutions']} resolutions) |")
+    L.append(f"| blocks with no rival at all | {shape['uncontested_blocks']} |")
+    L.append(
+        "\nThe relevant count is the cross-section one: a clean run can only "
+        "certify the project's ~1% false-attach bar at roughly 300 or more "
+        "(`results_item.md`), and the total is not a substitute for it.\n")
+    op_table(L, rows, "Per operator (markers stripped)")
+    L.append(
+        f"\nControl: **{pct(rec)}% recovery, {pct(fr)}% false attachment** over "
+        f"{total} resolutions.\n")
+    Path(out + ".md").write_text("\n".join(L) + "\n")
+    Path(out + ".json").write_text(json.dumps(
+        {"fixture": "fixtures/cross_section_dups.md",
+         "threshold": threshold, "margin": margin,
+         "operators": list(ops), "shape": shape, "rows": rows, "agg": agg,
+         "recovery": rec, "false_rate": fr, "n": total}, indent=1) + "\n")
+    print(f"wrote {out}.json and {out}.md")
+    print(f"[cross-section control] recovery={pct(rec)}%  "
+          f"false-attach={pct(fr)}%  n={total}  {agg}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--docs", default="doc1,doc2")
@@ -235,10 +345,55 @@ def main():
     ap.add_argument("--margin", type=float, default=R.DEFAULT_MARGIN)
     ap.add_argument("--out", default=None)
     ap.add_argument("--granularity", choices=("block", "item"), default="block")
+    ap.add_argument("--fixture", choices=("default", "cross-section"),
+                    default="default",
+                    help="'cross-section' runs the multi-section fixture with "
+                         "the structural operators into its own artifact")
+    ap.add_argument("--arms", action="store_true",
+                    help="run the experimental heading-path arms over every "
+                         "corpus into results_headingpath.{json,md}")
+    ap.add_argument("--heading-path", choices=R.HEADING_MODES, default="off",
+                    help="experimental: use the enclosing heading path as extra "
+                         "quote-tier evidence (default off, and off is the "
+                         "shipped resolver bit for bit)")
+    ap.add_argument("--heading-bonus", type=float, default=R.DEFAULT_HEADING_BONUS)
+    ap.add_argument("--heading-gate", type=float, default=None,
+                    help="minimum body score before the heading bonus applies "
+                         "(default: the commit threshold, making it a pure "
+                         "tiebreaker; 0.0 for the ungated form)")
+    ap.add_argument("--unclamp", action="store_true",
+                    help="experimental: run the runner-up margin on unclamped "
+                         "scores instead of clamping both to 1.0 first")
     args = ap.parse_args()
+    resolve_kw = {"heading_path": args.heading_path, "clamp": not args.unclamp,
+                  "heading_bonus": args.heading_bonus,
+                  "heading_gate": args.heading_gate}
     out = args.out or str(
         HERE / ("results_item" if args.granularity == "item" else "results")
     )
+
+    if args.arms:
+        try:
+            import heading_arms
+        except ImportError:  # same posture as the missing-fixture message below
+            raise SystemExit(
+                "missing heading_arms.py: the experimental heading-path arms are "
+                "not part of this copy. Run this from the markstay umbrella.")
+        arms_out = args.out or str(HERE / "results_headingpath")
+        data = heading_arms.write(arms_out)
+        print(f"wrote {arms_out}.json and {arms_out}.md")
+        for corpus in data["corpora"]:
+            head = ", ".join(
+                f"{label} {corpus['arms'][label]['overall']['recovery']:.1%}/"
+                f"{corpus['arms'][label]['overall']['false_attach']:.1%}"
+                for label in ("A", "B12c", "C"))
+            print(f"[{corpus['name']}] {head}   (recovery/false, full table in the report)")
+        return
+
+    if args.fixture == "cross-section":
+        run_cross_section(args.out or str(HERE / "results_crosssection_fixture"),
+                          args.threshold, args.margin, resolve_kw)
+        return
 
     if args.granularity == "item":
         payload = item_eval.write(out)
@@ -255,15 +410,19 @@ def main():
     bases = [(DOCS_DIR / f"{d}.md").read_text() for d in docs]
     adv_base = [(HERE / "fixtures" / "near_dups.md").read_text()]
 
-    rows_strip = op_rows(bases, True, args.threshold, args.margin)
-    rows_keep = op_rows(bases, False, args.threshold, args.margin)
-    adv_rows = op_rows(adv_base, True, args.threshold, args.margin)
+    rows_strip = op_rows(bases, True, args.threshold, args.margin,
+                         resolve_kw=resolve_kw)
+    rows_keep = op_rows(bases, False, args.threshold, args.margin,
+                        resolve_kw=resolve_kw)
+    adv_rows = op_rows(adv_base, True, args.threshold, args.margin,
+                       resolve_kw=resolve_kw)
 
     # Guard ablation on the adversarial fixture: margin off vs on.
     ablation = []
     for m in (0.0, args.margin):
         cells = [
-            run_case(adv_base[0], op, True, args.threshold, m) for op in PB.OPERATORS
+            run_case(adv_base[0], op, True, args.threshold, m, resolve_kw)
+            for op in PB.OPERATORS
         ]
         ablation.append((m, merge_counts(cells, "cats")))
 

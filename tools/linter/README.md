@@ -191,6 +191,14 @@ The attachment-survival eval reuses `parse_document` (block + marker extraction)
 and `lint_diff` (before/after id accounting) rather than reimplement marker
 parsing, so it inherits the same mode switch.
 
+`heading_paths(blocks)` and `canonical_heading(title)` are **experimental and
+canonical-Python-only**: no `SPEC.md` text defines a heading path, no check here
+consumes one, and the other implementations do not have them. They exist so the
+attachment eval can measure whether a block's enclosing section is useful
+recovery evidence for the §9 quote tier (`../eval/attachment/`). Their
+derivation rules are pinned by tests rather than by the spec, so treat them as a
+measurement tool and not as linter surface.
+
 ## Tests
 
 ```bash

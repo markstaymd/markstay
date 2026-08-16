@@ -42,12 +42,18 @@ if str(_LINTER) not in sys.path:
     sys.path.insert(0, str(_LINTER))
 import markstay_lint as L  # noqa: E402
 
-from quote import Selector, best_match  # noqa: E402
+from quote import Selector, best_match, window_prefix, window_suffix  # noqa: E402
 
 # Default thresholds for the QUOTE tier. A recovery is committed only when the
 # best candidate clears `threshold` AND beats the runner-up by `margin`.
 DEFAULT_THRESHOLD = 0.5
 DEFAULT_MARGIN = 0.05
+
+
+HEADING_MODES = ("off", "bonus", "penalty", "filter")
+# revdown's constant, kept as the default so the arms start where the borrowed
+# design sits. Phase 3 sweeps it rather than trusting it.
+DEFAULT_HEADING_BONUS = 0.12
 
 
 @dataclass
@@ -57,6 +63,12 @@ class Anchor:
     id: str
     hash: str            # full sha256 of the normalized body
     selector: Selector   # quote + prefix/suffix recovery evidence
+
+    @property
+    def heading_path(self) -> tuple[str, ...]:
+        """The enclosing section at annotation time, carried on the selector
+        because it is recovery evidence of the same kind as prefix/suffix."""
+        return self.selector.heading_path
 
 
 @dataclass
@@ -76,11 +88,24 @@ def build_anchors(before_md: str, mode: str = "blank-line") -> list[Anchor]:
     'commonmark' (§5.2, whole loose lists / blank-line fences). It MUST match the
     mode passed to `resolve`."""
     blocks = [b for b in L.parse_document(before_md, mode=mode) if b.index >= 0]
+    # Experimental third contextual signal, stored whether or not any caller
+    # asks for it: an anchor built with `--heading-path off` and one built with
+    # it on must be the same anchor, or the arms would differ by what was
+    # recorded rather than by how it was used.
+    paths = L.heading_paths(before_md, blocks)
     anchors: list[Anchor] = []
     for i, b in enumerate(blocks):
         prev_text = blocks[i - 1].content if i > 0 else ""
         next_text = blocks[i + 1].content if i + 1 < len(blocks) else ""
-        sel = Selector(quote=b.content, prefix=prev_text, suffix=next_text)
+        # SPEC.md §9: the stored prefix/suffix carry up to 48 characters of the
+        # neighbour on each side. Storing the whole block instead caps the
+        # achievable ratio near 2*48/(len+48), because the candidate side is
+        # windowed at match time, so a perfectly preserved long neighbour scored
+        # well under the 0.05 it should.
+        sel = Selector(quote=b.content,
+                       prefix=window_prefix(prev_text),
+                       suffix=window_suffix(next_text),
+                       heading_path=tuple(paths[i]))
         for mk in b.markers:
             if mk.id and not mk.malformed:
                 anchors.append(Anchor(
@@ -97,12 +122,33 @@ def resolve(
     threshold: float = DEFAULT_THRESHOLD,
     margin: float = DEFAULT_MARGIN,
     mode: str = "blank-line",
+    heading_path: str = "off",
+    heading_bonus: float = DEFAULT_HEADING_BONUS,
+    heading_gate: float | None = None,
+    clamp: bool = True,
 ) -> dict[str, Resolution]:
     """Resolve every anchor id against the edited document via the evidence
     ladder. Returns id -> Resolution. `mode` selects the block segmenter and MUST
-    match the mode `build_anchors` used (SPEC.md §5)."""
+    match the mode `build_anchors` used (SPEC.md §5).
+
+    The last four arguments are the heading-path experiment and the clamp axis it
+    is measured against. Defaults reproduce the shipped resolver exactly.
+    `heading_path` is 'off' | 'bonus' | 'penalty' | 'filter'; `heading_gate`
+    defaults to `threshold`, making the preference a tiebreaker among candidates
+    that already clear the commit bar on body text alone (pass 0.0 for the
+    ungated form)."""
+    if heading_path not in HEADING_MODES:
+        raise ValueError(f"unknown heading_path mode: {heading_path!r}")
+    gate = threshold if heading_gate is None else heading_gate
+
     after_blocks = [b for b in L.parse_document(after_md, mode=mode) if b.index >= 0]
     bodies = [b.content for b in after_blocks]
+    # The after-document needs its own paths: `best_match` compares an anchor's
+    # stored path against where each *candidate* now sits, and candidates are
+    # bare bodies with no structure attached.
+    after_paths = (
+        L.heading_paths(after_md, after_blocks) if heading_path != "off" else None
+    )
 
     # Tier 1 lookup: ids whose marker is still attached, mapped to block index.
     surviving: dict[str, int] = {}
@@ -128,7 +174,16 @@ def resolve(
             out[a.id] = Resolution(a.id, "hash", hits[0], 1.0)
             continue
         # Tier 3: quote recovery, committed only on a clear winner.
-        idx, score, runner = best_match(a.selector, bodies)
+        idx, score, runner = best_match(
+            a.selector,
+            bodies,
+            candidate_paths=after_paths,
+            heading_bonus=heading_bonus if heading_path == "bonus" else 0.0,
+            heading_penalty=heading_bonus if heading_path == "penalty" else 0.0,
+            heading_filter=heading_path == "filter",
+            heading_gate=gate,
+            clamp=clamp,
+        )
         if idx >= 0 and score >= threshold and (score - runner) >= margin:
             out[a.id] = Resolution(a.id, "quote", idx, score)
         else:

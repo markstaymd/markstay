@@ -568,6 +568,236 @@ def parse_document(
     return blocks
 
 
+# --- heading paths (experimental, not spec behaviour) ---------------------
+#
+# The enclosing section a block sits in, as an ordered list of heading titles.
+# This is candidate recovery evidence for the QUOTE tier (SPEC.md §9), being
+# measured before any of it is proposed for the spec; nothing in the linter's
+# published checks consumes it. See eval/attachment/ for the experiment.
+#
+# Derived from the document's **source lines**, never from `Block.content`.
+# Content has already lost the leading indent that separates an indented code
+# block from a heading (`    # deploy` is code, `# deploy` is a section), and it
+# has had markers removed, so a derivation reading it cannot tell those cases
+# apart. Blocks come in only to map a line's path onto the block that starts
+# there.
+
+# An opening fence may carry an info string; a *closing* fence may not, and a
+# backtick fence's info string may not contain a backtick (CommonMark 4.5).
+_FENCE_OPEN_RE = re.compile(r"^ {0,3}(?P<run>`{3,}|~{3,})(?P<info>.*)$")
+_FENCE_CLOSE_RE = re.compile(r"^ {0,3}(?P<run>`{3,}|~{3,})[ \t]*$")
+# The opening `#` run must be followed by whitespace or end the line: `#Foo` is a
+# paragraph, not a heading (CommonMark 4.2). Indent is at most 3 spaces; 4 makes
+# it an indented code block.
+_ATX_RE = re.compile(r"^ {0,3}(?P<hashes>#{1,6})(?:[ \t]+(?P<title>.*?))?[ \t]*$")
+# A closing `#` run only closes when whitespace precedes it, so `## foo#` keeps
+# its trailing hash and `## foo #` does not.
+_ATX_CLOSE_RE = re.compile(r"(?:^|[ \t])#+[ \t]*$")
+_SETEXT_RE = re.compile(r"^ {0,3}(?P<run>=+|-+)[ \t]*$")
+# Lines that cannot be the paragraph a setext underline applies to. Blockquote
+# and list openers put following lines in a container (their continuations are
+# lazy, so they are not document-level paragraph text either); an indented line
+# with no paragraph open is code; a link reference definition is consumed by the
+# parser and emits no paragraph at all.
+_CONTAINER_RE = re.compile(r"^ {0,3}(?:>|(?:[*+-]|[0-9]{1,9}[.)])(?:[ \t]|$))")
+_INDENTED_RE = re.compile(r"^(?: {4}|\t)")
+_LINKDEF_RE = re.compile(r"^ {0,3}\[[^\]]*\]:")
+# HTML blocks (CommonMark 4.6). Types 1 to 5 close on their own end condition,
+# type 6 on a blank line. Type 7 (any complete tag alone on a line) is
+# deliberately not recognised: it cannot interrupt a paragraph, it is the rarest
+# of the seven, and treating an arbitrary custom tag as a block opener would
+# swallow real headings after it.
+_HTML_TAGS_6 = (
+    "address|article|aside|base|basefont|blockquote|body|caption|center|col|"
+    "colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|"
+    "footer|form|frame|frameset|h1|h2|h3|h4|h5|h6|head|header|hr|html|iframe|"
+    "legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|"
+    "search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul"
+)
+_HTML_OPEN = (
+    (re.compile(r"^ {0,3}<(?:script|pre|style|textarea)(?:[ \t>]|$)", re.I),
+     re.compile(r"</(?:script|pre|style|textarea)>", re.I)),
+    (re.compile(r"^ {0,3}<!--"), re.compile(r"-->")),
+    (re.compile(r"^ {0,3}<\?"), re.compile(r"\?>")),
+    (re.compile(r"^ {0,3}<![A-Za-z]"), re.compile(r">")),
+    (re.compile(r"^ {0,3}<!\[CDATA\["), re.compile(r"\]\]>")),
+    (re.compile(rf"^ {{0,3}}</?(?:{_HTML_TAGS_6})(?:[ \t/>]|$)", re.I), None),
+)
+
+# Inline markup removed before the §9 fold, matched as *pairs* only. A blanket
+# strip of `*`, backtick and `~` collides section titles that differ by literal
+# punctuation (`*.py` with `.py`, `~/.config` with `/.config`, `A * B` with
+# `A B`), which is a worse failure than missing an unpaired delimiter.
+_INLINE_RES = (
+    (re.compile(r"!?\[(?P<text>[^\]]*)\]\([^()]*\)"), r"\g<text>"),   # inline link
+    (re.compile(r"!?\[(?P<text>[^\]]*)\]\[[^\]]*\]"), r"\g<text>"),   # ref link
+    (re.compile(r"`+(?P<text>[^`]+)`+"), r"\g<text>"),                # code span
+    (re.compile(r"\*\*(?=\S)(?P<text>.+?)(?<=\S)\*\*"), r"\g<text>"),
+    (re.compile(r"(?<![0-9A-Za-z_])__(?=\S)(?P<text>.+?)(?<=\S)__(?![0-9A-Za-z_])"),
+     r"\g<text>"),
+    (re.compile(r"~~(?=\S)(?P<text>.+?)(?<=\S)~~"), r"\g<text>"),
+    (re.compile(r"\*(?=\S)(?P<text>.+?)(?<=\S)\*"), r"\g<text>"),
+    # `_` opens or closes emphasis only at a word boundary: intraword underscores
+    # are literal, so `sync_corpus.sh` keeps its underscore while `_Rollback_`
+    # loses its delimiters.
+    (re.compile(r"(?<![0-9A-Za-z_])_(?=\S)(?P<text>.+?)(?<=\S)_(?![0-9A-Za-z_])"),
+     r"\g<text>"),
+)
+
+
+def canonical_heading(title: str) -> str:
+    """Compare-form of one heading title.
+
+    SPEC.md §9's fold (lowercase ASCII, collapse ASCII whitespace runs, trim)
+    plus a heading-specific step the fold does not do: paired inline emphasis,
+    code spans and link syntax come out first. A heading is short enough that one
+    emphasis span is a large fraction of the string, so `## **Rollback**` and
+    `## Rollback` folding differently would break the signal on a purely cosmetic
+    edit, which is what an LLM rewrite does to headings. Only *paired*
+    delimiters are removed, so a title that merely contains `*`, `` ` `` or `~`
+    keeps it."""
+    out = title
+    for pattern, repl in _INLINE_RES:
+        out = pattern.sub(repl, out)
+    return re.sub(r"[ \t\n\r\f\v]+", " ", out.strip(" \t\n\r\f\v")).translate(
+        _ASCII_LOWER
+    )
+
+
+def _paths_by_line(md: str) -> list[list[str]]:
+    """The enclosing heading titles for every 0-indexed source line.
+
+    A heading line carries its *parents*: the stack is popped for the incoming
+    level before the line's path is recorded, so `## Prod` under `# Deploy`
+    records `["Deploy"]` rather than the path of the sibling section above it.
+    A setext title line is rescoped the same way once its underline is read."""
+    text = _blank_frontmatter(md.replace("\r\n", "\n").replace("\r", "\n"))
+    # Markers are stripped per line rather than document-wide: a multi-line
+    # marker would otherwise take its newlines with it and shift every line
+    # number after it.
+    lines = [_strip_markers(raw) for raw in text.split("\n")]
+    stack: list[tuple[int, str]] = []
+    out: list[list[str]] = []
+    fence: str | None = None
+    html_close: re.Pattern | None = None
+    html_blank_ends = False
+    para: list[int] = []  # line indices of an open paragraph (a setext candidate)
+    container = False     # inside a blockquote or list item, until a blank line
+
+    def pop_to(level: int) -> None:
+        while stack and stack[-1][0] >= level:
+            stack.pop()
+
+    for line in lines:
+        blank = line.strip(" \t\f\v") == ""
+
+        if html_close is not None or html_blank_ends:
+            if (html_blank_ends and blank) or (
+                html_close is not None and html_close.search(line)
+            ):
+                html_close, html_blank_ends = None, False
+            out.append([t for _, t in stack])
+            para = []
+            continue
+
+        if fence is not None:
+            close = _FENCE_CLOSE_RE.match(line)
+            if (
+                close
+                and close.group("run")[0] == fence[0]
+                and len(close.group("run")) >= len(fence)
+            ):
+                fence = None
+            out.append([t for _, t in stack])
+            para = []
+            continue
+
+        opener = _FENCE_OPEN_RE.match(line)
+        if opener and not (
+            opener.group("run")[0] == "`" and "`" in opener.group("info")
+        ):
+            fence = opener.group("run")
+            out.append([t for _, t in stack])
+            para, container = [], False
+            continue
+
+        atx = _ATX_RE.match(line)
+        if atx:
+            level = len(atx.group("hashes"))
+            title = _ATX_CLOSE_RE.sub("", atx.group("title") or "").strip(" \t")
+            pop_to(level)
+            out.append([t for _, t in stack])
+            stack.append((level, title))
+            para, container = [], False
+            continue
+
+        setext = _SETEXT_RE.match(line)
+        if setext and para:
+            level = 1 if setext.group("run")[0] == "=" else 2
+            title = " ".join(lines[i].strip(" \t") for i in para)
+            pop_to(level)
+            parents = [t for _, t in stack]
+            for i in para:  # the title lines belong to the heading, not above it
+                out[i] = parents
+            stack.append((level, title))
+            out.append([t for _, t in stack])
+            para, container = [], False
+            continue
+
+        out.append([t for _, t in stack])
+        if blank:
+            para, container = [], False
+        elif _CONTAINER_RE.match(line):
+            # Everything up to the next blank line belongs to the blockquote or
+            # list item, including lines that look like top-level paragraph text
+            # (they are lazy continuations of the container's paragraph).
+            para, container = [], True
+        elif container:
+            para = []
+        elif para:
+            para.append(len(out) - 1)  # continuation of the open paragraph
+        elif _INDENTED_RE.match(line) or _LINKDEF_RE.match(line):
+            para = []
+        elif any(op.match(line) for op, _ in _HTML_OPEN):
+            for op, close in _HTML_OPEN:
+                if op.match(line):
+                    if close is None:
+                        html_blank_ends = True
+                    elif not close.search(line):
+                        html_close = close
+                    break
+        else:
+            para = [len(out) - 1]
+    return out
+
+
+def heading_paths(md: str, blocks: list[Block]) -> list[list[str]]:
+    """The enclosing heading titles for each block, parallel to `blocks`.
+
+    `md` is the same source `parse_document` was given; `blocks` is what it
+    returned, in either segmentation mode. A block takes the path of the source
+    line it starts on, so the rules are:
+
+    * **A block is scoped by the headings that precede it**, and a heading never
+      appears in its own path. A block opening with a heading gets that
+      heading's parents.
+    * A heading the segmenter glued to the body after it (`# H` with no blank
+      line before `Body.`, one block under blank-line segmentation and two under
+      CommonMark, SPEC.md §5.4) is recognised either way, and scopes the blocks
+      that *follow* the block containing it.
+    * All six ATX levels and both setext levels count, held as a stack popped on
+      `level >= incoming`, so a skipped level nests rather than replacing.
+    * Fenced code, indented code, HTML blocks, blockquotes and list items cannot
+      contribute a heading, and a link reference definition or a lazy
+      continuation line cannot become a setext title.
+
+    Titles come back as written; use `canonical_heading` to compare them.
+    Experimental: no spec text defines this yet (see eval/attachment/)."""
+    by_line = _paths_by_line(md)
+    if not by_line:
+        return [[] for _ in blocks]
+    return [by_line[max(0, min(len(by_line) - 1, b.line - 1))] for b in blocks]
+
 # --- checks ---------------------------------------------------------------
 
 
@@ -677,6 +907,11 @@ def _child_id_index(blocks: list[Block]) -> dict[str, list[ChildBlock]]:
 
 _ASCII_LOWER = str.maketrans(string.ascii_uppercase, string.ascii_lowercase)
 
+# SPEC.md §9: a stored prefix/suffix carries up to this many characters of the
+# neighbour on each side. Both the stored and the candidate side are windowed to
+# it, on raw text before normalization, so the two sides compare like with like.
+_CONTEXT_CHARS = 48
+
 
 def _match_normalize(text: str) -> str:
     return re.sub(r"[ \t\n\r\f\v]+", " ", text.strip(" \t\n\r\f\v")).translate(
@@ -710,12 +945,14 @@ def _best_match(
         if prefix:
             prev = candidates[i - 1] if i > 0 else ""
             score += 0.05 * _match_ratio(
-                _match_normalize(prefix), _match_normalize(prev[-48:])
+                _match_normalize(prefix[-_CONTEXT_CHARS:]),
+                _match_normalize(prev[-_CONTEXT_CHARS:]),
             )
         if suffix:
             nxt = candidates[i + 1] if i + 1 < len(candidates) else ""
             score += 0.05 * _match_ratio(
-                _match_normalize(suffix), _match_normalize(nxt[:48])
+                _match_normalize(suffix[:_CONTEXT_CHARS]),
+                _match_normalize(nxt[:_CONTEXT_CHARS]),
             )
         scored.append((score, i))
     if not scored:
@@ -771,9 +1008,13 @@ def _build_child_anchors(md: str, mode: str) -> list[_ChildAnchor]:
                             id=mk.id,
                             hash=digest,
                             quote=child.content,
-                            prefix=block.children[ci - 1].content if ci > 0 else "",
+                            prefix=(
+                                block.children[ci - 1].content[-_CONTEXT_CHARS:]
+                                if ci > 0
+                                else ""
+                            ),
                             suffix=(
-                                block.children[ci + 1].content
+                                block.children[ci + 1].content[:_CONTEXT_CHARS]
                                 if ci + 1 < len(block.children)
                                 else ""
                             ),
@@ -781,9 +1022,15 @@ def _build_child_anchors(md: str, mode: str) -> list[_ChildAnchor]:
                             parent_id=parent.id if parent else None,
                             parent_hash=body_hash(block.content),
                             parent_quote=block.content,
-                            parent_prefix=blocks[bi - 1].content if bi > 0 else "",
+                            parent_prefix=(
+                                blocks[bi - 1].content[-_CONTEXT_CHARS:]
+                                if bi > 0
+                                else ""
+                            ),
                             parent_suffix=(
-                                blocks[bi + 1].content if bi + 1 < len(blocks) else ""
+                                blocks[bi + 1].content[:_CONTEXT_CHARS]
+                                if bi + 1 < len(blocks)
+                                else ""
                             ),
                             sibling_hash_count=sum(
                                 1

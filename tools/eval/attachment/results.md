@@ -15,13 +15,13 @@ Each cell annotates a doc, applies one deterministic edit with known ground trut
 | reorder | 20 | 20 | 0 | 0 | 0 | 0 | 100% |   0% |
 | edit_in_place | 20 | 20 | 0 | 0 | 0 | 0 | 100% |   0% |
 | heavy_paraphrase | 20 | 20 | 0 | 0 | 0 | 0 | 100% |   0% |
-| split | 20 | 19 | 0 | 1 | 0 | 0 |  95% |   0% |
+| split | 20 | 20 | 0 | 0 | 0 | 0 | 100% |   0% |
 | merge | 20 | 20 | 0 | 0 | 0 | 0 | 100% |   0% |
 | delete | 20 | 18 | 0 | 0 | 2 | 0 | 100% |   0% |
 | insert | 20 | 20 | 0 | 0 | 0 | 0 | 100% |   0% |
 | decoy | 20 | 20 | 0 | 0 | 0 | 0 | 100% |   0% |
 | clone | 20 | 18 | 0 | 2 | 0 | 0 |  90% |   0% |
-| **all** | 180 | 175 | 0 | 3 | 2 | 0 | ** 98%** | **  0%** |
+| **all** | 180 | 176 | 0 | 2 | 2 | 0 | ** 99%** | **  0%** |
 
 ## Markers kept (sanity: id token present -> trivial)
 
@@ -44,8 +44,8 @@ Each cell annotates a doc, applies one deterministic edit with known ground trut
 |------|-------------:|------:|------------------|
 | marker | 0 |   0% | id token survived (n/a here, stripped) |
 | hash | 146 |  81% | body unchanged, just moved (exact) |
-| quote | 29 |  16% | body drifted: paraphrase / split / merge (fuzzy) |
-| detached | 5 |   3% | no confident match: deleted or ambiguous |
+| quote | 30 |  17% | body drifted: paraphrase / split / merge (fuzzy) |
+| detached | 4 |   2% | no confident match: deleted or ambiguous |
 
 # Part 2: adversarial fixture (near-duplicate blocks)
 
@@ -57,15 +57,15 @@ Blocks that share most of their wording and differ by a single token (a stage na
 | Edit | n | correct | wrong | missed | detach✓ | false-attach | recovery | false-rate |
 |------|--:|--------:|------:|-------:|--------:|-------------:|---------:|-----------:|
 | reorder | 8 | 8 | 0 | 0 | 0 | 0 | 100% |   0% |
-| edit_in_place | 8 | 5 | 1 | 2 | 0 | 0 |  62% |  12% |
-| heavy_paraphrase | 8 | 7 | 0 | 1 | 0 | 0 |  88% |   0% |
+| edit_in_place | 8 | 5 | 0 | 3 | 0 | 0 |  62% |   0% |
+| heavy_paraphrase | 8 | 8 | 0 | 0 | 0 | 0 | 100% |   0% |
 | split | 8 | 8 | 0 | 0 | 0 | 0 | 100% |   0% |
 | merge | 8 | 6 | 2 | 0 | 0 | 0 |  75% |  25% |
 | delete | 8 | 7 | 0 | 0 | 1 | 0 | 100% |   0% |
 | insert | 8 | 8 | 0 | 0 | 0 | 0 | 100% |   0% |
 | decoy | 8 | 7 | 0 | 1 | 0 | 0 |  88% |   0% |
 | clone | 8 | 7 | 0 | 1 | 0 | 0 |  88% |   0% |
-| **all** | 72 | 63 | 3 | 5 | 1 | 0 | ** 89%** | **  4%** |
+| **all** | 72 | 64 | 2 | 5 | 1 | 0 | ** 90%** | **  3%** |
 
 ## Margin-guard ablation (the guard's whole job)
 
@@ -74,4 +74,4 @@ Same adversarial cases, aggregated over all operators, with the runner-up margin
 | margin | recovery | false-rate | correct | wrong | missed | detach✓ |
 |-------:|---------:|-----------:|--------:|------:|-------:|--------:|
 | 0.0 |  93% |   8% | 66 | 5 | 0 | 0 |
-| 0.05 |  89% |   4% | 63 | 3 | 5 | 1 |
+| 0.05 |  90% |   3% | 64 | 2 | 5 | 1 |

@@ -366,7 +366,7 @@ in-document stay and its address form.
 ## Failure modes and how the spec answers them
 
 - **Marker detachment**: hash-drift check + quote recovery + explicit stale state.
-  On distinct prose the marker→hash→quote ladder re-attaches 98% of ids with zero
+  On distinct prose the marker→hash→quote ladder re-attaches 99% of ids with zero
   false attachment; near-duplicate blocks are the residual risk, so a quote match
   without a clear margin surfaces as detached.
 - **Sanitiser stripping**: the MDX/attribute profiles, and consumers that detect a

@@ -97,7 +97,7 @@ moved. That is the harder question, and the real test of the recovery model
 That second study now exists as a separate, deterministic eval:
 [`tools/eval/attachment/`](https://github.com/markstaymd/markstay/tree/master/tools/eval/attachment)
 (findings in `FINDINGS.md`). Headline: on lexically distinct prose the
-marker->hash->quote ladder re-attaches 98% of ids correctly with zero false
+marker->hash->quote ladder re-attaches 99% of ids correctly with zero false
 attachment (the exact `hash` tier alone does 81%), but near-duplicate blocks are the
 failure mode, content recovery binds to the wrong twin a few percent of the time even
 with a margin guard. So content recovery is best-effort evidence, and keeping the id

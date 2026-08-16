@@ -24,11 +24,9 @@ async def complete_meta(model_name: str, prompt: str, max_tokens: int):
     None for OpenAI-compat models (no clean stop_reason plumbed)."""
     family, model_id = P.MODELS[model_name]
     if family == "anthropic":
-        kwargs = dict(model=model_id, max_tokens=max_tokens,
-                      messages=[{"role": "user", "content": prompt}])
-        if not model_id.startswith("claude-opus-4-8"):
-            kwargs["temperature"] = 0
-        resp = await P._anthropic().messages.create(**kwargs)
+        resp = await P._anthropic().messages.create(
+            **P.anthropic_kwargs(model_id, prompt, max_tokens)
+        )
         text = "".join(b.text for b in resp.content
                        if getattr(b, "type", None) == "text")
         return text, (resp.stop_reason == "max_tokens")

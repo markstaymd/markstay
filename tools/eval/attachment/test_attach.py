@@ -18,6 +18,7 @@ from quote import Selector, best_match
 HERE = Path(__file__).parent
 DOC1 = (HERE.parent / "docs" / "doc1.md").read_text()
 ADV = (HERE / "fixtures" / "near_dups.md").read_text()
+XSEC = (HERE / "fixtures" / "cross_section_dups.md").read_text()
 
 PASS = 0
 FAIL = 0
@@ -224,6 +225,213 @@ def test_commonmark_blank_line_fence_recovers_as_whole_block():
     check("fence with internal blank is one anchor", len(anchors) == 2)
     res = R.resolve(anchors, after, mode="commonmark")
     check("blank-line fence recovered by the hash tier", res["code"].method == "hash")
+
+
+# --- section-structure operators (PB.SECTION_OPERATORS) --------------------
+# These exist to price a resolver that uses heading position as evidence, so
+# what each one must preserve is the interesting part, not the counts it emits.
+
+
+def test_heading_level_reads_atx_and_setext():
+    check("ATX level", PB.heading_level("## Persist") == 2)
+    check("ATX deep level", PB.heading_level("##### Deep") == 5)
+    check("setext h1", PB.heading_level("Title\n=====") == 1)
+    check("setext h2", PB.heading_level("Appendix\n--------") == 2)
+    check("paragraph is not a heading", PB.heading_level("Just prose.") == 0)
+    check("a thematic break is not a setext heading",
+          PB.heading_level("---") == 0)
+    check("hash without a space is not an ATX heading",
+          PB.heading_level("#notaheading") == 0)
+
+
+def test_cross_section_move_keeps_every_id_and_block():
+    _, pbs = PB.annotate(XSEC)
+    out, adj = PB.cross_section_move(pbs)
+    check("move drops no block", len(out) == len(pbs))
+    check("move drops no id",
+          sorted(i for p in out for i in p.ids) ==
+          sorted(i for p in pbs for i in p.ids))
+    check("move overrides no ground truth (SPEC.md 2.2: movement is survivable)",
+          adj == {})
+    check("something actually moved",
+          [p.text for p in out] != [p.text for p in pbs])
+
+
+def test_section_move_relocates_a_whole_section_intact():
+    _, pbs = PB.annotate(XSEC)
+    out, _ = PB.section_move(pbs)
+    check("section move preserves the multiset of blocks",
+          sorted(p.text for p in out) == sorted(p.text for p in pbs))
+    heads = [i for i, p in enumerate(out) if PB.heading_level(p.text)]
+    moved = out[heads[-1]:] if heads else []
+    check("the relocated section still leads with its heading",
+          bool(moved) and PB.heading_level(moved[0].text) > 0)
+
+
+def test_heading_rename_keeps_levels_and_ids():
+    _, pbs = PB.annotate(XSEC)
+    out, _ = PB.heading_rename(pbs)
+    before = [PB.heading_level(p.text) for p in pbs]
+    check("rename preserves every heading level", before ==
+          [PB.heading_level(p.text) for p in out])
+    check("rename preserves block count", len(out) == len(pbs))
+    renamed = [a.text != b.text for a, b in zip(pbs, out)]
+    check("rename touches some headings but not all", any(renamed))
+    check("rename touches no body block",
+          all(not changed or PB.heading_level(a.text)
+              for a, changed in zip(pbs, renamed)))
+
+
+def test_heading_delete_forces_its_own_id_to_detach():
+    _, pbs = PB.annotate(XSEC)
+    out, adj = PB.heading_delete(pbs)
+    check("delete removes exactly one block", len(out) == len(pbs) - 1)
+    check("the deleted heading's id must detach",
+          len(adj) == 1 and all(v["accept"] is None for v in adj.values()))
+    gone = (set(i for p in pbs for i in p.ids) -
+            set(i for p in out for i in p.ids))
+    check("the detaching id is the deleted heading's", gone == set(adj))
+
+
+def test_cross_section_fixture_is_segmenter_agnostic():
+    bl = [b.content for b in R.L.parse_document(XSEC) if b.index >= 0]
+    cm = [b.content for b in R.L.parse_document(XSEC, mode="commonmark")
+          if b.index >= 0]
+    check("fixture parses identically under both segmenters (SPEC.md 5.4)",
+          bl == cm)
+
+
+def test_cross_section_fixture_holds_both_twin_classes():
+    """The fixture is only useful if it contains the case the mechanism targets
+    *and* the case it provably cannot touch. Assert both are present, so a later
+    edit cannot quietly turn it into a one-sided corpus."""
+    import run_attach_eval as RA
+    shape = RA.fixture_shape(XSEC, 1)
+    check("has cross-section rivals (the target class)",
+          shape["cross_section_blocks"] > 0)
+    check("has same-section-only rivals (the negative control)",
+          shape["same_section_only_blocks"] > 0)
+    check("has uncontested blocks (the regression guard)",
+          shape["uncontested_blocks"] > 0)
+    check("clears the ~1% bar's sizing rule at 13 operators",
+          shape["cross_section_blocks"] * 13 >= 300)
+
+
+# --- the heading-path experiment (all flags default to off) ----------------
+
+
+def _resolve_all(base, op, **kw):
+    before, pblocks = PB.annotate(base)
+    after_pblocks, adj = {**PB.OPERATORS, **PB.SECTION_OPERATORS}[op](pblocks)
+    after = PB.serialize(after_pblocks, strip=True)
+    anchors = R.build_anchors(before)
+    truth = PB.default_truth(after_pblocks)
+    truth.update(adj)
+    return R.resolve(anchors, after, **kw), truth, anchors
+
+
+def _same(a, b):
+    return all(a[k].method == b[k].method and a[k].target == b[k].target for k in a)
+
+
+def test_heading_off_is_the_shipped_resolver():
+    """The experiment must be invisible when it is off, or every arm is
+    measured against a control that already moved."""
+    for op in ("edit_in_place", "merge", "clone"):
+        base_res, _, _ = _resolve_all(ADV, op)
+        off, _, _ = _resolve_all(ADV, op, heading_path="off")
+        check(f"{op}: heading_path=off matches the default", _same(base_res, off))
+
+
+def test_no_stored_path_makes_every_arm_inert():
+    """An anchor with no heading path has no heading evidence. Without this
+    guard a bonus arm rewards every candidate for matching the empty path, and
+    a filter arm keeps only candidates that are equally unscoped."""
+    import heading_arms as HA
+    flat = HA.strip_headings(DOC1)
+    for op in ("edit_in_place", "clone"):
+        control, _, anchors = _resolve_all(flat, op)
+        check(f"{op}: no anchor stored a path",
+              all(not a.heading_path for a in anchors))
+        for mode in ("bonus", "penalty", "filter"):
+            arm, _, _ = _resolve_all(flat, op, heading_path=mode)
+            check(f"{op}: {mode} is inert with no stored path", _same(control, arm))
+
+
+def test_blockquote_nested_headings_do_not_scope_blocks():
+    """A heading inside a blockquote does not change outer structure, so a
+    document written that way carries no paths and every arm stays inert."""
+    md = ("> # Quoted heading\n\nThe ingest stage validates each record before "
+          "the queue accepts it.\n\n> ## Another quoted heading\n\nThe dispatch "
+          "stage validates each record before the queue accepts it.\n")
+    control, _, anchors = _resolve_all(md, "edit_in_place")
+    check("blockquote headings store no path",
+          all(not a.heading_path for a in anchors))
+    for mode in ("bonus", "penalty", "filter"):
+        arm, _, _ = _resolve_all(md, "edit_in_place", heading_path=mode)
+        check(f"blockquote headings: {mode} is inert", _same(control, arm))
+
+
+def test_penalty_cannot_lift_a_candidate_over_the_commit_threshold():
+    """The bonus form can: body at the noise floor plus a full context stack
+    plus a heading bonus can cross 0.5 on non-body evidence. A penalty only ever
+    lowers a mismatched candidate, so the commit bar stays a body-score bar."""
+    sel = Selector(quote="the ingest stage validates each record",
+                   heading_path=("Deploy", "Ingest"))
+    cands = ["something else entirely, unrelated words here", "and another one"]
+    paths = [["Deploy", "Ingest"], ["Other"]]
+    _, base, _ = best_match(sel, cands)
+    _, bonus, _ = best_match(sel, cands, paths, heading_bonus=0.12)
+    _, penalty, _ = best_match(sel, cands, paths, heading_penalty=0.12)
+    check("a bonus raises the winning score", bonus >= base)
+    check("a penalty never raises it", penalty <= base)
+
+
+def test_a_uniform_bonus_is_not_a_no_op_under_the_clamp():
+    """Why the penalty form exists. On a single-section document every
+    candidate matches, so the preference carries no information; a bonus still
+    pushes both the best and the runner-up into the clamp's 1.0 ceiling, which
+    collapses the margin and detaches. The negative control caught this."""
+    detached = lambda r: sum(1 for x in r.values() if x.method == "detached")
+    moved = False
+    for op in PB.OPERATORS:
+        control, _, _ = _resolve_all(ADV, op)
+        bonus, _, _ = _resolve_all(ADV, op, heading_path="bonus")
+        penalty, _, _ = _resolve_all(ADV, op, heading_path="penalty")
+        moved = moved or detached(bonus) > detached(control)
+        check(f"{op}: a penalty leaves the single-section control untouched",
+              _same(control, penalty))
+    check("a clamped bonus detaches more on a single-section document", moved)
+
+
+def test_a_filter_cannot_recover_a_block_that_changed_section():
+    """SPEC.md §2.2: a stay MUST survive movement within a document. The
+    operator moves the fixture's most distinctive paragraph into another section
+    and drifts it, so only the quote tier can recover it. A preference does; a
+    filter cannot, by construction, which is why arm C is priced and not
+    shipped."""
+    op = "cross_section_move_edit"
+    control, truth, _ = _resolve_all(XSEC, op)
+    moved = [i for i, t in truth.items()
+             if control[i].method == "quote" and control[i].target in (t["accept"] or ())]
+    check("the shipped resolver recovers a moved, drifted block by quote",
+          bool(moved))
+    pen, _, _ = _resolve_all(XSEC, op, heading_path="penalty")
+    filt, _, _ = _resolve_all(XSEC, op, heading_path="filter")
+    check("a penalty still recovers it",
+          all(pen[i].target == control[i].target for i in moved))
+    check("a filter detaches at least one of them",
+          any(filt[i].method == "detached" for i in moved))
+
+
+def test_heading_paths_compare_component_by_component():
+    """A joined string leaves the delimiter and its escaping unspecified, and
+    lets a one-component path collide with a two-component one."""
+    from quote import canonical_path
+    check("a/b is not the same path as a then b",
+          canonical_path(["a/b"]) != canonical_path(["a", "b"]))
+    check("emphasis does not change a path",
+          canonical_path(["**Rollback**"]) == canonical_path(["Rollback"]))
 
 
 def main():

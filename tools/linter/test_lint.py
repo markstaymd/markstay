@@ -709,6 +709,283 @@ def test_commonmark_without_the_parser_is_an_error_not_a_traceback():
     assert "markdown-it-py" in err.getvalue(), err.getvalue()
 
 
+def test_child_anchor_context_is_windowed_to_48_characters():
+    """SPEC.md §9's 48-character limit, applied to the child ladder as well.
+
+    The child path has NO conformance vectors (it is opt-in and its spec text is
+    unmerged), so this is the only thing standing between it and the storage
+    asymmetry corrected in the block path: whole neighbours stored against a
+    candidate side windowed at match time, which caps a long neighbour's
+    contribution well under the 0.05 §9 allows it."""
+    long_sibling = ("Ship the linter and then "
+                    + "wait for the release train " * 3
+                    + "wait for the release train")
+    long_before = "A preceding block far longer than forty-eight characters, easily."
+    long_after = "A following block also far longer than forty-eight characters here."
+    md = (
+        f"{long_before}\n\n"
+        f"- {long_sibling} {_child_marker('a', long_sibling)}\n"
+        f"- Document the command {_child_marker('b', 'Document the command')}\n\n"
+        f"{long_after}\n"
+    )
+    anchors = {a.id: a for a in L._build_child_anchors(md, "blank-line")}
+    b = anchors["b"]
+    # Compare against the parsed sibling body, not the raw source line: the child
+    # content is what the segmenter produced (markers stripped, edges trimmed).
+    sibling_body = anchors["a"].quote
+    assert len(b.prefix) == 48 and b.prefix == sibling_body[-48:]
+    assert len(b.parent_prefix) == 48 and b.parent_prefix == long_before[-48:]
+    assert len(b.parent_suffix) == 48 and b.parent_suffix == long_after[:48]
+    # A short neighbour is stored whole: 48 is a cap, not a fixed width.
+    assert anchors["a"].suffix == "Document the command"
+
+
+def test_context_bonus_windows_an_over_long_stored_selector():
+    """The match-time half of the same limit. A selector carrying more than §9
+    allows (built by a pre-fix tool, or assembled by a consumer) must score the
+    same as the conforming selector it windows down to, rather than losing bonus
+    to the asymmetry."""
+    long_prev = "Operators can override these retry defaults on a per-partner basis."
+    candidates = [long_prev, "the target block body", "an unrelated block body"]
+    over_long, _, _ = L._best_match(
+        "the target block body", long_prev, "", candidates
+    )
+    windowed_idx, windowed_score, _ = L._best_match(
+        "the target block body", long_prev[-48:], "", candidates
+    )
+    _, over_long_score, _ = L._best_match(
+        "the target block body", long_prev, "", candidates
+    )
+    assert over_long == windowed_idx == 1
+    assert over_long_score == windowed_score
+
+
+# --- heading paths (experimental, not spec behaviour) ---------------------
+# Every rule below is a choice rather than a consequence, so each one is pinned
+# here: the derivation is the half that would cost real money to change once a
+# conformance category exists for it.
+
+
+def _paths(md, mode="blank-line"):
+    """(block content, its heading path) for every content block."""
+    blocks = L.parse_document(md, mode=mode)
+    return [
+        (b.content, p)
+        for b, p in zip(blocks, L.heading_paths(md, blocks))
+        if b.index >= 0
+    ]
+
+
+def test_heading_path_atx_nests_by_level():
+    md = "# Alpha\n\nOne.\n\n## Beta\n\nTwo.\n\n# Gamma\n\nThree.\n"
+    assert _paths(md) == [
+        ("# Alpha", []),          # a heading is scoped by its parents, not itself
+        ("One.", ["Alpha"]),
+        ("## Beta", ["Alpha"]),
+        ("Two.", ["Alpha", "Beta"]),
+        ("# Gamma", []),          # level 1 pops Beta and Alpha both
+        ("Three.", ["Gamma"]),
+    ]
+
+
+def test_heading_path_skipped_level_nests_rather_than_replaces():
+    md = "# Alpha\n\n### Deep\n\nBody.\n\n## Mid\n\nAfter.\n"
+    assert _paths(md) == [
+        ("# Alpha", []),
+        ("### Deep", ["Alpha"]),
+        ("Body.", ["Alpha", "Deep"]),
+        ("## Mid", ["Alpha"]),    # level 2 pops the level-3 sibling
+        ("After.", ["Alpha", "Mid"]),
+    ]
+
+
+def test_heading_path_atx_closing_hashes_and_empty_title():
+    md = "## Alpha ##\n\nOne.\n\n### Beta#\n\nTwo.\n\n#\n\nThree.\n"
+    assert _paths(md) == [
+        ("## Alpha ##", []),
+        ("One.", ["Alpha"]),
+        ("### Beta#", ["Alpha"]),   # no space before the hash: not a closer
+        ("Two.", ["Alpha", "Beta#"]),
+        ("#", []),
+        ("Three.", [""]),           # an empty title is still a level
+    ]
+
+
+def test_heading_path_setext():
+    md = "Alpha\n=====\n\nOne.\n\nBeta\n----\n\nTwo.\n"
+    assert _paths(md) == [
+        ("Alpha\n=====", []),
+        ("One.", ["Alpha"]),
+        ("Beta\n----", ["Alpha"]),   # `-` is level 2, so it nests under Alpha
+        ("Two.", ["Alpha", "Beta"]),
+    ]
+
+
+def test_heading_path_setext_needs_a_paragraph_above_it():
+    """`---` opening a block is a thematic break, not a heading with no title."""
+    md = "One.\n\n---\n\nTwo.\n"
+    assert _paths(md) == [("One.", []), ("---", []), ("Two.", [])]
+
+
+def test_heading_path_glued_heading_scopes_what_follows_not_itself():
+    """`# H` with no blank line before the body is one block under blank-line
+    segmentation and two under CommonMark (SPEC.md §5.4). The heading is
+    recognised either way; what differs is only which block carries the body."""
+    md = "# Alpha\nGlued body.\n\nAfter.\n"
+    assert _paths(md, "blank-line") == [
+        ("# Alpha\nGlued body.", []),
+        ("After.", ["Alpha"]),
+    ]
+    assert _paths(md, "commonmark") == [
+        ("# Alpha", []),
+        ("Glued body.", ["Alpha"]),
+        ("After.", ["Alpha"]),
+    ]
+
+
+def test_heading_path_fenced_code_is_not_a_heading():
+    md = "# Alpha\n\n```sh\n# not a heading\n```\n\nBody.\n"
+    assert _paths(md) == [
+        ("# Alpha", []),
+        ("```sh\n# not a heading\n```", ["Alpha"]),
+        ("Body.", ["Alpha"]),
+    ]
+
+
+def test_heading_path_fence_state_survives_a_split_fence():
+    """Blank-line segmentation cuts a fence containing a blank line into several
+    blocks (SPEC.md §5.2's motivating case). Fence state has to carry across the
+    boundary or the `#` line inside reads as a section."""
+    md = "# Alpha\n\n```sh\necho one\n\n# not a heading\n```\n\nBody.\n"
+    assert [p for _, p in _paths(md)] == [[], ["Alpha"], ["Alpha"], ["Alpha"]]
+
+
+def test_heading_path_tilde_fence_is_not_closed_by_backticks():
+    md = "~~~\n```\n# still code\n~~~\n\nBody.\n"
+    assert _paths(md) == [("~~~\n```\n# still code\n~~~", []), ("Body.", [])]
+
+
+def test_heading_path_blockquote_and_list_headings_do_not_escape():
+    md = "# Alpha\n\n> # Quoted\n\n- # Listed\n\nBody.\n"
+    assert [p for _, p in _paths(md)] == [[], ["Alpha"], ["Alpha"], ["Alpha"]]
+
+
+def test_heading_path_document_with_no_headings():
+    md = "One.\n\nTwo.\n\nThree.\n"
+    assert [p for _, p in _paths(md)] == [[], [], []]
+
+
+def test_heading_path_marker_on_the_heading_line():
+    md = "## Alpha <!-- stay:h1 -->\n\nBody.\n<!-- stay:b1 -->\n"
+    assert _paths(md) == [("## Alpha", []), ("Body.", ["Alpha"])]
+
+
+def test_heading_path_is_parallel_to_blocks_including_orphans():
+    md = "<!-- stay:orphan -->\n\n# Alpha\n\nBody.\n"
+    blocks = L.parse_document(md)
+    paths = L.heading_paths(md, blocks)
+    assert len(paths) == len(blocks)
+    assert blocks[0].index == -1 and paths[0] == []
+
+
+def test_heading_path_indented_code_is_not_a_heading():
+    """`Block.content` is whitespace-stripped, so a derivation reading it cannot
+    tell `    # deploy` (code) from `# deploy` (a section). Deriving from the
+    source lines is what keeps them apart."""
+    md = "# Alpha\n\n    # not a heading\n\nBody.\n"
+    assert [p for _, p in _paths(md)] == [[], ["Alpha"], ["Alpha"]]
+
+
+def test_heading_path_html_block_is_not_a_heading():
+    md = "# Alpha\n\n<script>\n# not a heading\n</script>\n\nBody.\n"
+    assert [p for _, p in _paths(md)] == [[], ["Alpha"], ["Alpha"]]
+
+
+def test_heading_path_html_block_closing_on_a_blank_line():
+    """A CommonMark type-6 HTML block runs to the next blank line, which under
+    blank-line segmentation is the end of the block anyway."""
+    md = "# Alpha\n\n<div>\n# not a heading\n</div>\n\nBody.\n"
+    assert [p for _, p in _paths(md)] == [[], ["Alpha"], ["Alpha"]]
+
+
+def test_heading_path_link_reference_definition_is_not_a_setext_title():
+    md = "# Alpha\n\n[label]: /url\n---\n\nBody.\n"
+    assert [p for _, p in _paths(md)] == [[], ["Alpha"], ["Alpha"]]
+
+
+def test_heading_path_lazy_continuation_is_not_a_setext_title():
+    """`lazy` continues the blockquote's paragraph, so the `---` under it is a
+    thematic break rather than a heading called "lazy"."""
+    md = "# Alpha\n\n> quote\nlazy\n---\n\nBody.\n"
+    assert [p for _, p in _paths(md)] == [[], ["Alpha"], ["Alpha"]]
+
+
+def test_heading_path_multi_line_setext_title():
+    md = "Alpha\nBeta\n=====\n\nBody.\n"
+    assert _paths(md) == [("Alpha\nBeta\n=====", []), ("Body.", ["Alpha Beta"])]
+
+
+def test_heading_path_backtick_fence_info_string_with_a_backtick():
+    """A backtick fence's info string may not contain a backtick, so this line
+    opens no fence and the heading under it is real (CommonMark 4.5)."""
+    md = "``` bad`info\n\n# Alpha\n\nBody.\n"
+    assert [p for _, p in _paths(md)] == [[], [], ["Alpha"]]
+
+
+def test_heading_path_frontmatter_is_not_a_setext_heading():
+    md = "---\ntitle: t\n---\n\n# Alpha\n\nBody.\n"
+    assert _paths(md) == [("# Alpha", []), ("Body.", ["Alpha"])]
+
+
+def test_heading_paths_agree_across_modes_inside_the_agreement_subset():
+    """SPEC.md §5.4: the two segmenters draw the same boundaries only on the
+    subset with a blank line at every boundary and no blank line inside a node.
+    Scoped to that subset deliberately, since outside it the block lists differ
+    and a path comparison would be comparing different things."""
+    md = (
+        "# Alpha\n\nOne.\n\n## Beta\n\nTwo.\n\nGamma\n-----\n\nThree.\n\n"
+        "```sh\necho hi\n```\n\nFour.\n"
+    )
+    assert _paths(md, "blank-line") == _paths(md, "commonmark")
+
+
+def test_canonical_heading_strips_emphasis_and_link_syntax():
+    assert L.canonical_heading("**Rollback**") == L.canonical_heading("Rollback")
+    assert L.canonical_heading("`api` Reference") == "api reference"
+    assert L.canonical_heading("[Deploy](https://example.com/x)") == "deploy"
+    assert L.canonical_heading("![Logo](a.png) Deploy") == "logo deploy"
+    assert L.canonical_heading("~~Old~~ New") == "old new"
+    assert L.canonical_heading("*Rollback*") == L.canonical_heading("_Rollback_")
+
+
+def test_canonical_heading_keeps_unpaired_punctuation():
+    """Only *paired* delimiters come out. Stripping every `*`, backtick and `~`
+    collides section titles that differ by literal punctuation, which is worse
+    than missing an unpaired delimiter: a glob and a path are real headings."""
+    for a, b in (
+        ("*.py", ".py"),
+        ("operator*", "operator"),
+        ("A * B", "A B"),
+        ("foo*bar", "foobar"),
+        ("~/.config", "/.config"),
+    ):
+        assert L.canonical_heading(a) != L.canonical_heading(b), a
+    assert L.canonical_heading("*.py") == "*.py"
+
+
+def test_canonical_heading_keeps_intraword_underscores():
+    """`_` is only emphasis at a word boundary in CommonMark, and headings in
+    this repo are full of `snake_case` identifiers."""
+    assert L.canonical_heading("_heading_paths_") == "heading_paths"
+    assert L.canonical_heading("Run   sync_corpus.sh\tnow") == "run sync_corpus.sh now"
+
+
+def test_canonical_heading_folds_ascii_only():
+    """SPEC.md §9's fold is ASCII-only so every implementation reproduces it
+    without Unicode case data; `Ä` must survive uppercase."""
+    assert L.canonical_heading("Ärger UPPER") == "Ärger upper"
+
+
 def _run_all():
     tests = [
         v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)

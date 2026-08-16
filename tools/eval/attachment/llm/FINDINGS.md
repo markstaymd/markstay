@@ -7,6 +7,23 @@ truth, but its hardest synthetic rewrite still kept ~0.7 text similarity. The
 genuinely hard regime, an agent rewording prose down to 0.3-0.5 similarity, was
 the one untested place v1 §9 could still break. This eval closes that gap.
 
+## These numbers predate the §9 stored-context window (2026-08)
+
+**Every number in this file was measured before the stored prefix/suffix was
+windowed to §9's 48 characters, and it cannot be re-measured without paying for
+the cells again.** `results.json` keeps per-id derived data only (category,
+clamped score, target, gold) and not the rewritten Markdown, so there is nothing
+on disk to replay a resolver change against. `demo_fixture.json` is one captured
+before/after pair, which is a demonstration, not a sample.
+
+Direction, not magnitude, is what can be said: the correction only ever *raises*
+the context bonus, and on the deterministic corpora it improved both headline
+numbers (recovery 95.6% -> 96.4%, false attachment 1.2% -> 0.8%). On the one
+captured LLM pair it changes no decision at all. So these figures are most likely
+a slight understatement of current behaviour rather than an overstatement, but
+they are stale figures either way and should be cited with the date, not as the
+current recovery rate.
+
 ## Method (judge-free ground truth from one generation)
 
 For each (doc, rewrite task, model) cell:
