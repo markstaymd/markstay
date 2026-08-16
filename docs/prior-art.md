@@ -63,12 +63,16 @@ show what survives editing and what does not.
 | GitHub review comments | `commit_id` + `path` + `line` + `side` | Revision-scoped line ranges | The diff can map the line through later commits | The line changes or the file is rewritten | Pair location with revision identity; accept an "outdated" state |
 | Figma comments | File key + `client_meta` coords or node id | Coordinate or node-scoped anchor | The node persists | Node deleted, restructured, or moved frames | Stable object ids beat coordinates |
 | Notion comments | Comment UUID + parent block/page UUID | Stable block-id parentage + thread | The parent block exists | Block deleted, copied without thread, or exported | Block-UUID parentage is the closest product analogue to markstay |
+| Sidecar Markdown reviewers | A JSON file beside the `.md`: document hash and offsets, source *and* rendered quotes, heading path | A multi-tier recovery ladder over pure evidence, with nothing written into the source | One tier still matches, and the file keeps its name and location | The block is rewritten past the similarity threshold, moves to another file, or the sidecar is lost | Evidence-only anchoring is workable, and its cost is visible: several tiers, two quote forms, and a section filter to approximate what one stable id resolves directly |
 
 The recurring pattern: mature systems lean on stable internal object identity wherever
 they own the data model, keep positions and quotes only as recovery evidence, and mark
-an anchor **outdated** rather than silently reattaching it to a nearby block. markstay
-is an attempt to make that same block-id idea source-native and tool-neutral, so it
-lives in the Markdown text instead of a single application's database.
+an anchor **outdated** rather than silently reattaching it to a nearby block. The
+sidecar reviewers are the instructive exception, because they do not own the data
+model and cannot write to it, so they must reconstruct identity from evidence alone on
+every open. markstay is an attempt to make that same block-id idea source-native and
+tool-neutral, so it lives in the Markdown text instead of a single application's
+database.
 
 ## Block editors with CRDT identity
 
