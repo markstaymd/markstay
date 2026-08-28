@@ -146,7 +146,7 @@ A stay is recorded as a **marker** placed after the block it identifies (§5).
 
 ```md
 The paragraph being identified.
-<!-- stay:8f24 hash=sha256:a897 -->
+<!-- stay:8f24 hash=sha256:7a9c -->
 ```
 
 The HTML-comment form is the primary serialization. It is invisible in
@@ -164,7 +164,7 @@ takes the JSX comment form:
 
 ```mdx
 The paragraph being identified.
-{/* stay:8f24 hash=sha256:a897 */}
+{/* stay:8f24 hash=sha256:7a9c */}
 ```
 
 One data model, two serializations. A conforming tool that targets MDX MUST use
@@ -592,7 +592,7 @@ documents, which §13 counts as a failure rather than an implementation choice.
 ```md
 - Ship the linter <!-- stay:c4LD1 subhash=sha256:9d2f -->
 - Ship the hook <!-- stay:c4LD2 subhash=sha256:41ac -->
-<!-- stay:c4LDp hash=sha256:295e -->
+<!-- stay:c4LDp hash=sha256:1122 -->
 ```
 
 **`subhash` is a write-path requirement, not a naming preference.** A tool that does
