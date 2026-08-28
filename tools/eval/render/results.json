@@ -40,6 +40,10 @@
         "hash": {
           "verdict": "SURVIVES",
           "note": "clean, no drift"
+        },
+        "rows": {
+          "verdict": "SURVIVES",
+          "note": "clean; \u00a78 hash drifts on reflow (expected); 3 in-cell row marker(s) still on their row"
         }
       }
     },
@@ -62,6 +66,10 @@
         "hash": {
           "verdict": "SURVIVES",
           "note": "clean, no drift"
+        },
+        "rows": {
+          "verdict": "SURVIVES",
+          "note": "clean; \u00a78 hash drifts on reflow (expected); 3 in-cell row marker(s) still on their row"
         }
       }
     },
@@ -84,6 +92,10 @@
         "hash": {
           "verdict": "SURVIVES",
           "note": "clean, no drift"
+        },
+        "rows": {
+          "verdict": "SURVIVES",
+          "note": "clean, no drift; 3 in-cell row marker(s) still on their row"
         }
       }
     },
@@ -106,6 +118,10 @@
         "hash": {
           "verdict": "SURVIVES",
           "note": "clean; \u00a78 hash drifts on reflow (expected)"
+        },
+        "rows": {
+          "verdict": "SURVIVES",
+          "note": "clean; \u00a78 hash drifts on reflow (expected); 3 in-cell row marker(s) still on their row"
         }
       }
     },
@@ -128,6 +144,10 @@
         "hash": {
           "verdict": "SURVIVES",
           "note": "clean; \u00a78 hash drifts on reflow (expected)"
+        },
+        "rows": {
+          "verdict": "ROW_ESCAPED",
+          "note": "marker(s) no longer on their table row's line: rw1, rw2"
         }
       }
     },
@@ -164,6 +184,10 @@
         "hash": {
           "verdict": "INVISIBLE",
           "note": "comment dropped from output (invisible)"
+        },
+        "rows": {
+          "verdict": "INVISIBLE",
+          "note": "comment dropped from output (invisible)"
         }
       }
     },
@@ -184,6 +208,10 @@
           "note": "comment retained in HTML source (invisible)"
         },
         "hash": {
+          "verdict": "INVISIBLE",
+          "note": "comment retained in HTML source (invisible)"
+        },
+        "rows": {
           "verdict": "INVISIBLE",
           "note": "comment retained in HTML source (invisible)"
         }
@@ -208,6 +236,10 @@
         "hash": {
           "verdict": "LEAKED_VISIBLE",
           "note": "marker(s) rendered as visible text: hh1"
+        },
+        "rows": {
+          "verdict": "LEAKED_VISIBLE",
+          "note": "marker(s) rendered as visible text: rw1, rw2, rw3, tbl1"
         }
       }
     },
@@ -230,6 +262,10 @@
         "hash": {
           "verdict": "INVISIBLE",
           "note": "comment retained in HTML source (invisible)"
+        },
+        "rows": {
+          "verdict": "INVISIBLE",
+          "note": "comment retained in HTML source (invisible)"
         }
       }
     },
@@ -250,6 +286,10 @@
           "note": "comment retained in HTML source (invisible)"
         },
         "hash": {
+          "verdict": "INVISIBLE",
+          "note": "comment retained in HTML source (invisible)"
+        },
+        "rows": {
           "verdict": "INVISIBLE",
           "note": "comment retained in HTML source (invisible)"
         }
@@ -333,6 +373,13 @@
       "note": "clean, no drift"
     },
     {
+      "tool": "prettier",
+      "axis": "roundtrip",
+      "fixture": "rows",
+      "verdict": "SURVIVES",
+      "note": "clean; \u00a78 hash drifts on reflow (expected); 3 in-cell row marker(s) still on their row"
+    },
+    {
       "tool": "mdformat",
       "axis": "roundtrip",
       "fixture": "blocks",
@@ -352,6 +399,13 @@
       "fixture": "hash",
       "verdict": "SURVIVES",
       "note": "clean, no drift"
+    },
+    {
+      "tool": "mdformat",
+      "axis": "roundtrip",
+      "fixture": "rows",
+      "verdict": "SURVIVES",
+      "note": "clean; \u00a78 hash drifts on reflow (expected); 3 in-cell row marker(s) still on their row"
     },
     {
       "tool": "remark",
@@ -375,6 +429,13 @@
       "note": "clean, no drift"
     },
     {
+      "tool": "remark",
+      "axis": "roundtrip",
+      "fixture": "rows",
+      "verdict": "SURVIVES",
+      "note": "clean, no drift; 3 in-cell row marker(s) still on their row"
+    },
+    {
       "tool": "pandoc-gfm",
       "axis": "roundtrip",
       "fixture": "blocks",
@@ -394,6 +455,13 @@
       "fixture": "hash",
       "verdict": "SURVIVES",
       "note": "clean; \u00a78 hash drifts on reflow (expected)"
+    },
+    {
+      "tool": "pandoc-gfm",
+      "axis": "roundtrip",
+      "fixture": "rows",
+      "verdict": "SURVIVES",
+      "note": "clean; \u00a78 hash drifts on reflow (expected); 3 in-cell row marker(s) still on their row"
     },
     {
       "tool": "pandoc-markdown",
@@ -415,6 +483,13 @@
       "fixture": "hash",
       "verdict": "SURVIVES",
       "note": "clean; \u00a78 hash drifts on reflow (expected)"
+    },
+    {
+      "tool": "pandoc-markdown",
+      "axis": "roundtrip",
+      "fixture": "rows",
+      "verdict": "ROW_ESCAPED",
+      "note": "marker(s) no longer on their table row's line: rw1, rw2"
     },
     {
       "tool": "remark-mdx",
@@ -445,6 +520,13 @@
       "note": "comment dropped from output (invisible)"
     },
     {
+      "tool": "github",
+      "axis": "render",
+      "fixture": "rows",
+      "verdict": "INVISIBLE",
+      "note": "comment dropped from output (invisible)"
+    },
+    {
       "tool": "markdown-it",
       "axis": "render",
       "fixture": "blocks",
@@ -462,6 +544,13 @@
       "tool": "markdown-it",
       "axis": "render",
       "fixture": "hash",
+      "verdict": "INVISIBLE",
+      "note": "comment retained in HTML source (invisible)"
+    },
+    {
+      "tool": "markdown-it",
+      "axis": "render",
+      "fixture": "rows",
       "verdict": "INVISIBLE",
       "note": "comment retained in HTML source (invisible)"
     },
@@ -487,6 +576,13 @@
       "note": "marker(s) rendered as visible text: hh1"
     },
     {
+      "tool": "markdown-it-default",
+      "axis": "render",
+      "fixture": "rows",
+      "verdict": "LEAKED_VISIBLE",
+      "note": "marker(s) rendered as visible text: rw1, rw2, rw3, tbl1"
+    },
+    {
       "tool": "marked",
       "axis": "render",
       "fixture": "blocks",
@@ -508,6 +604,13 @@
       "note": "comment retained in HTML source (invisible)"
     },
     {
+      "tool": "marked",
+      "axis": "render",
+      "fixture": "rows",
+      "verdict": "INVISIBLE",
+      "note": "comment retained in HTML source (invisible)"
+    },
+    {
       "tool": "python-markdown",
       "axis": "render",
       "fixture": "blocks",
@@ -525,6 +628,13 @@
       "tool": "python-markdown",
       "axis": "render",
       "fixture": "hash",
+      "verdict": "INVISIBLE",
+      "note": "comment retained in HTML source (invisible)"
+    },
+    {
+      "tool": "python-markdown",
+      "axis": "render",
+      "fixture": "rows",
       "verdict": "INVISIBLE",
       "note": "comment retained in HTML source (invisible)"
     },

@@ -8,7 +8,11 @@ there is no single shared comparator. This module holds three classifiers:
   that reflows a body drifts the §8 hash, which is *expected and not a failure*. The
   real failures are a marker dropped, relocated to the wrong block, or rewritten into
   a form that no longer reads as a clean marker (pandoc's `<!-- ... -->`{=html} code
-  span). HASH_DRIFT never fails a cell.
+  span). HASH_DRIFT never fails a cell. A marker that entered inside a **table row**
+  gets one extra test the block-level oracle cannot make (ROW_ESCAPED): a table is a
+  single block to every segmenter, so a marker hoisted out of its row, or pushed onto
+  a continuation line by a writer that re-tables, still passes DROPPED/RELOCATED while
+  the row identity it carried is gone.
 - ``render_verdict``     md -> HTML: the output is HTML, so a {block -> stay} reparse
   is the wrong oracle. Measure two facts: is the marker visible in the rendered text
   (bad), and is the comment retained in the HTML source (informational). "Invisible"
@@ -34,6 +38,77 @@ PARSE_MODE = "blank-line"
 
 _TAG_RE = re.compile(r"<[^>]+>")
 _COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
+
+
+# --- the table-row carrier (SPEC.md §14) -----------------------------------
+# A GFM row is one line, so the only position a row marker can take is inside the
+# last cell, before the closing pipe. Nothing in the block-level oracle can see that
+# placement break: the whole table is one block, so a marker that leaves its row for
+# a neighbouring line is still "on the right block" and still parses. The helpers
+# below measure the row instead: a marker is row-carried if it entered on a table
+# row line, and it survived if it comes out on a line that still holds that row's
+# other cell values. Association is measured, not pipe syntax, so a writer that emits
+# a different table style (pandoc's simple tables) passes as long as the row stays
+# one line.
+#
+# Two known limits, both narrower than the check itself. A GFM row written without its
+# outer pipes (`a | b`) is not tracked at all, because a prose line containing a `|`
+# would otherwise be scored as a row; read that as "no row test ran", not as a pass.
+# And two rows with identical cell text are indistinguishable to this check, so a
+# marker that swapped between them scores clean. The corpus uses the fully piped form
+# with distinct rows.
+
+_ROW_LINE_RE = re.compile(r"^\s*\|.*\|\s*$")
+_DELIM_CELL_RE = re.compile(r"^:?-+:?$")
+
+
+def _strip_markers(text: str) -> str:
+    return L.MDX_MARKER.sub("", L.HTML_MARKER.sub("", text))
+
+
+def _row_cells(line: str) -> list[str]:
+    """The cell texts of a table row line, markers stripped, empties dropped."""
+    inner = line.strip().strip("|")
+    return [c for c in (" ".join(_strip_markers(cell).split())
+                        for cell in re.split(r"(?<!\\)\|", inner)) if c]
+
+
+def _row_carried(text: str) -> dict:
+    """{id: [that row's other cell texts]} for every marker sitting in a table row."""
+    carried = {}
+    for line in text.splitlines():
+        if not _ROW_LINE_RE.match(line):
+            continue
+        cells = _row_cells(line)
+        if cells and all(_DELIM_CELL_RE.match(c) for c in cells):
+            continue                                   # header delimiter row
+        for m in L.find_markers(line):
+            if m.id:
+                carried[m.id] = cells
+    return carried
+
+
+def _marker_lines(text: str, mid: str) -> list[str]:
+    """Every output line still mentioning ``mid``, mangled forms included. All of them,
+    not the first: prose that names a marker id would otherwise be answered with, and
+    fail, a line the marker never moved to."""
+    pat = re.compile(r"stay:%s\b" % re.escape(mid))
+    return [line for line in text.splitlines() if pat.search(line)]
+
+
+def _still_on_its_row(line: str, cells: list[str]) -> bool:
+    """Does ``line`` still carry the row this marker entered on?
+
+    The marker is stripped out of the line first, and so are the backticks a writer
+    may have wrapped it in. That is not cosmetic: a one-character cell value like `5`
+    occurs inside every marker's own `sha256:` prefix, so an unstripped line would
+    vouch for its own row. With no cell values to key on (a row whose other cells are
+    all empty) there is nothing to match, and the weaker test is that the marker is at
+    least still on a table row line."""
+    text = _strip_markers(line.replace("`", ""))
+    if not cells:
+        return bool(_ROW_LINE_RE.match(line))
+    return all(c in text for c in cells)
 
 
 # --- round-trip (md -> md) -------------------------------------------------
@@ -77,13 +152,27 @@ def roundtrip_verdict(inp: str, res: dict) -> dict:
     if "DUPLICATED_ID" in codes:
         dup = sorted({f.id for f in findings if f.code == "DUPLICATED_ID"})
         return {"verdict": "DUPLICATED", "note": "marker(s) duplicated: %s" % ", ".join(dup)}
+    # Row carriage: a marker that entered inside a table row must come out on a line
+    # that still carries that row's other cells (see the helpers above).
+    carried = _row_carried(inp)
+    left_row = []
+    for mid, cells in carried.items():
+        if not any(_still_on_its_row(line, cells) for line in _marker_lines(out, mid)):
+            left_row.append(mid)
+    if left_row:
+        return {"verdict": "ROW_ESCAPED",
+                "note": "marker(s) no longer on their table row's line: %s"
+                        % ", ".join(sorted(left_row))}
+
     if mangled:
         return {"verdict": "MANGLED",
                 "note": "marker(s) rewritten to a non-comment form (code span / escaped): %s"
                         % ", ".join(sorted(set(mangled)))}
     drift = "HASH_DRIFT" in codes
-    return {"verdict": "SURVIVES",
-            "note": "clean; §8 hash drifts on reflow (expected)" if drift else "clean, no drift"}
+    note = "clean; §8 hash drifts on reflow (expected)" if drift else "clean, no drift"
+    if carried:
+        note += "; %d in-cell row marker(s) still on their row" % len(carried)
+    return {"verdict": "SURVIVES", "note": note}
 
 
 # --- render-emit (md -> HTML) ---------------------------------------------
@@ -173,7 +262,10 @@ def _first_line(s):
 
 # Severity order per axis: the cell verdict is the WORST across a tool's fixtures.
 SEVERITY = {
-    "roundtrip": ["DROPPED", "RELOCATED", "DUPLICATED", "MANGLED", "ERROR", "SURVIVES"],
+    # Order matches the order roundtrip_verdict tests them, so the worst-across-fixtures
+    # cell verdict and a single fixture's verdict cannot disagree about which is worse.
+    "roundtrip": ["DROPPED", "RELOCATED", "DUPLICATED", "ROW_ESCAPED", "MANGLED",
+                  "ERROR", "SURVIVES"],
     "render": ["LEAKED_VISIBLE", "ERROR", "INVISIBLE"],
     "sanitize": ["ID_STRIPPED", "ID_PREFIXED", "ERROR", "ID_SURVIVES"],
 }

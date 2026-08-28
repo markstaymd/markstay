@@ -32,7 +32,7 @@ reimplemented (per the handover): `parse_document`, `body_hash`, `normalize_body
 from __future__ import annotations
 
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 # Reuse the reference linter's parser/hasher rather than re-deriving marker
@@ -42,7 +42,13 @@ if str(_LINTER) not in sys.path:
     sys.path.insert(0, str(_LINTER))
 import markstay_lint as L  # noqa: E402
 
-from quote import Selector, best_match, window_prefix, window_suffix  # noqa: E402
+from quote import (  # noqa: E402
+    Candidate,
+    Selector,
+    rank_candidates,
+    window_prefix,
+    window_suffix,
+)
 
 # Default thresholds for the QUOTE tier. A recovery is committed only when the
 # best candidate clears `threshold` AND beats the runner-up by `margin`.
@@ -77,6 +83,24 @@ class Resolution:
     method: str          # 'marker' | 'hash' | 'quote' | 'detached'
     target: int | None   # content-block index in the after-doc, or None
     score: float         # confidence in [0, 1] (1.0 for marker/hash)
+    reason: str | None = None  # detached only: ambiguous | unmatched
+    candidates: list[Candidate] = field(default_factory=list)
+    runner_up_score: float = 0.0
+
+
+def _ambiguous_candidates(
+    ranked: list[Candidate], margin: float
+) -> list[Candidate]:
+    """Return only candidates that participated in the failed margin.
+
+    ``unmatched`` returns no sub-threshold candidates at all. For ``ambiguous``,
+    the first candidate and every rival within the required margin explain why
+    the resolver refused to commit, while lower-ranked noise does not.
+    """
+    if not ranked:
+        return []
+    best = ranked[0].score
+    return [c for c in ranked if best - c.score < margin]
 
 
 def build_anchors(before_md: str, mode: str = "blank-line") -> list[Anchor]:
@@ -174,7 +198,7 @@ def resolve(
             out[a.id] = Resolution(a.id, "hash", hits[0], 1.0)
             continue
         # Tier 3: quote recovery, committed only on a clear winner.
-        idx, score, runner = best_match(
+        ranked = rank_candidates(
             a.selector,
             bodies,
             candidate_paths=after_paths,
@@ -184,8 +208,32 @@ def resolve(
             heading_gate=gate,
             clamp=clamp,
         )
+        idx = ranked[0].target if ranked else -1
+        score = ranked[0].score if ranked else 0.0
+        runner = ranked[1].score if len(ranked) > 1 else 0.0
         if idx >= 0 and score >= threshold and (score - runner) >= margin:
-            out[a.id] = Resolution(a.id, "quote", idx, score)
+            out[a.id] = Resolution(
+                a.id, "quote", idx, score, runner_up_score=runner
+            )
+        elif idx >= 0 and score >= threshold:
+            out[a.id] = Resolution(
+                a.id,
+                "detached",
+                None,
+                score,
+                reason="ambiguous",
+                candidates=_ambiguous_candidates(ranked, margin),
+                runner_up_score=runner,
+            )
         else:
-            out[a.id] = Resolution(a.id, "detached", None, score)
+            # Deliberate policy: an unmatched result never returns sub-threshold
+            # candidates. Listing them would make rejected noise look actionable.
+            out[a.id] = Resolution(
+                a.id,
+                "detached",
+                None,
+                score,
+                reason="unmatched",
+                runner_up_score=runner,
+            )
     return out

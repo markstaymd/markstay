@@ -74,7 +74,7 @@ use a handful of human-readable ids.
 
 ## What happens to my YAML frontmatter?
 
-Nothing: it is metadata, not a block. Since [version 1.2](spec.md#document-metadata-leading-yaml-frontmatter-version-12)
+Nothing: it is metadata, not a block. Since [version 1.2](spec.md#53-document-metadata-leading-yaml-frontmatter-v12)
 a conforming tool excludes a leading `---` fenced span before segmenting, so it is
 never stamped and never hashed, and flipping `status: draft` to `status: done` is not
 a content edit. Recognition is deliberately conservative, because `---` is also a

@@ -11,7 +11,7 @@ implements the rules below. Its default path is dependency-free (Python standard
 library only) and fully local: no network, no credentials. It is meant to run as a git
 pre-commit hook or as the post-edit step of an agent that edits markstay documents. The
 code ships with the site repo (`tools/linter/`, 59 self-tests in `test_lint.py`).
-The one optional extra is `--commonmark` mode ([version 1.1](spec.md#commonmark-tree-attachment-version-11)),
+The one optional extra is `--commonmark` mode ([version 1.1](spec.md#52-commonmark-tree-attachment-v11)),
 which needs `markdown-it-py`.
 
 ## What it checks
@@ -39,7 +39,7 @@ Any error-level finding exits non-zero, so the check gates a hook or an agent st
 directly.
 
 One `ORPHAN_MARKER` is worth naming, because it is the only thing
-[version 1.2](spec.md#document-metadata-leading-yaml-frontmatter-version-12) can
+[version 1.2](spec.md#53-document-metadata-leading-yaml-frontmatter-v12) can
 turn from silent into loud: a document stamped by a pre-1.2 tool may carry a marker
 on its YAML frontmatter. Frontmatter is no longer a block, so that marker usually has
 nothing to attach to. Delete the ones reported here; the blocks below them keep their
@@ -85,8 +85,8 @@ relocates a stay.
   it. A chunk of markers on their own attaches to the previous content block. Blocks
   are split by blank lines by default; `--commonmark` splits over the CommonMark tree
   instead, so a loose list or a blank-line-containing fence attaches as one block
-  ([version 1.1](spec.md#commonmark-tree-attachment-version-11)).
-- **Hash normalisation** follows [the spec](spec.md#hash-normalisation): LF line
+  ([version 1.1](spec.md#52-commonmark-tree-attachment-v11)).
+- **Hash normalisation** follows [the spec](spec.md#8-hash-normalization): LF line
   endings, per-line trailing whitespace stripped, leading and trailing blank lines
   dropped, the marker excluded. The checker always compares at the precision recorded
   in the marker, so it never reports drift merely because a freshly computed hash is

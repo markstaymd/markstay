@@ -105,7 +105,15 @@ def run_pymarkdown(text):
 # axis: roundtrip | render | sanitize. `run` maps fixture markdown -> a result
 # dict. `remediation` is the §13 answer printed for a non-green cell.
 
-HTML_FIXTURES = ["blocks", "blocks_trailing", "hash"]
+HTML_FIXTURES = ["blocks", "blocks_trailing", "hash", "rows"]
+
+# The row carrier is a separate question from "does a marker survive this tool":
+# SPEC.md §14 still defers table-row identity, and the marker placements a spec'd
+# document actually uses are the other three fixtures. So `rows` runs against every
+# tool but is kept OUT of the tool's headline verdict and reported in its own
+# section, where a failure reads as "this carrier does not survive here" rather than
+# as a tool that eats markers.
+AGGREGATE_EXCLUDE = {"rows"}
 
 TOOLS = [
     # --- source round-trip (md -> md) -------------------------------------
@@ -191,19 +199,20 @@ def process_tool(tool):
     # (primary) fixture; the HTML-comment ERROR is the documented limitation, noted
     # but not the headline.
     sev_axis = "render" if axis == "render" else axis
+    headline = [r for r in records if r["fixture"] not in AGGREGATE_EXCLUDE]
     if tool.get("primary"):
         primary = next(r for r in records if r["fixture"] == tool["primary"])
         cell_verdict = primary["verdict"]
     else:
-        cell_verdict = classify.worst(sev_axis, [r["verdict"] for r in records])
+        cell_verdict = classify.worst(sev_axis, [r["verdict"] for r in headline])
 
     # Cell note: the note from the fixture that produced the headline verdict, plus a
     # short tail when a non-primary fixture diverges (e.g. trailing vs marker-only).
-    lead = next(r for r in records if r["verdict"] == cell_verdict)
+    lead = next(r for r in headline if r["verdict"] == cell_verdict)
     note = lead["note"]
-    divergent = sorted({r["fixture"] for r in records if r["verdict"] != cell_verdict})
+    divergent = sorted({r["fixture"] for r in headline if r["verdict"] != cell_verdict})
     if tool.get("primary"):
-        others = [r for r in records if r["fixture"] != tool["primary"]]
+        others = [r for r in headline if r["fixture"] != tool["primary"]]
         if others:
             note += "; %s fixture: %s" % (others[0]["fixture"], others[0]["verdict"])
     elif divergent:
@@ -259,6 +268,7 @@ def capture_versions():
 VERDICT_MARK = {
     "SURVIVES": "✅ SURVIVES", "INVISIBLE": "✅ INVISIBLE", "ID_SURVIVES": "✅ ID kept",
     "MANGLED": "⚠️ MANGLED", "ID_PREFIXED": "⚠️ ID renamed",
+    "ROW_ESCAPED": "❌ LEFT ITS ROW",
     "LEAKED_VISIBLE": "❌ LEAKED", "DROPPED": "❌ DROPPED", "RELOCATED": "❌ RELOCATED",
     "DUPLICATED": "❌ DUPLICATED", "ID_STRIPPED": "❌ ID stripped",
     "ERROR": "❌ ERROR",
@@ -299,6 +309,25 @@ def render_matrix_md(cells, versions):
         out.append("| `%s` | %s | %s |" % (c["label"], VERDICT_MARK[c["verdict"]], _cellnote(c)))
     out.append("")
 
+    out.append("## Table-row carrier (in-cell marker) — SPEC.md §14\n")
+    out.append("A GFM row is one line, so a row marker has one position available: "
+               "inside the **last cell**, before the closing pipe. `SPEC.md` §14 "
+               "defers table-row identity *\"until that carrier is shown to survive "
+               "real renderers\"*, and this is that measurement, from the `rows` "
+               "fixture alone. A table is one block to every segmenter, so the "
+               "round-trip oracle adds a row-level test here: the marker must come "
+               "out on a line that still carries its row's other cells (❌ LEFT ITS "
+               "ROW when it does not).\n")
+    out.append("| Tool | Axis | Verdict | Notes |")
+    out.append("|------|------|---------|-------|")
+    for c in cells:
+        fx = c["fixtures"].get("rows")
+        if not fx:
+            continue
+        out.append("| `%s` | %s | %s | %s |"
+                   % (c["label"], c["axis"], VERDICT_MARK[fx["verdict"]], fx["note"]))
+    out.append("")
+
     out.append("## Anchor after sanitizer (rehype-stay `id=` emit) — gap 4\n")
     out.append("Does the HTML `id=` that makes `doc.md#stay-id` resolve survive an HTML "
                "sanitizer?\n")
@@ -327,7 +356,8 @@ def _cellnote(c):
     # Show the §13 remediation when the headline verdict is non-green, OR when a
     # green headline still hides a per-fixture failure (MDX: §3.2 renders fine, but
     # the HTML-comment form is rejected — the adopter needs that caveat).
-    fixture_failed = any(v["verdict"] not in _GREEN for v in c["fixtures"].values())
+    fixture_failed = any(v["verdict"] not in _GREEN
+                         for k, v in c["fixtures"].items() if k not in AGGREGATE_EXCLUDE)
     if c["remediation"] and (c["verdict"] not in _GREEN or fixture_failed):
         note += " — **→** %s" % c["remediation"]
     return note

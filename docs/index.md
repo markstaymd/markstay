@@ -17,13 +17,19 @@ JavaScript, and Rust back the spec, each gated by the same conformance corpus. V
 optional CommonMark-tree attachment, a backward-compatible refinement so a loose list
 or a blank-line-containing fence can carry a single stay. Version 1.2 excludes leading
 YAML frontmatter from segmentation, so editing `status:` is not a content edit.
+Version 1.3 lets a **direct list item carry its own stay**, addressed inside its list
+rather than as a block of its own, and version 1.4 names the two ways quote recovery
+can refuse an attachment.
 
-!!! note "Status: version 1.2, settled"
+!!! note "Status: version 1.4, settled"
     The surface is small and stable. It is also young: real-world use and critique
     will shape later versions. A dogfood run found row and bullet loss about 30x more
-    often than section loss when those items shared one block-level stay, so
-    finer-grained list-item and table-row identity is the named next step. Issues and
-    counter-arguments are welcome.
+    often than section loss when those items shared one block-level stay, which is
+    what version 1.3 answers for list items. **Table rows are still deferred**, and
+    the carrier they were waiting on has now been measured: a marker inside the last
+    cell of a one-line row survives every mainstream formatter and stays invisible in
+    every renderer that keeps HTML comments, so what is left is spec text rather than
+    an open question. Issues and counter-arguments are welcome.
 
 ## The problem
 

@@ -66,6 +66,16 @@ most real documents, emitting no children rather than guessing a boundary, so an
 item run under it would score almost nothing. Results land in
 `results_item.{json,md}`.
 
+Rebuild the derived report from the checked-in paid-model output without an API
+key or provider call:
+
+```bash
+python run_llm_attach_eval.py --replay results_item.json --out /tmp/results_item
+```
+
+This is a report-only replay. It reaggregates the stored per-id results and does
+not rerun the resolver against a captured before/after document pair.
+
 ## Files
 
 | File | What |

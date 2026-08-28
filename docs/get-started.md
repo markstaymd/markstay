@@ -54,7 +54,7 @@ keeping it attached through an edit, and reporting the moment one vanishes anywa
 
 ## 1. Tell the editing agent (the lever)
 
-The [AI editing contract](spec.md#ai-editing-contract) is only honoured if the agent
+The [AI editing contract](spec.md#11-ai-editing-contract) is only honoured if the agent
 is told to honour it. This is the single biggest control on whether markers survive a
 rewrite, and it is not close: a naive "clean this up" rewrite keeps about **5%** of
 markers, the same rewrite carrying the instruction keeps **~96-100%**, measured
@@ -115,7 +115,7 @@ Wire it into the hook manager your repo already runs.
     # .pre-commit-config.yaml
     repos:
       - repo: https://github.com/markstaymd/markstay-py
-        rev: v0.6.0
+        rev: v0.8.0
         hooks:
           - id: markstay
     ```

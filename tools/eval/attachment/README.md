@@ -84,12 +84,36 @@ fence attach as a single block; the self-tests cover the recovery of each as one
 block. It is the linter's optional `markdown-it-py` extra, inherited through the
 reused `parse_document`.
 
+### Detached diagnostics
+
+`Resolution.method` keeps the stable `marker | hash | quote | detached` axis.
+A detached result now also says why:
+
+- `ambiguous`: the best quote cleared the threshold but failed the required
+  margin over another plausible block.
+- `unmatched`: no quote cleared the threshold, including an empty document.
+
+Only `ambiguous` carries candidates. They are the contenders that explain the
+failed margin, in the resolver's historical `(score, index)` descending order.
+Sub-threshold candidates are deliberately omitted from `unmatched`, since
+surfacing weak matches would invite callers to treat noise as a repair. Candidate
+evidence and labels are diagnostic, not protocol or attachment authority. A
+detached result never commits a target.
+
+The packaged child resolver adds `unscored`, `unaddressed`, and `contested` for
+paths that cannot be described honestly as a failed quote match. Its candidate
+provenance distinguishes independent block scoring from parent and child
+tier-start snapshots. Snapshot context evidence is labelled as adjacency within
+that filtered candidate snapshot, not as physical document adjacency. A
+same-tier contest still continues to weaker tiers as §9.2 requires. If no weaker
+tier attaches the stay, the final detached result retains the strongest contest.
+
 ## Files
 
 | File | Role |
 |------|------|
-| `resolver.py` | the evidence ladder: marker -> hash -> quote -> DETACHED. Reuses the linter's `parse_document` / `body_hash`. |
-| `quote.py` | W3C `TextQuoteSelector`-style recovery: similarity + exact-containment + prefix/suffix tiebreak. |
+| `resolver.py` | the evidence ladder: marker -> hash -> quote -> DETACHED, with detached reasons and diagnostic candidates. Reuses the linter's `parse_document` / `body_hash`. |
+| `quote.py` | W3C `TextQuoteSelector`-style recovery: similarity + exact-containment + prefix/suffix tiebreak, with a compatibility wrapper over ranked candidates. |
 | `perturb.py` | deterministic edit operators (reorder, edit, heavy-paraphrase, split, merge, delete, insert, decoy, clone) with ground-truth tracking. |
 | `run_attach_eval.py` | harness, scoring, report. |
 | `item_eval.py` | opt-in list-item identity: a shape x operation matrix (6 list shapes x 9 edit operations), gated per shape so benign families cannot dilute an adversarial failure. |

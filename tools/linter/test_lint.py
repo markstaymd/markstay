@@ -304,6 +304,18 @@ def test_child_boundaries_agree_inside_restricted_profile_and_fail_closed_outsid
     assert L.parse_document(lazy, child_blocks=True)[0].children == []
     loose = "- Alpha\n\n- Beta\n"
     assert all(not b.children for b in L.parse_document(loose, child_blocks=True))
+    # SPEC.md §5.5: a nested list belongs to its ancestor item's body, so it is
+    # never a sibling child. The restricted profile used to accept "  - Nested"
+    # as an item of its own, which shifted every later ordinal away from what
+    # CommonMark reports for the same document.
+    nested = "- Alpha\n  - Nested\n- Beta\n"
+    assert L.parse_document(nested, child_blocks=True)[0].children == []
+    assert [
+        c.content
+        for c in L.parse_document(nested, mode="commonmark", child_blocks=True)[
+            0
+        ].children
+    ] == ["Alpha\n- Nested", "Beta"]
 
 
 def test_child_drop_blocks_but_markerless_reword_recovers():
@@ -325,6 +337,76 @@ def test_child_drop_blocks_but_markerless_reword_recovers():
     assert "CHILD_DROPPED" not in codes(
         L.lint_diff(before, reworded, child_blocks=True)
     )
+
+
+def test_child_quote_context_can_separate_original_duplicate_hashes():
+    before = (
+        f"- Alpha {_child_marker('a', 'Alpha')}\n"
+        f"- Shared task {_child_marker('s1', 'Shared task')}\n"
+        f"- Beta {_child_marker('b', 'Beta')}\n"
+        f"- Shared task {_child_marker('s2', 'Shared task')}\n"
+        f"- Gamma {_child_marker('g', 'Gamma')}\n"
+        "<!-- stay:parent -->\n"
+    )
+    after = (
+        "- Alpha\n"
+        "- Shared task revised\n"
+        "- Beta\n"
+        "- Shared task revised\n"
+        "- Gamma\n"
+        "<!-- stay:parent -->\n"
+    )
+    anchors = [
+        anchor
+        for anchor in _child_anchors(before)
+        if anchor.quote == "Shared task"
+    ]
+    assert [anchor.sibling_hash_count for anchor in anchors] == [2, 2]
+
+    resolved = L._resolve_children(anchors, after, "blank-line")
+    assert [resolved[anchor.id] for anchor in anchors] == [
+        ("quote", 1),
+        ("quote", 3),
+    ]
+
+
+def test_child_duplicate_history_still_blocks_exact_hash_tiers():
+    before = (
+        "- Alpha\n"
+        f"- Shared task {_child_marker('s1', 'Shared task')}\n"
+        "- Beta\n"
+        "- Shared task\n"
+        "- Gamma\n"
+        "<!-- stay:parent -->\n"
+    )
+    after = (
+        "- Alpha\n"
+        "- Shared task\n"
+        "- Beta\n"
+        "- Shared task revised\n"
+        "- Gamma\n"
+        "<!-- stay:parent -->\n"
+    )
+    anchors = [
+        anchor
+        for anchor in _child_anchors(before)
+        if anchor.quote == "Shared task"
+    ]
+    assert len(anchors) == 1
+    assert anchors[0].sibling_hash_count == 2
+    assert anchors[0].document_hash_count == 2
+    current_children = [
+        child
+        for block in L.parse_document(after, child_blocks=True)
+        for child in block.children
+    ]
+    current_exact = sum(
+        L.body_hash(child.content) == anchors[0].hash for child in current_children
+    )
+    assert current_exact == 1
+
+    resolved = L._resolve_children(anchors, after, "blank-line")
+    assert resolved[anchors[0].id] == ("quote", 1)
 
 
 def test_child_surviving_marker_precedes_parent_hash_ordinal():
@@ -381,6 +463,69 @@ def test_child_near_duplicate_parent_cannot_capture_a_deleted_sibling_list():
     assert [resolved[cid][0] for cid in ("a1", "a2")] == ["detached", "detached"]
 
 
+def test_child_same_tier_contest_is_order_invariant_and_goes_to_neither():
+    digest = L.body_hash(L.child_body("- Alpha"), 12)
+    before = (
+        f"- Alpha <!-- stay:a1 subhash=sha256:{digest} -->"
+        f" <!-- stay:a2 subhash=sha256:{digest} -->\n"
+        "- Beta\n<!-- stay:parent -->\n"
+    )
+    after = before.replace(
+        f" <!-- stay:a1 subhash=sha256:{digest} -->", ""
+    ).replace(f" <!-- stay:a2 subhash=sha256:{digest} -->", "")
+    anchors = L._build_child_anchors(before, "blank-line")
+    forward = L._resolve_children(anchors, after, "blank-line")
+    reverse = L._resolve_children(list(reversed(anchors)), after, "blank-line")
+    for result in (forward, reverse):
+        assert result["a1"] == ("detached", None)
+        assert result["a2"] == ("detached", None)
+
+
+def test_child_parent_quote_contest_goes_to_neither_in_both_orders():
+    before = (
+        f"- Deploy alpha service {_child_marker('a', 'Deploy alpha service')}\n"
+        f"- Tail alpha {_child_marker('at', 'Tail alpha')}\n"
+        "<!-- stay:pa -->\n\n"
+        "Interlude.\n<!-- stay:mid -->\n\n"
+        f"- Deploy beta service {_child_marker('b', 'Deploy beta service')}\n"
+        f"- Tail beta {_child_marker('bt', 'Tail beta')}\n"
+        "<!-- stay:pb -->\n"
+    )
+    after = "Interlude.\n\n- Deploy shared service\n- Tail shared\n"
+    anchors = L._build_child_anchors(before, "blank-line")
+    forward = L._resolve_children(anchors, after, "blank-line")
+    reverse = L._resolve_children(list(reversed(anchors)), after, "blank-line")
+    for result in (forward, reverse):
+        assert result["a"] == ("detached", None)
+        assert result["b"] == ("detached", None)
+
+
+def test_child_parent_hash_contest_goes_to_neither_in_both_orders():
+    before = (
+        f"- Deploy shared service {_child_marker('a', 'Deploy shared service')}\n"
+        f"- Tail shared {_child_marker('at', 'Tail shared')}\n"
+        "<!-- stay:pa -->\n\n"
+        "Interlude.\n<!-- stay:mid -->\n\n"
+        f"- Deploy shared service {_child_marker('b', 'Deploy shared service')}\n"
+        f"- Tail shared {_child_marker('bt', 'Tail shared')}\n"
+        "<!-- stay:pb -->\n"
+    )
+    after = (
+        "Interlude.\n<!-- stay:mid -->\n\n"
+        "- Deploy shared service\n- Tail shared\n"
+    )
+    anchors = L._build_child_anchors(before, "blank-line")
+    blocks = [
+        block
+        for block in L.parse_document(after, child_blocks=True)
+        if block.index >= 0
+    ]
+    for ordered in (anchors, list(reversed(anchors))):
+        parents = L._resolve_parents(ordered, blocks)
+        assert "pa" not in parents
+        assert "pb" not in parents
+
+
 def test_child_markerless_cross_parent_move_uses_document_hash():
     before = (
         f"- Alpha {_child_marker('a', 'Alpha')}\n"
@@ -396,6 +541,57 @@ def test_child_markerless_cross_parent_move_uses_document_hash():
     lines.insert(at, "- Move me")
     findings = L.lint_diff(before, "\n".join(lines) + "\n", child_blocks=True)
     assert not [f for f in findings if f.code == "CHILD_DROPPED" and f.id == "move"]
+
+
+def test_child_demoted_to_a_nested_item_detaches_rather_than_moving():
+    """SPEC.md §5.5: a `subhash` marker inside a nested item is nobody's stay.
+
+    The marker survives the edit, so nothing here is a dropped marker; what is
+    gone is the id's ability to address anything. The ladder must not recover it
+    from weaker evidence, because the quote tier lands it on the *enclosing*
+    direct item and the loss goes unreported. Alpha deliberately carries no
+    child stay of its own: that is what leaves it unclaimed and reachable, and
+    a shape where every sibling is stamped hides the defect.
+    """
+    before = (
+        "- Alpha\n"
+        f"- Beta {_child_marker('b', 'Beta')}\n"
+        "<!-- stay:parent -->\n"
+    )
+    beta = next(line for line in before.splitlines() if line.startswith("- Beta"))
+    after = before.replace(beta + "\n", "  " + beta + "\n", 1)
+    resolved = L._resolve_children(
+        L._build_child_anchors(before, "commonmark"), after, "commonmark"
+    )
+    assert resolved["b"] == ("detached", None)
+    findings = L.lint_diff(before, after, child_blocks=True, mode="commonmark")
+    assert "b" in [f.id for f in findings if f.code == "CHILD_DROPPED"]
+    _, after_findings = L.lint_document(after, mode="commonmark", child_blocks=True)
+    assert "b" in [f.id for f in after_findings if f.code == "CHILD_UNADDRESSED"]
+
+
+def test_child_nested_copy_does_not_detach_the_marker_that_never_moved():
+    """The unaddressed gate is about an id with nowhere to be, not an id with a
+    stray copy. Paste a stayed bullet into a nested position elsewhere and the
+    original marker is still exactly where it was, doing its job; the copy is a
+    §7 duplicate for the linter to report. Detaching there would lose an anchor
+    that never moved, which is the over-broad reading of §5.5 rule 2.
+    """
+    stayed = f"- Beta {_child_marker('b', 'Beta')}"
+    before = (
+        f"- Alpha\n{stayed}\n<!-- stay:p1 -->\n\nInterlude.\n\n"
+        "- Gamma\n<!-- stay:p2 -->\n"
+    )
+    after = before.replace(
+        "- Gamma\n<!-- stay:p2 -->", f"- Gamma\n  {stayed}\n<!-- stay:p2 -->", 1
+    )
+    resolved = L._resolve_children(
+        L._build_child_anchors(before, "commonmark"), after, "commonmark"
+    )
+    assert resolved["b"] == ("marker", 1)
+    _, after_findings = L.lint_document(after, mode="commonmark", child_blocks=True)
+    codes = {f.code for f in after_findings if f.id == "b"}
+    assert "DUPLICATE_ID" in codes
 
 
 def test_child_identical_sibling_loss_detaches_safely():

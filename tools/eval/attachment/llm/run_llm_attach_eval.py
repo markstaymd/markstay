@@ -11,6 +11,7 @@ Needs an API key: source ~/.credentials/unlock.sh first.
     python run_llm_attach_eval.py --models sonnet
     python run_llm_attach_eval.py --models sonnet,gpt4o --docs doc1,doc2 --adversarial
     python run_llm_attach_eval.py --models sonnet --smoke      # one cheap cell
+    python run_llm_attach_eval.py --replay results_item.json --out /tmp/results_item
 """
 
 from __future__ import annotations
@@ -176,7 +177,9 @@ def write_report(path, meta, rows, no_truth_n):
     tot = sum(methods.values()) or 1
     L.append("| tier | ids | share |")
     L.append("|------|----:|------:|")
-    for m in ["hash", "quote", "detached", "marker"]:
+    base_methods = ["hash", "quote", "detached", "marker"]
+    method_order = sorted(set(methods) - set(base_methods)) + base_methods
+    for m in method_order:
         L.append(f"| {m} | {methods.get(m,0)} | {pct(methods.get(m,0)/tot)}% |")
 
     # Every wrong attachment, named: the cases that would move the spec.
@@ -189,13 +192,32 @@ def write_report(path, meta, rows, no_truth_n):
             L.append(f"| {r['model']} | {r['doc']} | {r['task']} | {r['id']} | "
                      f"{r['sim']:.2f} | {r['score']:.2f} | {r['gold']}->{r['target']} |")
     else:
-        L.append("\n## False attachments\n\nNone across the scored ids.\n")
+        L.append("\n## False attachments\n\nNone across the scored ids.")
 
     Path(path).write_text("\n".join(L) + "\n")
 
 
+def replay_results(source, out=None):
+    """Rebuild a report from stored paid-model output without calling a model."""
+    source = Path(source)
+    payload = json.loads(source.read_text())
+    meta = payload["meta"]
+    cells = payload["cells"]
+    rows = all_results(cells)
+    no_truth_n = sum(1 for r in rows if r["cat"] == "no_truth")
+    rows = [r for r in rows if r["cat"] != "no_truth"]
+    if out is None:
+        out = source.with_name(source.stem + "_replay")
+    write_report(str(out) + ".md", meta, rows, no_truth_n)
+    overall = cats_of(rows)
+    rec, fr, n = LA.recovery_falserate(overall)
+    return str(out) + ".md", n, rec, fr, no_truth_n
+
+
 async def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--replay", metavar="RESULTS.json",
+                    help="rebuild only the derived report from stored output; no model call")
     ap.add_argument("--models", default="sonnet")
     ap.add_argument("--docs", default="doc1,doc2")
     ap.add_argument("--tasks", default=",".join(LA.TASKS))
@@ -209,6 +231,12 @@ async def main():
                     help="item: experimental list-item identity on the list-heavy corpus")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
+    if args.replay:
+        path, n, rec, fr, no_truth_n = replay_results(args.replay, args.out)
+        print(f"wrote {path} from stored output (no model call)")
+        print(f"scored={n}  recovery={pct(rec)}%  false-attach={pct(fr)}%  "
+              f"excluded(no_truth)={no_truth_n}")
+        return
     if args.out is None:
         args.out = str(HERE / ("results_item" if args.granularity == "item" else "results"))
 

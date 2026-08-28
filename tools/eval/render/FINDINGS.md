@@ -61,6 +61,60 @@ must not leak as visible text.
   invisible. This is exactly why §3.2 exists, now demonstrated rather than asserted.
   Remediation: target MDX with the §3.2 form.
 
+## The table-row carrier: the placement §14 gates row identity on
+
+`SPEC.md` §14 defers table-row identity *"until that carrier is shown to survive real
+renderers"*. A GFM row is one line, so the carrier has exactly one position available
+to it: **inside the last cell, before the closing pipe**. Until the `rows` fixture
+landed, no fixture here covered it (`blocks.md` puts the table's marker on its own
+line *after* the table), so the gate had never been measured. It is now.
+
+**The carrier survives the GFM ecosystem.** `prettier`, `mdformat`, `remark` and
+`pandoc`'s `gfm` writer all keep every row marker inside the row it entered on, and
+every render engine in the set keeps it invisible inside its cell: `markdown-it`
+(`html: true`), `marked` and `python-markdown` retain the comment in the HTML source,
+`cmark-gfm` drops it for `<!-- raw HTML omitted -->` exactly as it does at block
+placement. The degenerate placement, a last cell that is the marker and nothing else,
+survives everywhere the populated one does; nothing collapses the empty-looking cell
+or drops the row. What the formatters do change is **cell padding**, which is a §8
+hash drift on the container and nothing more.
+
+**The one failure is pandoc's native `markdown` writer, and it fails differently here
+than it does on a paragraph.** On a trailing block marker it mangles the comment into
+a `` `<!-- ... -->`{=html} `` code span (above). On a row it does that *and* re-tables
+the document into pandoc's multi-line simple-table style, which pushes the marker onto
+a **continuation line of its own**, with none of its row's cells on it:
+
+```
+  apples   3        picked early
+                    `<!-- stay:rw1 subhash=sha256:1a2b -->`{=html}
+```
+
+The marker is still on the right *block* (a table is one block to every segmenter) and
+still parses, so `DROPPED` and `RELOCATED` both stay silent. The row it addressed is
+gone all the same. That is the whole reason the round-trip oracle grew a row-level
+test (`ROW_ESCAPED`): a marker that entered on a table row must come out on a line
+that still carries that row's other cells. Association is what is measured, not pipe
+syntax, so a writer that emits a different *one-line* table style still passes. The
+remediation is the one already on this page: use the `gfm` writer.
+
+**The shipped linter already reports a row marker rather than misreading it**, which
+matters because row identity is not in any released version. Over this fixture with
+`child_blocks=True` the reference emits `CHILD_UNADDRESSED` for all three row markers
+("addresses no list item; this segmenter emitted no child blocks for this block"), at
+`warn` level, and in every mode it leaves the table's own `hash` bound to the table.
+So a row-stamped document read by v1.3 tooling degrades into a report, not into a
+wrong answer, which is what §5.5's `subhash` reservation was written to buy.
+
+**One design input for whoever writes the row spec, free from this run.** §8 strips
+*trailing* whitespace per line but never collapses interior whitespace, and every
+table formatter re-pads cells. A row hash defined over the cell's **source slice**
+would therefore drift on a `prettier` run that changed nothing; defined over the
+cell's **trimmed content** it does not. In this run all four surviving formatters
+changed nothing in a cell but the padding around it, which is an observation about
+these four outputs rather than something the oracle enforces: the row check tests
+that the cell text is still on the marker's line, not that it is byte-identical.
+
 ## Anchor after sanitizer (gap 4, `rehype-stay`'s `id=` emit)
 
 `rehype-stay` emits an HTML `id=` per stay so `doc.md#stay-id` resolves in a browser.
@@ -84,6 +138,7 @@ artifact:
 | pandoc `markdown` writer, trailing marker | MANGLED | placement (marker-only chunk) or the `gfm` writer; consumer detects the missing expected marker |
 | markdown-it default (`html: false`) | LEAKED | `html: true`, or consumer detects the missing expected marker |
 | MDX, HTML-comment form | ERROR | the §3.2 MDX/comment-expression profile |
+| pandoc `markdown` writer, in-cell row marker | LEFT ITS ROW | the `gfm` writer, which keeps the row on one line |
 | rehype-sanitize | ID renamed | target the `user-content-` id (the GitHub-anchor convention) |
 
 None needed a "§4 side-index": §4's side-index sentence covers quote/prefix/suffix
@@ -105,12 +160,21 @@ Out of v1, per the plan's representative-not-exhaustive scope:
 ## Method note
 
 - Round-trip verdicts are parser-verified by the reference linter's `lint_diff`
-  (`DROPPED` / `RELOCATED` / `DUPLICATED`) plus a marker-cleanliness check, **not**
-  grepped; `HASH_DRIFT` is explicitly not a failure. Render/sanitizer verdicts come from
+  (`DROPPED` / `RELOCATED` / `DUPLICATED`) plus a marker-cleanliness check and, for
+  a marker that entered inside a table row, a row-association check (`ROW_ESCAPED`),
+  **not** grepped; `HASH_DRIFT` is explicitly not a failure. Render/sanitizer verdicts come from
   HTML inspection (visible-text extraction, comment retention, `id=` survival). The
   classifier is proven on hand-labelled survived/leaked/stripped/relocated/mangled cases
-  in `test_render.py` (15/15) before the matrix is trusted.
+  in `test_render.py` (23/23, eight of them the table-row carrier) before the matrix is trusted.
 - Parser mode is pinned to `blank-line` for the whole matrix (decision 4), so a
   "relocated" verdict reflects the tool under test, not a segmenter mismatch.
+- The row-association check reads every output line that mentions the marker, not
+  just the first, and strips the marker (and any backticks around it) out of the line
+  before matching the row's cell values against it, since a one-character cell value
+  occurs inside the marker's own `sha256:` prefix. Two limits remain, both narrower
+  than the check: a GFM row written without its outer pipes is not tracked at all,
+  because a looser rule would score a prose line containing a `|` as a table row, and
+  two rows with identical cell text are indistinguishable, so a marker swapping
+  between them scores clean. The corpus uses the fully piped form with distinct rows.
 - Everything runs offline over vendored fixtures; a re-run on a version bump
   re-measures rather than trusting the old verdict.

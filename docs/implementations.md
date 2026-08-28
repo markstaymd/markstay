@@ -31,6 +31,22 @@ bit.
   is `no_std` + `alloc` with zero runtime dependencies, ships a single static CLI
   binary, and is the source for a future WASM build.
 
+## Child-block identity is optional, and only one implements it
+
+[Version 1.3](spec.md#55-child-block-identity-list-items-v13) lets a direct list item
+carry its own stay under the reserved `subhash` key. **The Python reference is the only
+implementation that segments and resolves child blocks**, behind `--child-blocks` on the
+CLI and `child_blocks=True` in the API, and that is not a gap:
+[§16](spec.md#16-conformance-summary) makes segmenting and resolving them a tool's
+choice.
+
+What §16 does *not* make optional is a two-rule write-path shim, and **every
+implementation here carries it**: a marker with a `subhash` never receives a container
+hash, and never counts as its block's stay. That is what lets you hand a child-stamped
+document to a tool that cannot see child blocks and get it back undamaged. Both rules
+are pinned by shared conformance vectors, so agreement on them is tested rather than
+asserted.
+
 ## One corpus, four runners
 
 Every implementation runs the same conformance vectors, so a change in any one that

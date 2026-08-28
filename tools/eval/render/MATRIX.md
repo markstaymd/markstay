@@ -30,6 +30,23 @@ The marker should be invisible in the render (the good default for a comment) an
 | `python-markdown (MkDocs)` | ✅ INVISIBLE | comment retained in HTML source (invisible) |
 | `MDX (@mdx-js/mdx)` | ✅ INVISIBLE | compiles; marker hoisted to a JS comment, renders as an empty expression; blocks fixture: ERROR — **→** the HTML-comment form is invalid MDX and is rejected at compile; use the §3.2 `{/* stay:id */}` form (which compiles away invisibly) |
 
+## Table-row carrier (in-cell marker) — SPEC.md §14
+
+A GFM row is one line, so a row marker has one position available: inside the **last cell**, before the closing pipe. `SPEC.md` §14 defers table-row identity *"until that carrier is shown to survive real renderers"*, and this is that measurement, from the `rows` fixture alone. A table is one block to every segmenter, so the round-trip oracle adds a row-level test here: the marker must come out on a line that still carries its row's other cells (❌ LEFT ITS ROW when it does not).
+
+| Tool | Axis | Verdict | Notes |
+|------|------|---------|-------|
+| `prettier` | roundtrip | ✅ SURVIVES | clean; §8 hash drifts on reflow (expected); 3 in-cell row marker(s) still on their row |
+| `mdformat` | roundtrip | ✅ SURVIVES | clean; §8 hash drifts on reflow (expected); 3 in-cell row marker(s) still on their row |
+| `remark + remark-stringify` | roundtrip | ✅ SURVIVES | clean, no drift; 3 in-cell row marker(s) still on their row |
+| `pandoc (gfm → gfm)` | roundtrip | ✅ SURVIVES | clean; §8 hash drifts on reflow (expected); 3 in-cell row marker(s) still on their row |
+| `pandoc (markdown → markdown)` | roundtrip | ❌ LEFT ITS ROW | marker(s) no longer on their table row's line: rw1, rw2 |
+| `GitHub (cmark-gfm)` | render | ✅ INVISIBLE | comment dropped from output (invisible) |
+| `markdown-it (html: true)` | render | ✅ INVISIBLE | comment retained in HTML source (invisible) |
+| `markdown-it (default, html: false)` | render | ❌ LEAKED | marker(s) rendered as visible text: rw1, rw2, rw3, tbl1 |
+| `marked` | render | ✅ INVISIBLE | comment retained in HTML source (invisible) |
+| `python-markdown (MkDocs)` | render | ✅ INVISIBLE | comment retained in HTML source (invisible) |
+
 ## Anchor after sanitizer (rehype-stay `id=` emit) — gap 4
 
 Does the HTML `id=` that makes `doc.md#stay-id` resolve survive an HTML sanitizer?

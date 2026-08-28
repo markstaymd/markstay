@@ -61,6 +61,47 @@ ROUNDTRIP = [
      "First paragraph.\n\n<!-- stay:p2 -->\n",
      ok("First paragraph.\n\n&lt;!-- stay:p2 --&gt;\n"),
      "MANGLED"),  # escaped: find_markers won't match -> not 'clean' and id present? see note
+
+    # --- the table-row carrier: a marker inside the last cell of a one-line row.
+    # A table is ONE block to every segmenter, so none of the cases above can tell a
+    # row marker that held from one that slid off its row; these four are the whole
+    # difference between "the bytes survived" and "the row is still addressed".
+    ("row_survives_realigned",
+     "| a | b |\n|---|---|\n| apples | 3 <!-- stay:r1 subhash=sha256:1a2b --> |\n",
+     ok("| a      | b                                    |\n"
+        "| ------ | ------------------------------------ |\n"
+        "| apples | 3 <!-- stay:r1 subhash=sha256:1a2b --> |\n"),
+     "SURVIVES"),  # column padding moves the marker's column, not its row
+    ("row_survives_restyled_table",
+     "| a | b |\n|---|---|\n| apples | 3 <!-- stay:r1 --> |\n",
+     ok("  a        b\n  -------- -----------------------\n"
+        "  apples   3 <!-- stay:r1 -->\n"),
+     "SURVIVES"),  # a non-pipe table style still keeps the row on one line
+    ("row_escaped_hoisted",
+     "| a | b |\n|---|---|\n| apples | 3 <!-- stay:r1 --> |\n",
+     ok("<!-- stay:r1 -->\n\n| a | b |\n|---|---|\n| apples | 3 |\n"),
+     "ROW_ESCAPED"),  # still on the right BLOCK, and the row it addressed is gone
+    ("row_escaped_short_cells_not_vouched_by_marker",
+     "| a | b |\n|---|---|\n| 3 | 5 <!-- stay:r1 subhash=sha256:5e6f --> |\n",
+     ok("<!-- stay:r1 subhash=sha256:5e6f -->\n\n| a | b |\n|---|---|\n| 3 | 5 |\n"),
+     "ROW_ESCAPED"),  # `3` and `5` both occur inside the marker's own sha256: prefix
+    ("row_survives_prose_names_the_id",
+     "| apples | 3 <!-- stay:r1 --> |\n",
+     ok("see stay:r1 below\n\n| apples | 3 <!-- stay:r1 --> |\n"),
+     "SURVIVES"),  # every line mentioning the id is tried, not just the first
+    ("row_survives_all_empty_siblings",
+     "| | |\n|---|---|\n| | <!-- stay:r1 --> |\n",
+     ok("| | |\n|---|---|\n| | <!-- stay:r1 --> |\n"),
+     "SURVIVES"),  # no cell text to key on: the weaker test is "still on a row line"
+    ("row_escaped_all_empty_siblings",
+     "| | |\n|---|---|\n| | <!-- stay:r1 --> |\n",
+     ok("| | |\n|---|---|\n| | |\n<!-- stay:r1 -->\n"),
+     "ROW_ESCAPED"),
+    ("row_escaped_continuation_line",
+     "| a | b |\n|---|---|\n| apples | 3 <!-- stay:r1 --> |\n",
+     ok("  a        b\n  -------- ------------\n  apples   3\n"
+        "           <!-- stay:r1 -->\n"),
+     "ROW_ESCAPED"),  # pandoc's writer wrapping a cell splits marker from row
 ]
 
 

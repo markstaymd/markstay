@@ -9,6 +9,7 @@ verified offline. Run:  python test_llm_attach.py
 from __future__ import annotations
 
 import sys
+import tempfile
 from pathlib import Path
 
 import llm_attach as LA
@@ -180,6 +181,19 @@ check("item: prompt describes the subhash marker form",
       "subhash=sha256:HEX" in _prompt)
 check("item: prompt pins lists one-to-one",
       "same list items in the same" in _prompt)
+
+# Stored paid-model output can be reaggregated without a provider or API key.
+with tempfile.TemporaryDirectory() as _replay_dir:
+    _replay_out = Path(_replay_dir) / "item"
+    _report, _n, _rec, _fr, _excluded = RUN.replay_results(
+        Path(__file__).parent / "results_item.json", _replay_out)
+    _report_text = Path(_report).read_text()
+    check("item: stored replay reproduces the published scored count", _n == 256)
+    check("item: stored replay reproduces zero false attachment", _fr == 0.0)
+    check("item: stored replay reports every observed resolution tier",
+          "| parent-hash | 33 |" in _report_text)
+    check("item: stored replay is report-only",
+          not _replay_out.with_suffix(".json").exists())
 
 # A rewrite that merges two bullets breaks the one-to-one mapping the eval
 # depends on. Whatever the pipeline does with it, the one unacceptable outcome

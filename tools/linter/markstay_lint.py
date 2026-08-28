@@ -64,8 +64,18 @@ MDX_MARKER = re.compile(r"\{/\*\s*(?P<body>stay:.*?)\s*\*/\}", re.DOTALL)
 # (`stay:8f24`). A first token that contains `=` (a bare k=v with no id) leaves
 # the marker without an id, which is malformed.
 ID_RE = re.compile(r"stay:\s*(?P<id>[A-Za-z0-9_-]+)(?=\s|$)")
-HASH_RE = re.compile(r"\bhash\s*=\s*sha256:(?P<hash>[0-9a-fA-F]+)")
-SUBHASH_RE = re.compile(r"\bsubhash\s*=\s*sha256:(?P<hash>[0-9a-fA-F]+)")
+# The boundary is whitespace, not `\b`: an attribute is a whitespace-separated token
+# (SPEC.md §4), and a word boundary accepts a custom key merely ENDING in a reserved
+# one, since a hyphen is not a word character. Under `\b`, `x-hash=sha256:ab` reads as
+# the block hash and `restamp` rewrites its value, destroying a key §4 requires to be
+# preserved verbatim. `rehash` was already refused; the hyphenated form was not.
+HASH_RE = re.compile(r"(?<![^\s])hash\s*=\s*sha256:(?P<hash>[0-9a-fA-F]+)")
+# SPEC.md §4: `subhash` is a reserved key, and an attribute is a whitespace-separated
+# token, so the boundary that identifies it is whitespace (or the body's start), not a
+# word boundary. `\b` would accept a custom key ENDING in the reserved one, because a
+# hyphen is not a word character: `x-subhash=sha256:ab` would read as the reserved key
+# and a tool would act on an attribute §4 tells it to preserve and ignore.
+SUBHASH_RE = re.compile(r"(?<![^\s])subhash\s*=\s*sha256:(?P<hash>[0-9a-fA-F]+)")
 
 LEVELS = {"error": 0, "warn": 1, "info": 2}
 
@@ -364,7 +374,7 @@ def _restricted_child_spans(chunk: str, start: int) -> list[_ChildSpan]:
     item_lines: list[str] = []
     content_indent = 0
     saw_parent_marker = False
-    signature: tuple[str, str] | None = None
+    signature: tuple[tuple[str, str], str] | None = None
     for off, raw in enumerate(lines):
         clean = _strip_markers(raw).strip(" \t\r\f\v")
         markers = find_markers(raw, line_offset=start + off - 1)
@@ -382,9 +392,14 @@ def _restricted_child_spans(chunk: str, start: int) -> list[_ChildSpan]:
             if item_start is not None:
                 items.append((item_start, off - 1, "\n".join(item_lines)))
             marker = m.group("marker")
-            current = (
-                ("ordered", marker[-1]) if marker[0].isdigit() else ("bullet", marker)
-            )
+            kind = ("ordered", marker[-1]) if marker[0].isdigit() else ("bullet", marker)
+            # The marker's own indentation is part of the signature: an indented
+            # `  - Nested` matches _LIST_PREFIX_RE as happily as a top-level one
+            # and would be emitted as a *sibling* of the item containing it, a
+            # child block SPEC.md §5.5 says does not exist, shifting every later
+            # ordinal so the two segmenters disagree about which item a child
+            # stay addresses.
+            current = (kind, m.group("indent"))
             if signature is None:
                 signature = current
             elif signature != current:
@@ -863,6 +878,27 @@ def lint_document(
         for mk in b.markers:
             check_marker(mk, b.content, orphan=orphan)
         if child_blocks and b.index >= 0:
+            # SPEC.md §5.5: a `subhash` marker that no child block owns addresses
+            # nothing. It reaches here from an item nested inside another item,
+            # which v1.3 does not address, and it is not the container's stay
+            # either. Reporting it is the SHOULD in §5.5: silence is
+            # indistinguishable from a marker that resolved.
+            for mk in b.markers:
+                if mk.subhash is not None and mk.id and not mk.malformed:
+                    why = (
+                        "nested items are not child blocks in v1.3"
+                        if b.children
+                        else "this segmenter emitted no child blocks for the block"
+                    )
+                    findings.append(
+                        Finding(
+                            "warn",
+                            "CHILD_UNADDRESSED",
+                            f"child id {mk.id} addresses no list item ({why})",
+                            id=mk.id,
+                            line=mk.line,
+                        )
+                    )
             has_parent = any(
                 mk.id and not mk.malformed and mk.subhash is None for mk in b.markers
             )
@@ -1071,6 +1107,7 @@ def _resolve_parents(
                 claimed.add(idx)
                 break
 
+    hash_proposals: dict[str, int] = {}
     for pid, anchor in reps.items():
         if pid in out:
             continue
@@ -1080,13 +1117,19 @@ def _resolve_parents(
             if body_hash(block.content) == anchor.parent_hash and idx not in claimed
         ]
         if len(hits) == 1:
-            out[pid] = (hits[0], "hash")
-            claimed.add(hits[0])
+            hash_proposals[pid] = hits[0]
+    hash_counts: dict[int, int] = {}
+    for target in hash_proposals.values():
+        hash_counts[target] = hash_counts.get(target, 0) + 1
+    for pid, target in hash_proposals.items():
+        if hash_counts[target] == 1:
+            out[pid] = (target, "hash")
+            claimed.add(target)
 
-    # Quote claims run last and in descending score order, so the best-supported
-    # parent picks from the unclaimed blocks first rather than whichever anchor
-    # happened to be enumerated first.
-    pending = []
+    # Every parent scores against one tier-start snapshot. A target reached by
+    # two stays at this tier goes to neither (§9.2), rather than to the higher
+    # score or whichever parent happened to be enumerated first.
+    quote_proposals: dict[str, tuple[int, float]] = {}
     for pid, anchor in reps.items():
         if pid in out:
             continue
@@ -1098,12 +1141,14 @@ def _resolve_parents(
             [blocks[i].content for i in candidates],
         )
         if idx >= 0 and score >= 0.5 and score - runner >= 0.05:
-            pending.append((score, pid, candidates[idx]))
-    for _, pid, target in sorted(pending, key=lambda row: -row[0]):
-        if target in claimed:
-            continue
-        out[pid] = (target, "quote")
-        claimed.add(target)
+            quote_proposals[pid] = (candidates[idx], score)
+    quote_counts: dict[int, int] = {}
+    for target, _ in quote_proposals.values():
+        quote_counts[target] = quote_counts.get(target, 0) + 1
+    for pid, (target, _) in quote_proposals.items():
+        if quote_counts[target] == 1:
+            out[pid] = (target, "quote")
+            claimed.add(target)
     return out
 
 
@@ -1124,9 +1169,33 @@ def _resolve_children(
             if mk.id and not mk.malformed:
                 marked.setdefault(mk.id, child)
 
+    # SPEC.md §5.5: a `subhash` marker that no direct child owns addresses
+    # nothing, and "nobody's stay" is not a licence to recover the id from
+    # weaker evidence. The marker is still in the document, so a tool honouring
+    # the reader rule reports it unaddressed (`CHILD_UNADDRESSED`) while a
+    # resolver walking the ladder would bind the same id to a *different* item:
+    # the two halves of one implementation disagreeing about one document, which
+    # is the §13 failure the rule exists to prevent. Reaches here from an item
+    # nested inside another item, and from a segmenter that emitted no children
+    # for the block at all. Both fail closed.
+    # Narrower than "a `subhash` marker sits block-level somewhere": an id whose
+    # marker is *also* owned by a direct child still has a marker doing its job,
+    # and a stray nested copy of it is a §7 duplicate for the linter to report
+    # (`DUPLICATE_ID`), not a reason to lose an anchor that never moved.
+    unaddressed: set[str] = {
+        mk.id
+        for block in blocks
+        for mk in block.markers
+        if mk.subhash is not None and mk.id and not mk.malformed
+    } - set(marked)
+
     parents = _resolve_parents(anchors, blocks)
     out: dict[str, tuple[str, int | None]] = {}
     claimed: set[int] = set()
+
+    for anchor in anchors:
+        if anchor.id in unaddressed:
+            out[anchor.id] = ("detached", None)
 
     # Tier 1 runs ahead of the parent gate, not behind it. A surviving child
     # marker is stored identity; where the parent lives is an inference about
@@ -1135,6 +1204,8 @@ def _resolve_children(
     # block-level marker sits on its own line and is easy to drop, while the
     # child markers ride inline inside the bullet text being rewritten.
     for anchor in anchors:
+        if anchor.id in out:
+            continue
         hit = marked.get(anchor.id)
         if hit is not None:
             out[anchor.id] = ("marker", hit.index)
@@ -1149,44 +1220,66 @@ def _resolve_children(
         sibling scope, so every structural tier below is unavailable to it."""
         return anchor.parent_id is not None and anchor.parent_id not in parents
 
+    def _commit(tier: str, proposals: dict[str, int]) -> None:
+        counts: dict[int, int] = {}
+        for target in proposals.values():
+            counts[target] = counts.get(target, 0) + 1
+        for anchor_id, target in proposals.items():
+            if counts[target] == 1:
+                out[anchor_id] = (tier, target)
+                claimed.add(target)
+
+    ordinal_proposals: dict[str, int] = {}
     for anchor in anchors:
         if anchor.id in out or _gated(anchor):
             continue
         parent = _parent_of(anchor)
-        if parent is not None:
-            ordinal = anchor.ordinal - 1
-            if (
-                body_hash(parent.content) == anchor.parent_hash
-                and 0 <= ordinal < len(parent.children)
-                and not parent.children[ordinal].markers
-                and parent.children[ordinal].index not in claimed
-            ):
-                out[anchor.id] = ("parent-hash", parent.children[ordinal].index)
-                claimed.add(parent.children[ordinal].index)
-                continue
-            sibling_hits = [
-                child
-                for child in parent.children
-                if body_hash(child.content) == anchor.hash
-                and child.index not in claimed
-            ]
-            if len(sibling_hits) == 1 and anchor.sibling_hash_count == 1:
-                out[anchor.id] = ("hash", sibling_hits[0].index)
-                claimed.add(sibling_hits[0].index)
-                continue
-        doc_hits = [
-            child for child in hashes.get(anchor.hash, []) if child.index not in claimed
-        ]
-        if len(doc_hits) == 1 and anchor.document_hash_count == 1:
-            out[anchor.id] = ("document-hash", doc_hits[0].index)
-            claimed.add(doc_hits[0].index)
+        if parent is None or body_hash(parent.content) != anchor.parent_hash:
+            continue
+        ordinal = anchor.ordinal - 1
+        if not 0 <= ordinal < len(parent.children):
+            continue
+        candidate = parent.children[ordinal]
+        if candidate.markers or candidate.index in claimed:
+            continue
+        ordinal_proposals[anchor.id] = candidate.index
+    _commit("parent-hash", ordinal_proposals)
 
-    # Quote scoring runs only over what no stronger tier took.
+    sibling_proposals: dict[str, int] = {}
     for anchor in anchors:
         if anchor.id in out or _gated(anchor):
             continue
         parent = _parent_of(anchor)
         if parent is None or anchor.sibling_hash_count != 1:
+            continue
+        hits = [
+            child
+            for child in parent.children
+            if body_hash(child.content) == anchor.hash and child.index not in claimed
+        ]
+        if len(hits) == 1:
+            sibling_proposals[anchor.id] = hits[0].index
+    _commit("hash", sibling_proposals)
+
+    document_proposals: dict[str, int] = {}
+    for anchor in anchors:
+        if anchor.id in out or _gated(anchor) or anchor.document_hash_count != 1:
+            continue
+        hits = [
+            child for child in hashes.get(anchor.hash, []) if child.index not in claimed
+        ]
+        if len(hits) == 1:
+            document_proposals[anchor.id] = hits[0].index
+    _commit("document-hash", document_proposals)
+
+    # Quote scoring uses the tier-start snapshot too. Contested candidates go to
+    # neither stay and fall through to DETACHED.
+    quote_proposals: dict[str, int] = {}
+    for anchor in anchors:
+        if anchor.id in out or _gated(anchor):
+            continue
+        parent = _parent_of(anchor)
+        if parent is None:
             continue
         candidates = [
             child for child in parent.children if child.index not in claimed
@@ -1198,8 +1291,8 @@ def _resolve_children(
             [child.content for child in candidates],
         )
         if idx >= 0 and score >= 0.5 and score - runner >= 0.05:
-            out[anchor.id] = ("quote", candidates[idx].index)
-            claimed.add(candidates[idx].index)
+            quote_proposals[anchor.id] = candidates[idx].index
+    _commit("quote", quote_proposals)
 
     for anchor in anchors:
         out.setdefault(anchor.id, ("detached", None))

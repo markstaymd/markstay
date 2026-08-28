@@ -23,8 +23,12 @@ This market doubled in 2025.
 
 ## List
 
-A marker after a list identifies the **whole list**. List-item identity is deferred
-to a later extension, so a list carries one stay for the list as a unit.
+A marker after a list identifies the **whole list**, and that is still the default: a
+list carries one stay for the list as a unit. Since
+[version 1.3](spec.md#55-child-block-identity-list-items-v13) a **direct list item may
+also carry its own stay**, addressed inside its list under the reserved `subhash` key,
+which a tool opts into. A document that does not use it is unaffected, and a tool that
+does not implement it still has to leave a child-stamped document alone.
 
 ```md
 - Retry failed requests with jitter.
@@ -34,7 +38,7 @@ to a later extension, so a list carries one stay for the list as a unit.
 
 Under the dependency-free baseline the list must be **tight** (no blank lines between
 items) for the marker to bind the whole list; a loose list otherwise binds only its
-last item. The [version 1.1](spec.md#commonmark-tree-attachment-version-11)
+last item. The [version 1.1](spec.md#52-commonmark-tree-attachment-v11)
 CommonMark-tree mode removes that constraint, binding a loose list (and a fence with
 internal blank lines) as a single block.
 
@@ -52,8 +56,11 @@ curl https://api.example.com/v1/items
 
 ## Table
 
-A marker after the table identifies the whole table. Row-level identity is deferred to
-a later extension.
+A marker after the table identifies the whole table. Row-level identity is still
+deferred, though the carrier it waits on has been measured: a marker inside the last
+cell of a one-line row survives every mainstream formatter and stays invisible in every
+renderer that keeps HTML comments (see [compatibility](compat.md#table-row-carrier)),
+so what remains is spec text rather than an open question.
 
 ```md
 | Plan | Limit |

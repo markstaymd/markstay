@@ -15,9 +15,11 @@ at all.
 
 1. **Source round-trip** (md → md): the load-bearing axis. Oracle = the reference
    linter's `lint_diff` (`DROPPED` / `RELOCATED` / `DUPLICATED`) plus a
-   marker-cleanliness check. A §8 hash drift on reflow is **expected and not a
-   failure**. Catches pandoc's `<!-- ... -->`{=html} code-span mangle, which a grep
-   would miss.
+   marker-cleanliness check, and for a marker that entered inside a table row, a
+   row-association check (`ROW_ESCAPED`: a table is one block, so a marker that slid
+   off its row is still "on the right block"). A §8 hash drift on reflow is
+   **expected and not a failure**. Catches pandoc's `<!-- ... -->`{=html} code-span
+   mangle, which a grep would miss.
 2. **Render-emit** (md → HTML): the visibility axis. Oracle = is the marker visible
    in the rendered text (bad), is the comment retained in the HTML source (info), and,
    for `rehype-stay`'s `id=` emit, does the anchor survive a sanitizer.
@@ -55,7 +57,7 @@ matrix.
 | `test_render.py` | classifier self-tests on hand-labelled survived/leaked/stripped/relocated/mangled cases (proven before the matrix is trusted) |
 | `js/render.mjs` | the JS-side renderers, driven over stdin/stdout by `run.py` |
 | `js/package.json` | pins the JS renderer versions |
-| `fixtures/*.md` | the corpus: one stay per block kind, marker-only vs trailing placement, a hash-bearing marker, and the §3.2 MDX form |
+| `fixtures/*.md` | the corpus: one stay per block kind, marker-only vs trailing placement, a hash-bearing marker, the §3.2 MDX form, and the in-cell table-row carrier (`rows.md`, the §14 gate) |
 | `MATRIX.md` | the deliverable: the survival verdict per tool, both axes |
 | `FINDINGS.md` | the narrative: what survives, what degrades, what is deferred |
 | `versions.json` | the pinned versions a re-run re-measures against |
@@ -69,4 +71,7 @@ on their own line, or using the `gfm` writer). On render, the marker is invisibl
 default everywhere except `markdown-it`'s `html: false` default (escapes to visible
 text) and MDX (HTML comments are invalid → use the §3.2 form). `rehype-stay`'s anchor
 `id=` survives `DOMPurify` verbatim and `rehype-sanitize` renamed (`user-content-`).
-See `FINDINGS.md`.
+The **table-row carrier** (a marker inside the last cell of a one-line row, the
+placement §14 gates row identity on) survives every formatter but pandoc's native
+`markdown` writer, which re-tables the row across lines and strands the marker on one
+of its own. See `FINDINGS.md`.

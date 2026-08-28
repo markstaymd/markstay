@@ -31,7 +31,7 @@ from __future__ import annotations
 import re
 import string
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from pathlib import Path
 
@@ -90,7 +90,7 @@ class Selector:
     quote: str            # the block body (the exact selector)
     prefix: str = ""      # trailing context of the previous block
     suffix: str = ""      # leading context of the next block
-    # Experimental third contextual signal (PLAN_HEADING_PATH_EVIDENCE): the
+    # Experimental third contextual signal, measured but never specified: the
     # enclosing heading titles at annotation time. No spec field carries this;
     # it is here to be measured. Empty means "not stored", which every arm must
     # treat as "no heading evidence" rather than as "the empty path".
@@ -99,6 +99,25 @@ class Selector:
     @property
     def nquote(self) -> str:
         return normalize(self.quote)
+
+
+@dataclass(frozen=True)
+class Evidence:
+    """One non-normative explanation of a candidate's score."""
+
+    code: str
+    label: str
+    contribution: float
+
+
+@dataclass(frozen=True)
+class Candidate:
+    """A diagnostic candidate, ranked without implying an attachment."""
+
+    target: int
+    score: float
+    evidence: tuple[Evidence, ...] = field(default_factory=tuple)
+    provenance: str = "independent-per-anchor"
 
 
 def _ratio(a: str, b: str) -> float:
@@ -154,7 +173,7 @@ def canonical_path(path) -> tuple[str, ...]:
     return tuple(canonical_heading(p) for p in path)
 
 
-def best_match(
+def rank_candidates(
     sel: Selector,
     candidates: list[str],
     candidate_paths: list | None = None,
@@ -163,45 +182,23 @@ def best_match(
     heading_filter: bool = False,
     heading_gate: float = 0.0,
     clamp: bool = True,
-) -> tuple[int, float, float]:
-    """Rank candidate block bodies against a selector.
+    targets: list[int] | None = None,
+    provenance: str = "independent-per-anchor",
+) -> list[Candidate]:
+    """Return every scored candidate in the resolver's exact historical order.
 
-    Returns (best_index, best_score, runner_up_score). The runner-up is returned
-    so the resolver can require a margin: a confident recovery needs not just a
-    high score but a *clear winner*, which is how "surface, don't guess" is
-    enforced for genuinely ambiguous re-attachment.
+    Ranking deliberately remains ``(unclamped_score, candidate_index)``
+    descending. The index tie-break is part of the shipped resolver's behaviour:
+    equal scores choose the later candidate. ``targets`` lets callers scoring a
+    subset retain document-global target indices without changing that order.
 
-    The heading arguments are the experiment (`../../PLAN_HEADING_PATH_EVIDENCE`
-    in the umbrella). With `candidate_paths=None` and the defaults this is
-    bit-identical to the shipped resolver.
-
-    `heading_bonus`  added to a candidate whose heading path equals the stored
-                     one, alongside the existing prefix/suffix context bonus.
-    `heading_penalty` the same preference expressed the other way up: subtracted
-                     from a candidate whose path *differs*. The two differ by a
-                     constant only in the ranking, and that constant is the
-                     whole point. A bonus raises scores, so on a document where
-                     every candidate matches (a single-section document, the
-                     negative control) it is not a no-op: it pushes matched
-                     scores into the 1.0 ceiling, collapses the margin, and
-                     detaches. A penalty can only lower a *mismatched*
-                     candidate, so it cannot move a document with one section,
-                     cannot lift anything over the commit threshold, and cannot
-                     reach the clamp's ceiling.
-    `heading_gate`   minimum *body* score before the heading bonus applies. Set
-                     to the commit threshold it makes the bonus a pure
-                     tiebreaker: it can reorder candidates that already clear
-                     the bar on their own text and can never lift a weak body
-                     match over it. At 0.0 the bonus is ungated, which is the
-                     form the cross-section audit measured.
-    `heading_filter` revdown's hard gate: only equal-path candidates compete.
-                     Cheap to run and unshippable as written, since SPEC.md §2.2
-                     requires a stay to survive movement within a document.
-    `clamp`          the shipped behaviour: clamp the best and runner-up score
-                     individually to 1.0 *before* the caller's margin test.
-                     Ranking is unaffected either way (clamping is monotonic);
-                     what changes is the margin, and a collapsed margin detaches.
+    The heading arguments retain the completed heading-path experiment's
+    behaviour. Evidence codes and labels are diagnostics, not protocol or
+    conformance data; their versioning belongs to the surface that serializes
+    them.
     """
+    if targets is not None and len(targets) != len(candidates):
+        raise ValueError("targets and candidates must have the same length")
     # An anchor with no stored path has no heading evidence, so every heading
     # argument is inert for it. That is what keeps a bonus arm from rewarding
     # candidates for matching the empty path.
@@ -212,12 +209,48 @@ def best_match(
         else None
     )
 
-    scored = []
+    scored: list[tuple[float, int, tuple[Evidence, ...]]] = []
     for i, c in enumerate(candidates):
         s = body_score(sel, c)
         prev_text = candidates[i - 1] if i > 0 else ""
         next_text = candidates[i + 1] if i + 1 < len(candidates) else ""
-        total = s + context_bonus(sel, prev_text, next_text)
+        context = context_bonus(sel, prev_text, next_text)
+        total = s + context
+        evidence = [Evidence("body_similarity", "body similarity", s)]
+        if sel.prefix:
+            prefix = 0.05 * _ratio(
+                normalize(window_prefix(sel.prefix)),
+                normalize(window_prefix(prev_text)),
+            )
+            contextual = provenance != "independent-per-anchor"
+            evidence.append(
+                Evidence(
+                    "candidate_prefix_context" if contextual else "prefix_context",
+                    (
+                        f"preceding candidate in {provenance.replace('-', ' ')}"
+                        if contextual
+                        else "preceding context"
+                    ),
+                    prefix,
+                )
+            )
+        if sel.suffix:
+            suffix = 0.05 * _ratio(
+                normalize(window_suffix(sel.suffix)),
+                normalize(window_suffix(next_text)),
+            )
+            contextual = provenance != "independent-per-anchor"
+            evidence.append(
+                Evidence(
+                    "candidate_suffix_context" if contextual else "suffix_context",
+                    (
+                        f"following candidate in {provenance.replace('-', ' ')}"
+                        if contextual
+                        else "following context"
+                    ),
+                    suffix,
+                )
+            )
         if cpaths is not None:
             match = cpaths[i] == spath
             if heading_filter and not match:
@@ -225,15 +258,53 @@ def best_match(
             if s >= heading_gate:
                 if heading_bonus and match:
                     total += heading_bonus
+                    evidence.append(
+                        Evidence("heading_path_bonus", "matching heading path", heading_bonus)
+                    )
                 if heading_penalty and not match:
                     total -= heading_penalty
-        scored.append((total, i))
-    if not scored:
+                    evidence.append(
+                        Evidence(
+                            "heading_path_penalty",
+                            "different heading path",
+                            -heading_penalty,
+                        )
+                    )
+        scored.append((total, i, tuple(evidence)))
+    scored.sort(key=lambda row: (row[0], row[1]), reverse=True)
+    return [
+        Candidate(
+            target=targets[i] if targets is not None else i,
+            score=min(total, 1.0) if clamp else total,
+            evidence=evidence,
+            provenance=provenance,
+        )
+        for total, i, evidence in scored
+    ]
+
+
+def best_match(
+    sel: Selector,
+    candidates: list[str],
+    candidate_paths: list | None = None,
+    heading_bonus: float = 0.0,
+    heading_penalty: float = 0.0,
+    heading_filter: bool = False,
+    heading_gate: float = 0.0,
+    clamp: bool = True,
+) -> tuple[int, float, float]:
+    """Compatibility wrapper returning ``(index, score, runner-up score)``."""
+    ranked = rank_candidates(
+        sel,
+        candidates,
+        candidate_paths=candidate_paths,
+        heading_bonus=heading_bonus,
+        heading_penalty=heading_penalty,
+        heading_filter=heading_filter,
+        heading_gate=heading_gate,
+        clamp=clamp,
+    )
+    if not ranked:
         return -1, 0.0, 0.0
-    scored.sort(reverse=True)
-    best_score, best_index = scored[0]
-    runner_up = scored[1][0] if len(scored) > 1 else 0.0
-    if not clamp:
-        return best_index, best_score, runner_up
-    # Clamp the context bonus back out of the reported score's ceiling at 1.0.
-    return best_index, min(best_score, 1.0), min(runner_up, 1.0)
+    runner_up = ranked[1].score if len(ranked) > 1 else 0.0
+    return ranked[0].target, ranked[0].score, runner_up

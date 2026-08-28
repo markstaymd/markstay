@@ -8,12 +8,20 @@ where an exact count is the point (e.g. a deleted block must detach).
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
 import perturb as PB
 import resolver as R
-from quote import Selector, best_match
+from quote import (
+    Selector,
+    best_match,
+    body_score,
+    canonical_path,
+    context_bonus,
+    rank_candidates,
+)
 
 HERE = Path(__file__).parent
 DOC1 = (HERE.parent / "docs" / "doc1.md").read_text()
@@ -432,6 +440,221 @@ def test_heading_paths_compare_component_by_component():
           canonical_path(["a/b"]) != canonical_path(["a", "b"]))
     check("emphasis does not change a path",
           canonical_path(["**Rollback**"]) == canonical_path(["Rollback"]))
+
+
+# --- detached diagnostics, protected by the pre-change oracle ----------------
+
+def _legacy_best_match(
+    sel,
+    candidates,
+    candidate_paths=None,
+    heading_bonus=0.0,
+    heading_penalty=0.0,
+    heading_filter=False,
+    heading_gate=0.0,
+    clamp=True,
+):
+    """Frozen copy of the matcher before ranked candidates were added."""
+    spath = canonical_path(sel.heading_path) if sel.heading_path else None
+    cpaths = (
+        [canonical_path(p) for p in candidate_paths]
+        if candidate_paths is not None and spath is not None
+        else None
+    )
+    scored = []
+    for i, candidate in enumerate(candidates):
+        score = body_score(sel, candidate)
+        previous = candidates[i - 1] if i > 0 else ""
+        following = candidates[i + 1] if i + 1 < len(candidates) else ""
+        total = score + context_bonus(sel, previous, following)
+        if cpaths is not None:
+            match = cpaths[i] == spath
+            if heading_filter and not match:
+                continue
+            if score >= heading_gate:
+                if heading_bonus and match:
+                    total += heading_bonus
+                if heading_penalty and not match:
+                    total -= heading_penalty
+        scored.append((total, i))
+    if not scored:
+        return -1, 0.0, 0.0
+    scored.sort(reverse=True)
+    best_score, best_index = scored[0]
+    runner_up = scored[1][0] if len(scored) > 1 else 0.0
+    if not clamp:
+        return best_index, best_score, runner_up
+    return best_index, min(best_score, 1.0), min(runner_up, 1.0)
+
+
+def _legacy_resolve_map(
+    anchors, after_md, threshold=R.DEFAULT_THRESHOLD, margin=R.DEFAULT_MARGIN
+):
+    """Frozen committed ``id -> (method, target)`` block-resolver map."""
+    blocks = [b for b in R.L.parse_document(after_md) if b.index >= 0]
+    bodies = [b.content for b in blocks]
+    surviving = {}
+    for index, block in enumerate(blocks):
+        for marker in block.markers:
+            if marker.id and not marker.malformed:
+                surviving.setdefault(marker.id, index)
+    hash_to_indices = {}
+    for index, body in enumerate(bodies):
+        hash_to_indices.setdefault(R.L.body_hash(body), []).append(index)
+    out = {}
+    for anchor in anchors:
+        if anchor.id in surviving:
+            out[anchor.id] = ("marker", surviving[anchor.id])
+            continue
+        hits = hash_to_indices.get(anchor.hash, [])
+        if len(hits) == 1:
+            out[anchor.id] = ("hash", hits[0])
+            continue
+        index, score, runner = _legacy_best_match(anchor.selector, bodies)
+        if index >= 0 and score >= threshold and score - runner >= margin:
+            out[anchor.id] = ("quote", index)
+        else:
+            out[anchor.id] = ("detached", None)
+    return out
+
+
+def _corpus_vectors(category):
+    root = HERE.parents[1] / "conformance"
+    for tier in ("spec", "gen"):
+        path = root / tier / f"{category}.json"
+        if path.exists():
+            yield from json.loads(path.read_text())["vectors"]
+
+
+def test_ranked_matcher_is_bit_identical_to_the_frozen_oracle():
+    direct = [
+        (Selector("same"), ["same", "same"]),
+        (Selector("same"), ["same", "same", "same"]),
+        (Selector("missing"), []),
+    ]
+    for selector, candidates in direct:
+        assert best_match(selector, candidates) == _legacy_best_match(selector, candidates)
+
+    for vector in _corpus_vectors("score"):
+        if vector["fn"] != "best_match":
+            continue
+        selector = Selector(
+            vector["quote"], prefix=vector["prefix"], suffix=vector["suffix"]
+        )
+        candidates = vector["candidates"]
+        assert best_match(selector, candidates) == _legacy_best_match(selector, candidates)
+
+    selector = Selector("body", heading_path=("Section",))
+    candidates = ["body", "body"]
+    paths = [("Other",), ("Section",)]
+    for kwargs in (
+        {"candidate_paths": paths, "heading_bonus": 0.12},
+        {"candidate_paths": paths, "heading_penalty": 0.12},
+        {"candidate_paths": paths, "heading_filter": True},
+        {"candidate_paths": paths, "heading_bonus": 0.12, "heading_gate": 1.1},
+        {"clamp": False},
+    ):
+        assert best_match(selector, candidates, **kwargs) == _legacy_best_match(
+            selector, candidates, **kwargs
+        )
+
+
+def test_committed_map_is_identical_and_anchor_order_inert_over_every_corpus():
+    for vector in _corpus_vectors("resolve"):
+        anchors = R.build_anchors(vector["before"])
+        threshold = vector.get("threshold", R.DEFAULT_THRESHOLD)
+        margin = vector.get("margin", R.DEFAULT_MARGIN)
+        expected = _legacy_resolve_map(anchors, vector["after"], threshold, margin)
+        current = R.resolve(anchors, vector["after"], threshold=threshold, margin=margin)
+        assert {key: (value.method, value.target) for key, value in current.items()} == expected
+
+    before, blocks = PB.annotate(ADV)
+    after_blocks, _ = PB.edit_in_place(blocks)
+    after = PB.serialize(after_blocks, strip=True)
+    anchors = R.build_anchors(before)
+    expected = _legacy_resolve_map(anchors, after)
+    reversed_current = R.resolve(list(reversed(anchors)), after)
+    assert {key: (value.method, value.target) for key, value in reversed_current.items()} == expected
+
+
+def test_detached_reason_and_candidate_policy():
+    before = "Repeated body.\n<!-- stay:a -->\n"
+    anchor = R.build_anchors(before)
+
+    ambiguous = R.resolve(anchor, "Repeated body.\n\nRepeated body.\n")["a"]
+    assert ambiguous.method == "detached"
+    assert ambiguous.reason == "ambiguous"
+    assert [candidate.target for candidate in ambiguous.candidates] == [1, 0]
+    assert ambiguous.runner_up_score == 1.0
+    assert all(candidate.provenance == "independent-per-anchor" for candidate in ambiguous.candidates)
+    assert all(candidate.evidence[0].code == "body_similarity" for candidate in ambiguous.candidates)
+
+    unmatched = R.resolve(anchor, "xxxxxxxxxxxxxxxxxxxxxxxx\n")["a"]
+    assert unmatched.method == "detached"
+    assert unmatched.reason == "unmatched"
+    assert unmatched.candidates == []
+
+    empty = R.resolve(anchor, "")["a"]
+    assert empty.reason == "unmatched"
+    assert empty.score == 0.0
+    assert empty.candidates == []
+
+    attached_before = "Alpha.\n<!-- stay:a -->\n\nBeta.\n<!-- stay:b -->\n"
+    attached = R.resolve(R.build_anchors(attached_before), attached_before)
+    assert all(result.reason is None for result in attached.values())
+    assert all(result.candidates == [] for result in attached.values())
+
+
+def test_attached_quote_preserves_its_actual_runner_up_score():
+    before = "The deploy retries three times.\n<!-- stay:a -->\n"
+    after = (
+        "The deployment retries failed work three times.\n\n"
+        "Rollback uses the previous image.\n"
+    )
+    result = R.resolve(R.build_anchors(before), after)["a"]
+    expected = best_match(
+        R.build_anchors(before)[0].selector,
+        [
+            "The deployment retries failed work three times.",
+            "Rollback uses the previous image.",
+        ],
+    )
+    assert result.method == "quote"
+    assert result.runner_up_score == expected[2]
+    assert result.runner_up_score > 0.0
+
+
+def test_ranked_candidates_can_retain_global_targets_for_a_subset():
+    ranked = rank_candidates(
+        Selector("same"),
+        ["same", "same"],
+        targets=[4, 11],
+        provenance="parent-snapshot",
+    )
+    assert [candidate.target for candidate in ranked] == [11, 4]
+    assert all(candidate.provenance == "parent-snapshot" for candidate in ranked)
+    contextual = rank_candidates(
+        Selector("same", prefix="before", suffix="after"),
+        ["same", "same"],
+        targets=[4, 11],
+        provenance="parent-snapshot",
+    )
+    assert {
+        evidence.code for candidate in contextual for evidence in candidate.evidence
+    } >= {"candidate_prefix_context", "candidate_suffix_context"}
+    duplicate_ranking = rank_candidates(Selector("same"), ["same", "same", "same"])
+    assert [candidate.target for candidate in duplicate_ranking] == [2, 1, 0]
+
+
+def test_ambiguous_candidates_exclude_the_exact_margin_boundary():
+    ranked = [
+        R.Candidate(0, 0.80),
+        R.Candidate(1, 0.76),
+        R.Candidate(2, 0.75),
+    ]
+    assert [
+        candidate.target for candidate in R._ambiguous_candidates(ranked, 0.05)
+    ] == [0, 1]
 
 
 def main():

@@ -34,6 +34,7 @@ linter, not re-derived.
 
 from __future__ import annotations
 
+import os
 import re
 import sys
 from dataclasses import dataclass, field
@@ -285,3 +286,71 @@ def build_item_judge_prompt(after_md: str, items: list[tuple[str, str]]) -> str:
     for i, (_key, text) in enumerate(items, 1):
         parts.append(f"\n[{i}] {text}\n")
     return "".join(parts)
+
+
+# --- run artifacts: where they may land, and who may read them -----------------
+# Both runners persist a JSON that can contain the corpus itself, and the default
+# corpus is work-confidential. Two properties have to hold together and neither is
+# implied by the other: the artifact must be **durable** (a paid run's rewrites are
+# unrecoverable if they are lost, which is what /tmp cost us on 2026-08-24) and it
+# must be **out of any checkout** and owner-only. The default satisfies both; these
+# two helpers make an explicit --out satisfy them too, by refusing rather than by
+# hoping the caller picked well.
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def resolve_out_prefix(raw):
+    """Expand and validate an --out prefix, refusing anything inside this checkout.
+
+    Returns the resolved Path. Exits non-zero with the reason rather than writing
+    corpus text somewhere git can pick it up. `expanduser` is applied because a
+    shell-quoted '~/run' would otherwise be taken literally and land relative to the
+    working directory, which is usually the repo.
+    """
+    out = Path(raw).expanduser().resolve()
+    try:
+        out.relative_to(_REPO_ROOT)
+    except ValueError:
+        return out
+    sys.exit(
+        f"--out must not be inside the repository ({_REPO_ROOT}): {out}\n"
+        "The artifact can contain the corpus, and the default corpus is "
+        "work-confidential. Point --out at a path outside any checkout."
+    )
+
+
+def prepare_out_parent(out):
+    """Create the artifact directory and make it owner-only where we are able to.
+
+    Best-effort **on purpose**: this runs after every paid API call in the run, so a
+    directory we do not own (`--out /tmp/run` makes the parent `/tmp`) must not turn
+    a completed run into a crash with nothing written. The per-file mode in
+    `write_private` is the guarantee that actually protects the content; this is
+    defence in depth over the directory listing.
+    """
+    out.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        out.parent.chmod(0o700)
+    except OSError as e:
+        print(
+            f"warning: could not restrict {out.parent} to owner-only ({e}). "
+            "The artifacts themselves are still written owner-only.",
+            file=sys.stderr,
+        )
+
+
+def write_private(path, text):
+    """Write `text` to `path` as an owner-only file, private before any byte lands.
+
+    `chmod` after `write_text` leaves the content world-readable for the duration of
+    the write, and O_CREAT's mode argument does not apply when the file already
+    exists, so the mode is set on the descriptor before the first write. O_NOFOLLOW
+    refuses to write through a symlink planted at the output path.
+    """
+    fd = os.open(
+        path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600
+    )
+    with os.fdopen(fd, "w") as f:
+        os.fchmod(f.fileno(), 0o600)
+        f.write(text)

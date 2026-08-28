@@ -10,8 +10,9 @@ Needs an Anthropic key: export ANTHROPIC_API_KEY first.
 Docs are read live from --docs-dir (default the bundled `corpus/`) and sampled
 deterministically (smallest-by-words eligible docs first). The report anonymizes
 doc names (doc01..); the name->label map and per-cell metrics live only in the JSON
-written under --out (default /tmp, outside the repo). Point --docs-dir at one corpus
-subdir at a time (e.g. corpus/fastapi) to reproduce a single result table.
+written under --out (a persistent state dir outside the repo, never in /tmp: it is a
+paid run's only record). Point --docs-dir at one corpus subdir at a time (e.g.
+corpus/fastapi) to reproduce a single result table.
 """
 
 from __future__ import annotations
@@ -27,6 +28,9 @@ import dogfood_sim as D
 from llm_io import complete_meta
 
 DEFAULT_DOCS_DIR = Path(__file__).resolve().parent / "corpus"
+# Outside the repo because --docs-dir can point at a private corpus and the JSON keeps
+# real doc names; persistent rather than /tmp because it is a paid run's only record.
+DEFAULT_OUT = Path.home() / ".local" / "state" / "markstay" / "dogfood" / "sim-results"
 EXCLUDE_NAMES = {"INDEX.md"}  # auto-generated; markers would be wiped on regen
 
 
@@ -235,7 +239,9 @@ async def main():
     ap.add_argument("--preserve-file", default="",
                     help="path to PRESERVE.md for the instructed arm; default "
                          "<docs-dir>/../.markstay/PRESERVE.md (the install.sh layout)")
-    ap.add_argument("--out", default="/tmp/markstay-dogfood/sim-results")
+    ap.add_argument("--out", default=str(DEFAULT_OUT),
+                    help="output prefix for the .json and .md artifacts "
+                         "(default: %(default)s)")
     args = ap.parse_args()
 
     docs_dir = Path(args.docs_dir).expanduser()
@@ -290,13 +296,14 @@ async def main():
                 sample=len(docmap), word_cap=args.word_cap,
                 max_tokens=args.max_tokens)
 
-    out = Path(args.out)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    # JSON keeps the real doc names (it stays under --out, default /tmp). Strip the
-    # preserve_text blob from each cell so the artifact is metrics-only.
+    out = D.resolve_out_prefix(args.out)
+    D.prepare_out_parent(out)
+    # JSON keeps the real doc names, so it is written owner-only and `--out` is
+    # refused if it points inside the checkout.
+    # Strip the preserve_text blob from each cell so the artifact is metrics-only.
     for c in cells:
         c.pop("preserve_text", None)
-    Path(str(out) + ".json").write_text(json.dumps(
+    D.write_private(Path(str(out) + ".json"), json.dumps(
         {"meta": meta, "labels": labels, "cells": cells}, indent=2, default=str))
     write_report(str(out) + ".md", meta, cells, docmap)
 
