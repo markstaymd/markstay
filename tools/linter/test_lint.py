@@ -1182,6 +1182,73 @@ def test_canonical_heading_folds_ascii_only():
     assert L.canonical_heading("Ärger UPPER") == "Ärger upper"
 
 
+# --- SPEC.md §3.3: a fenced code block is content (v1.5) -----------------
+
+
+def test_code_lines_recognises_the_fences_the_line_rule_can_see():
+    cases = [
+        ("a\n```\ncode\n```\nb\n", {2, 3, 4}),
+        ("a\n~~~\ncode\n~~~\nb\n", {2, 3, 4}),
+        ("a\n   ```\ncode\n   ```\nb\n", {2, 3, 4}),   # three spaces still opens
+        ("a\n    ```\ncode\n    ```\nb\n", set()),      # four is indented code
+        ("a\n\t```\ncode\n\t```\nb\n", set()),          # a tab is not a space
+        ("````\n```\ninner\n```\n````\n", {1, 2, 3, 4, 5}),  # longer contains shorter
+        ("````\ncode\n```\nrest\n", {1, 2, 3, 4, 5}),   # shorter cannot close longer
+        ("```\ncode\n~~~\nrest\n", {1, 2, 3, 4, 5}),    # nor a different character
+        ("a\n```\ncode\n", {2, 3, 4}),                   # unclosed runs to EOF
+        ("```\ncode\n``` \nafter\n", {1, 2, 3}),         # trailing space still closes
+        ("```\ncode\n```x\nrest\n", {1, 2, 3, 4, 5}),    # trailing anything else does not
+        ("a\n```md `x`\nnope\n", set()),                 # backtick in a backtick info string
+        ("a\n~~~md `x`\ncode\n~~~\n", {2, 3, 4}),        # but not in a tilde one
+        ("> ```\n> code\n> ```\n", set()),               # §3.3's stated limit
+    ]
+    for md, expected in cases:
+        assert L.code_lines(md) == expected, repr(md)
+
+
+def test_crlf_and_lf_twins_give_the_same_mask():
+    lf = "a\n```\ncode\n```\nb\n"
+    assert L.code_lines(lf.replace("\n", "\r\n")) == L.code_lines(lf)
+
+
+def test_a_marker_in_a_fence_identifies_no_block_and_is_hashed_with_it():
+    fence = "```md\nThe paragraph.\n<!-- stay:demo hash=sha256:7a9c -->\n```"
+    (block,) = L.parse_document(fence + "\n")
+    assert block.markers == []
+    assert block.content == L.normalize_body(fence)
+
+
+def test_two_fences_sharing_an_example_id_are_not_a_duplicate():
+    md = (
+        "```md\n<!-- stay:8f24 hash=sha256:7a9c -->\n```\n\n"
+        "```mdx\n{/* stay:8f24 hash=sha256:7a9c */}\n```\n"
+    )
+    _, findings = L.lint_document(md)
+    assert findings == [], codes(findings)
+
+
+def test_a_marker_in_an_opening_fence_info_string_is_not_a_marker():
+    blocks = L.parse_document("Intro.\n\n~~~md <!-- stay:demo -->\ncode\n~~~\n")
+    assert [b.markers for b in blocks] == [[], []]
+
+
+def test_an_inline_code_span_still_carries_a_marker():
+    # §3.3 declines inline spans on purpose: a mangled marker a tool can still
+    # see beats one that has silently stopped existing.
+    (block,) = L.parse_document("A line showing `<!-- stay:demo -->` inline.\n")
+    assert [mk.id for mk in block.markers] == ["demo"]
+
+
+def test_a_fence_only_shifts_the_markers_inside_it():
+    body = "Live content."
+    md = (
+        "```md\n<!-- stay:demo -->\n```\n\n"
+        f"{body}\n<!-- stay:demo hash=sha256:{L.body_hash(body, 4)} -->\n"
+    )
+    _, findings = L.lint_document(md)
+    assert findings == [], codes(findings)
+
+
 def _run_all():
     tests = [
         v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)

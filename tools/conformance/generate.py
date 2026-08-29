@@ -206,7 +206,15 @@ def marker_texts() -> list[str]:
         "<!-- stay:id2 hash=sha256:DEADbeef extra=1 -->",  # uppercase hex -> lowered
         "reordered\n<!-- stay:r1 hash=sha256:abcd k=v -->\nmore",
         "line0\nline1\n<!-- stay:onln2 -->\nline3",        # line number check
-        "```\n<!-- stay:infence hash=sha256:1234 -->\n```",  # marker inside a fence
+        # SPEC.md §3.3 makes this string content, not a marker, and this vector
+        # still expects `find_markers` to RETURN it. That is the point: the
+        # function is a raw grammar primitive with no document around it, so it
+        # answers the grammar question and nothing else. Every document-level
+        # consumer (parse, lint, stamp, restamp) filters this same marker out
+        # against `code_lines`, so a `markers` vector and a `parse` vector over
+        # the same text are meant to disagree here. Do not "fix" one to match
+        # the other.
+        "```\n<!-- stay:infence hash=sha256:1234 -->\n```",
         "two\n<!-- stay:m1 -->\n<!-- stay:m2 hash=sha256:beef -->",
         "<!-- stay:multi\nhash=sha256:cafe -->",            # newline inside marker (DOTALL)
         "no markers here at all",

@@ -1,5 +1,5 @@
-# markstay specification, version 1.4
-<!-- stay:umd0IOWq hash=sha256:f396e1e194e3 -->
+# markstay specification, version 1.5
+<!-- stay:umd0IOWq hash=sha256:ba0222fbb86b -->
 
 Status: **normative, stable.** This is the markstay standard, not a proposal.
 Version 1 pins the marker grammar, attachment model, hashing, and recovery
@@ -10,12 +10,15 @@ fence carry a single stay, and leaves the grammar, identity, hashing, and recove
 rules unchanged. Version 1.4 adds recommended names for the two ways quote
 recovery can refuse an attachment, while keeping plain DETACHED conforming. It
 also corrects §9.2's prose and reference implementations so permitted sibling
-context can distinguish historically duplicate child bodies at CHILD QUOTE. The
+context can distinguish historically duplicate child bodies at CHILD QUOTE.
+Version 1.5 makes text inside a fenced code block content rather than markup
+(§3.3), so a marker in an example is an example, for every fence a line scan can
+recognise. The
 reference linter (`linter/`) and the resolver used by the
 attachment eval (`eval/attachment/`) implement this document; where this document
 and the reference code disagree, this document is authoritative and the code is a
 bug.
-<!-- stay:DraQ5ZPq hash=sha256:1fbe21748db9 -->
+<!-- stay:DraQ5ZPq hash=sha256:5a0a23c806b5 -->
 
 **Version 1.3 adds §5.5 and §9.2**, which let a **direct list item carry its own
 stay**, addressed inside its list rather than as a block of its own. It is an
@@ -171,6 +174,124 @@ One data model, two serializations. A conforming tool that targets MDX MUST use
 this form; a conforming tool MUST recognise both forms on input.
 <!-- stay:BVGaybIK hash=sha256:17d57643716d -->
 
+### 3.3 A fenced code block is content (v1.5)
+
+Text inside a fenced code block is **content, not markup**. A conforming tool MUST
+NOT read a `stay:` marker there as a marker: it identifies no block, it is not removed
+from a body before hashing (§8), and it does not make the block that contains it
+stamped (§5).
+
+This is the rule every other Markdown construct already follows. A `#` inside a fence
+is not a heading and a row of pipes is not a table, because a fence means *show this,
+do not interpret it*. Version 1.4 and earlier made markstay the exception, and the
+documents that exception damages are the ones that document markstay: a tutorial, a
+README, this specification. All three of the following were observed in this file
+before the rule existed. A restamp rewrote the `hash=` values in §3.1's and §3.2's
+examples to the digest of the fence around them. The fence carrying an example marker
+could not be stamped, because the example already counted as its stay. Two fences
+showing the same example id produced a duplicate-id error that no restamp could clear.
+
+**Recognising a fence.** Both segmenters (§5) and every tool apply the same line-based
+rule, so for every fence this rule recognises, what counts as a marker does not depend
+on which segmenter a tool implements:
+
+0. The scan runs on lines split at LF, after §8's line-ending normalization, so a
+ `CRLF` document and its `LF` twin give the same answer.
+1. An **opening fence** is a line with at most three leading **spaces**, U+0020, whose
+ next characters are a run of three or more backticks or three or more tildes. A
+ backtick fence's info string MUST NOT contain a backtick. **A tab is not a space
+ here.** CommonMark expands a tab to the next four-column stop, which needs a column
+ model this rule deliberately does not have, so a tab-indented fence is not recognised
+ and falls in with the other constructs the line rule cannot see (below).
+2. It closes at the first later line with at most three leading spaces that is a run
+ of **the same character**, **at least as long** as the opener, followed by zero or
+ more of **space or tab and nothing else**. A longer run is what lets a fence contain
+ a shorter one. The whitespace set is named rather than left to "whitespace", because
+ three implementations picking three sets is the way this rule fails quietly.
+3. An unclosed fence runs to the end of the document.
+
+The fenced block is the opening line, the closing line, and everything between them.
+The fence lines are included deliberately rather than as an edge case: a marker-shaped
+string can sit in an opening fence's **info string**, where before this rule it was read
+as a marker and bound to whatever block preceded it.
+
+````text
+```md <!-- stay:example -->
+a listing whose opening fence carries a marker-shaped info string
+```
+````
+
+**A marker that crosses the boundary.** The grammar (§4) spans lines, so one
+marker-shaped string can open outside a fenced block and close inside it, or the
+reverse. A tool applying the line rule above MUST judge such a string by the line it
+**opens** on. That is the only line a reader sees it begin on, and it is the one line two
+tools can agree about without tracking where the span ends. So a marker opening outside
+a fence is a marker, and removing it from a body (§8) removes the whole span including
+the bytes that fall inside the listing; a marker-shaped string opening inside a fence is
+content, even where its closing delimiter falls after the closing fence. Neither shape occurs in a document a
+conforming writer produced, because a writer emits a marker on one line. The rule is
+here so that two readers handed the same hand-written document agree. A tool with a block
+parser has no such ambiguity to resolve, since it reads the bytes from the code node
+itself, and §5.4 already scopes where the two answers part company.
+
+**Rules for writers.** A tool MUST NOT write a marker on a line inside a fenced code
+block, and MUST NOT stamp a block whose span lies inside one. This half of the rule is
+not symmetry for its own sake: a dependency-free segmenter (§5) splits a fence that
+contains a blank line into ordinary blocks, and a stamper that treats one of those as
+stampable appends a marker *into the listing*. This specification shipped that way. Its
+§4 grammar block reads
+
+```text
+marker      = html-marker / mdx-marker
+html-marker = "<!--" *WSP "stay:" id *( 1*WSP attribute ) *WSP "-->"
+mdx-marker  = "{/*"  *WSP "stay:" id *( 1*WSP attribute ) *WSP "*/}"
+<!-- stay:NdykyfZp hash=sha256:13c245cb8520 -->
+```
+
+on the published site, where the last line is a marker a stamping run put inside the
+formal grammar. A reader can see it is not ABNF; what they cannot tell from the grammar
+is that it is a markstay marker rather than a stray comment. Under §5.2 the fence is
+one block and takes its stay after the closing fence in the ordinary way; under the
+baseline segmenter the halves of such a fence are simply not stampable, which is where
+§5.2 already arrives: a fence with internal blank lines cannot reliably carry one stay
+without the block tree.
+
+**Deliberately not covered**, in every case because a dependency-free tool cannot
+recognise the construct without the block parser §5.2 exists to avoid:
+
+- **Indented code blocks.** Four spaces is code at the top level and ordinary
+ continuation inside a list item, and telling those apart needs list context.
+- **A fence the line rule cannot see**, which is one carrying a blockquote marker
+ (`> ` ``` `) or indented more than three spaces, as a fence inside a nested list item
+ is. Recognising those means knowing the container, which is the same parser. **This is
+ the rule's real limit and it is not a small one**: a tutorial that shows its example
+ inside a blockquote is exactly the document §3.3 exists to protect, and it is not
+ protected. §5.4 records what remains divergent there.
+- **Inline code spans.** A marker inside backticks on a prose line stays a marker.
+ That is the shape pandoc's native `markdown` writer produces when it mangles a
+ trailing marker, and a mangled marker a tool can still see is better than one that
+ has silently stopped existing.
+
+**Migration**, in two cases that behave differently, and the second is the one to warn
+about:
+
+1. **The block has its own stay and also shows a marker in a fence.** Its body now
+ hashes over the marker-shaped string, where before the string was removed. If that
+ stay carries a `hash`, it reports drift once and a restamp clears it, correctly
+ this time. If it carries none, nothing compares and nothing is reported: the id
+ still identifies the block and the upgrade costs nothing. Either way no id moves.
+2. **The in-fence marker *was* the block's only stay.** Under version 1.4 a tool read
+ it as the block's marker, so the block looked stamped and never received a real one.
+ Under this rule the string is content and the block has **no stay at all**. That is
+ not drift, nothing compares against a stored hash, and no linter finding fires,
+ because an unstamped block is not an error. A restamp does not fix it: the block
+ needs a stay **minted**, so it gets a new id rather than a corrected hash. A document
+ whose two fences shared an example id lands here twice, and the duplicate error it
+ used to report disappears with the stays.
+
+Nothing about the marker grammar (§4), identity (§7), or recovery (§9) changes.
+<!-- stay:zvT5cQlG -->
+
 ## 4. Marker grammar
 <!-- stay:p3a9OsnE hash=sha256:eba0ba2af4c9 -->
 
@@ -182,7 +303,6 @@ zero or more whitespace-separated attributes.
 marker      = html-marker / mdx-marker
 html-marker = "<!--" *WSP "stay:" id *( 1*WSP attribute ) *WSP "-->"
 mdx-marker  = "{/*"  *WSP "stay:" id *( 1*WSP attribute ) *WSP "*/}"
-<!-- stay:NdykyfZp hash=sha256:13c245cb8520 -->
 
 id          = 1*( ALPHA / DIGIT / "_" / "-" )      ; required, positional
 attribute   = key "=" value
@@ -496,14 +616,21 @@ final block list. Do not read that coincidence as agreement.
 
 **One thing the subset does not cover: marker-shaped text inside literal code.**
 The boundaries agree; what each tool recognises as a *marker* inside those
-boundaries is a separate axis. The dependency-free baseline scans source text
-(§3), so it finds `<!-- stay:x -->` wherever it appears, including inside a fenced
-code block or a code span. A tree-based tool can tell that the same bytes are
-literal code, and the reference mdast adapter deliberately declines to bind them.
-Both readings are defensible and this spec does not force one: a baseline tool
-cannot implement "ignore markers in code" without the parser it exists to avoid.
-Authors should therefore **keep marker-shaped text out of code spans and fenced
-blocks**, or expect one tool to see a stay there and another not to.
+boundaries is a separate axis, and **version 1.5 settled the larger half of it**. A
+fenced code block the §3.3 line rule recognises is content to every tool, baseline or
+tree-based, so it is no longer a divergence axis at all. The premise this section
+carried until then, that a baseline tool cannot implement "ignore markers in code"
+without the parser it exists to avoid, was true of a *parser* and false of a line
+scan: recognising a top-level fence needs neither.
+
+What remains divergent is what the line rule cannot see: a fence carrying a blockquote
+marker or indented more than three spaces, an indented code block, and an inline code
+span. There the baseline still finds a marker wherever it appears, a tree-based tool
+can tell the same bytes are literal code, and the reference mdast adapter declines to
+bind them. Both readings stay defensible and this spec still does not force one. Authors
+should therefore **keep marker-shaped text out of code spans, indented code, and any
+fence that is quoted or deeply indented**, or expect one tool to see a stay there and
+another not to.
 
 **What version 1.2 changed here.** Version 1.1 stated this condition as "lists
 tight and fences free of internal blank lines", which is case 2 alone. Cases 1 and
@@ -705,8 +832,9 @@ not byte-exact change.
 <!-- stay:XZ1C6RVN hash=sha256:e11f95608f88 -->
 
 The hash input is the block's body with all markers removed (§3), normalized in
-this order:
-<!-- stay:kRGUAMQN hash=sha256:37374b0af2ac -->
+this order. A marker-shaped string inside a fenced code block is not a marker (§3.3),
+so it stays in the body and is hashed with the rest of it:
+<!-- stay:kRGUAMQN hash=sha256:09856ff76283 -->
 
 1. **Line endings → LF.** `CRLF` and lone `CR` become `LF`.
 2. **Strip trailing ASCII whitespace** (space, tab, form feed, vertical tab) from
@@ -991,8 +1119,9 @@ documents.
 | **Copy-paste duplication** | copy mints a new id (§7); tools detect and repair duplicates. |
 | **Granularity disagreement** | granularity pinned to whole blocks (§5.1); loose lists and blank-line fences are handled by CommonMark-tree attachment (§5.2). |
 | **Metadata read as content** (a `status:` flip drifts a hash; the two segmenters disagree about what frontmatter even is) | leading YAML frontmatter is excluded from segmentation under both segmenters (§5.3), so it is never stamped and never hashed. |
+| **A document about markstay damaged by markstay** (an example marker in a fence read as a real stay, so a restamp rewrites the example, the fence cannot be stamped, and two examples sharing an id are a duplicate nothing can clear) | text inside a fenced code block is content, not markup (§3.3). |
 | **Scope creep into an annotation product** | core stays at identity + resolution; annotation is a separate, layered spec (§14). |
-<!-- stay:K6J3h42A hash=sha256:1b48fcd497d0 -->
+<!-- stay:K6J3h42A hash=sha256:bbd47062a532 -->
 
 ## 14. Non-goals
 <!-- stay:x3XFUhd4 hash=sha256:2f59dc50d4cf -->
@@ -1000,10 +1129,13 @@ documents.
 - Annotation, comment storage, threads.
 - Transclusion / embedding.
 - Row-level table identity, inline-span identity.
+- Recognising **indented** code blocks or **inline** code spans as content the way
+ §3.3 recognises a fenced block. Both need context a dependency-free tool does not
+ have, and §3.3 states why each is left out.
 - Provenance tracking and knowledge-graph construction.
 - A backend, accounts, a hosted registry, or any global / cross-repo stay
  namespace.
-<!-- stay:Itv36Vd3 hash=sha256:27d3544028db -->
+<!-- stay:Itv36Vd3 hash=sha256:d9d9c9c7581f -->
 
 (Loose-list and blank-line-fence single-stay attachment was a v1 non-goal; it is
 resolved by CommonMark-tree attachment in v1.1, §5.2. List-item identity was a v1
@@ -1035,6 +1167,13 @@ See `research/` (and the site's prior-art page) for the full survey and sources.
 
 ## 16. Conformance summary
 <!-- stay:f6YC7K0X hash=sha256:d995f806087a -->
+
+Every conforming tool, whichever segmenter it implements and whether or not it
+implements §5.5, MUST apply §3.3: a marker-shaped string inside a fenced code block is
+content. It is not recognised as a marker on the read path, not removed from a body
+before hashing, and not treated as its block's stay on the write path. A tool that
+skips this damages the documents most likely to contain marker examples, which are the
+documents that explain markstay to a new adopter.
 
 A conforming linter MUST, for a single document, report: malformed markers (no id,
 §4), orphan markers (§5), duplicate ids (§7), and hash drift (§8). For a
@@ -1085,12 +1224,13 @@ NOT stamp, hash, or attach a marker to it.
 
 | Version | What it changed |
 |---------|-----------------|
+| **1.5** | Text inside a fenced code block is content, not markup (§3.3): a `stay:` marker there identifies no block, is not removed from a body before hashing (§8), and does not make its block stamped (§5). Fence recognition is line-based, so for every fence it recognises, what counts as a marker does not depend on which segmenter a tool implements, and §5.4's divergence axis narrows to what the line rule cannot see. Indented code blocks, inline code spans, and a fence that is quoted or indented more than three spaces are deliberately not covered. A block whose body contains a marker-shaped string inside a fence hashes over that string now and reports drift once; nothing else changes. |
 | **1.4** | Recommends reporting `unmatched` when quote recovery has no above-threshold candidate and `ambiguous` when a candidate reaches the threshold but fails the margin (§10), while keeping plain DETACHED conforming. A machine-readable reason, when exposed, uses those names and meanings; candidate and evidence schemas remain non-normative (§16). Also corrects §9.2's version 1.3 note and both Python references: the historical-uniqueness gate belongs to CHILD HASH tiers 3 and 4, while CHILD QUOTE may use permitted sibling context to distinguish duplicate child bodies. The commit rule, document syntax, and DETACHED outcome are unchanged. |
 | **1.3** | Adds child-block identity for direct list items (§5.5) and their resolution ladder (§9.2), carried by the new reserved key `subhash` (§4) so that a tool which does not implement the section cannot overwrite a child's evidence. Lifts the list-item half of the §5.1 deferral and the §14 non-goal; table rows and inline spans stay deferred. Segmenting and resolving child blocks is optional; two write-path rules that keep an unaware tool from damaging a child-stamped document are not (§16). A document with no child markers is unaffected under either segmenter. |
 | **1.2** | Excludes leading YAML frontmatter from segmentation under both segmenters (§5, §5.3), and restates the two segmenters' agreement condition as the agreement subset (§5.4), which v1.1 stated too narrowly. Normative change to §5; grammar, identity, hashing, and recovery unchanged. A marker already stamped onto frontmatter usually becomes an orphan error. |
 | **1.1** | Adds CommonMark-tree attachment (§5.2) as an optional segmenter, so a loose list, a blank-line fence, or a blockquote with an internal blank line can carry a single stay. Adds no requirement to a baseline tool and changes no marker's meaning; its statement of when the two segmenters agree was corrected in 1.2. |
 | **1.0** | The marker grammar (§3, §4), the identity model (§2, §7), blank-line attachment (§5), hash normalization (§8), quote recovery and the commit rule (§9), the detached state (§10), and the AI editing contract (§11). |
-<!-- stay:wpHe8SeN hash=sha256:6b3f9969296d -->
+<!-- stay:wpHe8SeN hash=sha256:cd2153074d2e -->
 
 markstay does **not** offer a compatibility guarantee across versions at this
 stage. Where a version corrects a defect, it corrects it rather than carrying the

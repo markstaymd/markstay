@@ -136,6 +136,36 @@ in a pipeline, read `--json` or the return tuple.
  every maximal run of non-blank lines is exactly one CommonMark node. In practice
  that means blank lines between constructs, tight lists, fenced rather than
  indented code, and no link reference definitions.
+- **A fenced code block is content, not markup** (`../SPEC.md` §3.3, v1.5). A
+ marker-shaped string on a line inside a fence identifies no block, is hashed with
+ the body rather than removed from it, and does not make its block stamped; the
+ write path will not put one there either. Recognition is a line scan, identical
+ under both segmenters: at most three leading **spaces** (a tab is not one) then
+ three or more backticks or tildes, a backtick fence's info string carrying no
+ backtick, closed by a run of the same character at least as long followed by
+ nothing but spaces and tabs, and an unclosed fence running to the end of the
+ document. The fence lines are part of the block, so a marker in an opening
+ fence's info string is content too.
+
+ The rule is why `find_markers` and `strip_markers` stay code-blind: they are
+ grammar-level primitives answering "is this a well-formed marker" for a string
+ with no document around it, which is what the conformance corpus needs. Whole-
+ document callers compute `code_lines(text)` once and filter against it, on the
+ frontmatter-blanking precedent.
+
+ Three things it deliberately does not cover, in each case because seeing them
+ needs the block parser the baseline exists to avoid: indented code blocks, inline
+ code spans, and a fence the line scan cannot see (one carrying a blockquote
+ marker, or indented more than three spaces, as a fence inside a nested list item
+ is). A marker there is still a marker. The sharpest case is a fence whose opener
+ shares its line with a list marker (`- ` then the backticks): the line scan
+ cannot see it open and reads the *closing* line as an opener instead. With no
+ later fence-shaped line that phantom runs to the end of the document and every
+ marker after it goes silent; with one, the phantom closes and later lines come
+ back, except for the block that straddles the close, which stays unstampable
+ because a fence was open when it started. Either way it fails closed , nothing is
+ stamped and nothing is rewritten , but nothing is identified either.
+
 - **Leading YAML frontmatter is metadata, not a block.** It is skipped by both
  segmenters: never a block, never stamped, never hashed. Without this, a
  metadata-only edit (`status: draft` -> `status: done`) drifts a content hash, and

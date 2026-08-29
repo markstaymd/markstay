@@ -18,10 +18,11 @@ optional CommonMark-tree attachment, a backward-compatible refinement so a loose
 or a blank-line-containing fence can carry a single stay. Version 1.2 excludes leading
 YAML frontmatter from segmentation, so editing `status:` is not a content edit.
 Version 1.3 lets a **direct list item carry its own stay**, addressed inside its list
-rather than as a block of its own, and version 1.4 names the two ways quote recovery
-can refuse an attachment.
+rather than as a block of its own, version 1.4 names the two ways quote recovery
+can refuse an attachment, and version 1.5 makes **text inside a fenced code block
+content rather than markup**, so a document can show a marker without acquiring one.
 
-!!! note "Status: version 1.4, settled"
+!!! note "Status: version 1.5, settled"
     The surface is small and stable. It is also young: real-world use and critique
     will shape later versions. A dogfood run found row and bullet loss about 30x more
     often than section loss when those items shared one block-level stay, which is
@@ -29,7 +30,11 @@ can refuse an attachment.
     the carrier they were waiting on has now been measured: a marker inside the last
     cell of a one-line row survives every mainstream formatter and stays invisible in
     every renderer that keeps HTML comments, so what is left is spec text rather than
-    an open question. Issues and counter-arguments are welcome.
+    an open question. **Version 1.5 carries the project's first migration**: a
+    document that shows a marker inside a fence now hashes over it, so such a block
+    drifts once and a restamp clears it, and a fence whose only marker was an example
+    is now unstamped and takes a fresh stay. No id moves. Issues and counter-arguments
+    are welcome.
 
 ## The problem
 
