@@ -81,8 +81,10 @@ after_pbs, _ = PB.reorder(bpbs)
 after_marked = PB.serialize(after_pbs, strip=False)
 res = LA.score_document(before, after_marked)
 c = cats(res)
-check("reorder: all correct (gold follows the marker)", c.get("wrong", 0) == 0
-      and c.get("correct", 0) == len(res))
+check(
+    "reorder: all correct (gold follows the marker)",
+    c.get("wrong", 0) == 0 and c.get("correct", 0) == len(res),
+)
 
 # 4. A dropped marker becomes no_truth and is excluded from recovery scoring.
 after_pbs, _ = PB.reorder(bpbs)
@@ -102,26 +104,64 @@ check("dropped marker -> gold is None", nt and nt[0].gold is None)
 
 # 5. `wrong` is reachable: edit the true block far, leave a near-twin pristine, so
 #    the resolver's closest match is the twin while the gold is the edited block.
-twin_before = make_doc([
-    ("The ingest stage retries failed operations three times before giving up.", "a1"),
-    ("The ingest stage retries failed operations four times before giving up.", "b1"),
-])
-twin_after = make_doc([
-    ("A completely unrelated sentence about deployment scheduling and audit logs.", "a1"),
-    ("The ingest stage retries failed operations four times before giving up.", "b1"),
-])
+twin_before = make_doc(
+    [
+        (
+            "The ingest stage retries failed operations three times before giving up.",
+            "a1",
+        ),
+        (
+            "The ingest stage retries failed operations four times before giving up.",
+            "b1",
+        ),
+    ]
+)
+twin_after = make_doc(
+    [
+        (
+            "A completely unrelated sentence about deployment scheduling and audit logs.",
+            "a1",
+        ),
+        (
+            "The ingest stage retries failed operations four times before giving up.",
+            "b1",
+        ),
+    ]
+)
 res = LA.score_document(twin_before, twin_after)
 by_id = {r.id: r for r in res}
 check("twin: id a1 is scored (ground-truthable)", by_id["a1"].cat != "no_truth")
 check("twin: id a1 false-attaches to the pristine twin", by_id["a1"].cat == "wrong")
-check("twin: a1 gold is its edited block, target is the twin",
-      by_id["a1"].gold == 0 and by_id["a1"].target == 1)
+check(
+    "twin: a1 gold is its edited block, target is the twin",
+    by_id["a1"].gold == 0 and by_id["a1"].target == 1,
+)
 
 # 6. recovery_falserate math.
-rec, fr, n = LA.recovery_falserate({"correct": 8, "wrong": 1, "missed": 1, "no_truth": 5})
+rec, fr, n = LA.recovery_falserate(
+    {"correct": 8, "wrong": 1, "missed": 1, "no_truth": 5}
+)
 check("rate math: scored excludes no_truth", n == 10)
 check("rate math: recovery", abs(rec - 0.8) < 1e-9)
 check("rate math: false-rate", abs(fr - 0.1) < 1e-9)
+
+# Block-level gold follows §16: exact `subhash` key presence prevents container
+# attribution even when its value is invalid. A custom key merely ending in the
+# reserved name remains ordinary block metadata.
+_subhash_gold = LA.ground_truth(
+    "Child body.\n<!-- stay:child subhash=bogus -->\n\n"
+    "Extension body.\n<!-- stay:extension x-subhash=sha256:abcd -->\n",
+    "Child body.\n<!-- stay:child subhash=bogus -->\n\n"
+    "Extension body.\n<!-- stay:extension x-subhash=sha256:abcd -->\n",
+)
+check(
+    "ground truth: subhash marker is not block gold",
+    "child" not in _subhash_gold.id_to_idx,
+)
+check(
+    "ground truth: x-subhash marker remains block gold",
+    _subhash_gold.id_to_idx.get("extension") == 1,
+)
 
 # 7. band_label boundaries (half-open bands).
 check("band 0.29 -> 0.0-0.3", LA.band_label(0.29) == "0.0-0.3")
@@ -132,7 +172,9 @@ check("band 1.00 -> 0.9-1.0", LA.band_label(1.0) == "0.9-1.0")
 # 8. similarity is symmetric-ish and bounded.
 s = LA.similarity("the quick brown fox", "the quick brown FOX")
 check("similarity casefolds to ~1.0", s > 0.99)
-check("similarity of unrelated is low", LA.similarity("alpha beta", "zulu yankee") < 0.3)
+check(
+    "similarity of unrelated is low", LA.similarity("alpha beta", "zulu yankee") < 0.3
+)
 
 # 9. strip_outer_fence peels a whole-document markdown fence but keeps inner fences.
 wrapped = "```markdown\n# Title\n\nbody\n\n```python\nx=1\n```\n```"
@@ -140,13 +182,20 @@ peeled = LA.strip_outer_fence(wrapped)
 check("strip_outer_fence: removes outer wrapper", peeled.startswith("# Title"))
 check("strip_outer_fence: keeps inner code fence", "```python" in peeled)
 plain = "# Title\n\nbody"
-check("strip_outer_fence: leaves unfenced text alone", LA.strip_outer_fence(plain) == plain)
+check(
+    "strip_outer_fence: leaves unfenced text alone",
+    LA.strip_outer_fence(plain) == plain,
+)
 
 # 10. strip_markers removes both syntaxes.
-check("strip_markers: html gone",
-      "stay:" not in LA.strip_markers("x\n<!-- stay:z hash=sha256:ab -->"))
-check("strip_markers: mdx gone",
-      "stay:" not in LA.strip_markers("x\n{/* stay:z hash=sha256:ab */}"))
+check(
+    "strip_markers: html gone",
+    "stay:" not in LA.strip_markers("x\n<!-- stay:z hash=sha256:ab -->"),
+)
+check(
+    "strip_markers: mdx gone",
+    "stay:" not in LA.strip_markers("x\n{/* stay:z hash=sha256:ab */}"),
+)
 
 
 # 11. Item granularity: the child pipeline, offline.
@@ -155,45 +204,56 @@ import run_llm_attach_eval as RUN  # noqa: E402
 
 _ITEM_DOC = RUN.annotate_items(RUN.load_doc("list_tracker"), "list_tracker")
 
-check("item: fixtures carry parent and child markers",
-      "subhash=sha256:" in _ITEM_DOC and "hash=sha256:" in _ITEM_DOC)
+check(
+    "item: fixtures carry parent and child markers",
+    "subhash=sha256:" in _ITEM_DOC and "hash=sha256:" in _ITEM_DOC,
+)
 
 # Identity rewrite: markers preserved perfectly, so every id has clean gold and
 # the stripped doc still resolves. This is the pipeline's floor, not its result.
 _identity = LA.score_document_items(_ITEM_DOC, _ITEM_DOC)
-check("item: identity rewrite scores every child",
-      len(_identity) > 15 and all(r.cat == "correct" for r in _identity))
+check(
+    "item: identity rewrite scores every child",
+    len(_identity) > 15 and all(r.cat == "correct" for r in _identity),
+)
 
 # A dropped bullet has no trustworthy gold label and must be excluded, never
 # guessed at: `no_truth`, not `wrong`.
 _lines = _ITEM_DOC.split("\n")
 _dropped = "\n".join(l for l in _lines if "Retire the alpha node" not in l)
 _after_drop = LA.score_document_items(_ITEM_DOC, _dropped)
-check("item: dropped bullet excluded as no_truth",
-      any(r.cat == "no_truth" for r in _after_drop))
-check("item: dropping one bullet never manufactures a false attachment",
-      not any(r.cat == "wrong" for r in _after_drop))
+check(
+    "item: dropped bullet excluded as no_truth",
+    any(r.cat == "no_truth" for r in _after_drop),
+)
+check(
+    "item: dropping one bullet never manufactures a false attachment",
+    not any(r.cat == "wrong" for r in _after_drop),
+)
 
 # The prompt must name the child marker form, or the model has no way to know
 # the inline `subhash=` tokens are load-bearing.
 _prompt = LA.build_item_prompt("restructure", _ITEM_DOC)
-check("item: prompt describes the subhash marker form",
-      "subhash=sha256:HEX" in _prompt)
-check("item: prompt pins lists one-to-one",
-      "same list items in the same" in _prompt)
+check("item: prompt describes the subhash marker form", "subhash=sha256:HEX" in _prompt)
+check("item: prompt pins lists one-to-one", "same list items in the same" in _prompt)
 
 # Stored paid-model output can be reaggregated without a provider or API key.
 with tempfile.TemporaryDirectory() as _replay_dir:
     _replay_out = Path(_replay_dir) / "item"
     _report, _n, _rec, _fr, _excluded = RUN.replay_results(
-        Path(__file__).parent / "results_item.json", _replay_out)
+        Path(__file__).parent / "results_item.json", _replay_out
+    )
     _report_text = Path(_report).read_text()
     check("item: stored replay reproduces the published scored count", _n == 256)
     check("item: stored replay reproduces zero false attachment", _fr == 0.0)
-    check("item: stored replay reports every observed resolution tier",
-          "| parent-hash | 33 |" in _report_text)
-    check("item: stored replay is report-only",
-          not _replay_out.with_suffix(".json").exists())
+    check(
+        "item: stored replay reports every observed resolution tier",
+        "| parent-hash | 33 |" in _report_text,
+    )
+    check(
+        "item: stored replay is report-only",
+        not _replay_out.with_suffix(".json").exists(),
+    )
 
 # A rewrite that merges two bullets breaks the one-to-one mapping the eval
 # depends on. Whatever the pipeline does with it, the one unacceptable outcome
@@ -204,8 +264,10 @@ _merged = _ITEM_DOC.replace(
 )
 try:
     _after_merge = LA.score_document_items(_ITEM_DOC, _merged)
-    check("item: merged bullets never score as a false attachment",
-          not any(r.cat == "wrong" for r in _after_merge))
+    check(
+        "item: merged bullets never score as a false attachment",
+        not any(r.cat == "wrong" for r in _after_merge),
+    )
 except AssertionError:
     # Segmentation drift detected and refused, which is the stricter outcome.
     check("item: merged bullets never score as a false attachment", True)

@@ -19,22 +19,24 @@ or a blank-line-containing fence can carry a single stay. Version 1.2 excludes l
 YAML frontmatter from segmentation, so editing `status:` is not a content edit.
 Version 1.3 lets a **direct list item carry its own stay**, addressed inside its list
 rather than as a block of its own, version 1.4 names the two ways quote recovery
-can refuse an attachment, and version 1.5 makes **text inside a fenced code block
-content rather than markup**, so a document can show a marker without acquiring one.
+can refuse an attachment, version 1.5 makes **text inside a fenced code block
+content rather than markup**, so a document can show a marker without acquiring one,
+and version 1.6 gives **a GFM table body row its own stay** on the same key and the
+same ladder as a list item.
 
-!!! note "Status: version 1.5, settled"
+!!! note "Status: version 1.6, settled"
     The surface is small and stable. It is also young: real-world use and critique
     will shape later versions. A dogfood run found row and bullet loss about 30x more
     often than section loss when those items shared one block-level stay, which is
-    what version 1.3 answers for list items. **Table rows are still deferred**, and
-    the carrier they were waiting on has now been measured: a marker inside the last
+    what version 1.3 answers for list items and version 1.6 answers for table rows.
+    **Rows waited on a measurement rather than on a design**: a marker inside the last
     cell of a one-line row survives every mainstream formatter and stays invisible in
-    every renderer that keeps HTML comments, so what is left is spec text rather than
-    an open question. **Version 1.5 carries the project's first migration**: a
-    document that shows a marker inside a fence now hashes over it, so such a block
-    drifts once and a restamp clears it, and a fence whose only marker was an example
-    is now unstamped and takes a fresh stay. No id moves. Issues and counter-arguments
-    are welcome.
+    every renderer that keeps HTML comments, and only once that held did §5.6 get
+    written. Inline spans stay deferred. **Version 1.6 also adds one rule that binds
+    every reader**: a marker carrying `subhash` must never be reported as the stay of
+    the block containing it, which a row makes worth enforcing, since a row marker
+    sits mid-block and a whole table's rows could otherwise be handed to a consumer as
+    one block's stays. Issues and counter-arguments are welcome.
 
 ## The problem
 

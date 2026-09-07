@@ -64,12 +64,13 @@ which is the entire reason the spec carries the §3.2 comment-expression profile
 
 ## Table-row carrier
 
-Row-level identity is [deferred](spec.md#14-non-goals), and the spec says exactly what
-it is deferred *on*: table rows stay out "until that carrier is shown to survive real
-renderers". A GFM row is one line, so a row marker has one position available to it,
+Row-level identity is [specified](spec.md#56-child-block-identity-table-rows-v16), and
+this measurement is what it rests on: until version 1.6 the spec deferred rows "until
+that carrier is shown to survive real renderers", and the run below is that
+demonstration. A GFM row is one line, so a row marker has one position available to it,
 inside the **last cell**, before the closing pipe. Nothing else in this matrix covered
 that placement, because the table fixture puts its marker on its own line after the
-table. It is measured now.
+table.
 
 ```md
 | fruit  | crates | note                                                 |
@@ -97,11 +98,13 @@ off its row still passes a "was it dropped, was it relocated to the wrong block"
 The matrix now also asserts that a marker which entered on a row comes out on a line
 still carrying that row's other cells.
 
-**One design note the run produced, for whoever writes the row spec text.** A row's
-drift evidence has to be computed over the cell's **trimmed content** rather than its
-source slice: [§8](spec.md#8-hash-normalization) strips trailing whitespace per line but
-does not collapse interior whitespace, and every table formatter re-pads cells, so a
-source-slice hash would drift on a `prettier` run that changed nothing.
+**One design note the run produced, and §5.6 took it.** A row's drift evidence has to
+be computed over the cell's **trimmed content** rather than its source slice:
+[§8](spec.md#8-hash-normalization) strips trailing whitespace per line but does not
+collapse interior whitespace, and every table formatter re-pads cells, so a
+source-slice hash would drift on a `prettier` run that changed nothing. The row body in
+§5.6 is therefore the row's cells trimmed, reversibly escaped, and joined, which also
+keeps cell boundaries from colliding.
 
 ## Anchor after a sanitizer (`rehype-stay`'s `id=`)
 

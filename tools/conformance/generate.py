@@ -216,7 +216,7 @@ def marker_texts() -> list[str]:
         # the other.
         "```\n<!-- stay:infence hash=sha256:1234 -->\n```",
         "two\n<!-- stay:m1 -->\n<!-- stay:m2 hash=sha256:beef -->",
-        "<!-- stay:multi\nhash=sha256:cafe -->",            # newline inside marker (DOTALL)
+        '<!-- stay:multi x-note="line one\nline two" hash=sha256:cafe -->',
         "no markers here at all",
     ]
 

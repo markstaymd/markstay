@@ -53,7 +53,13 @@ def _run(base, op, strip, threshold=0.5, margin=R.DEFAULT_MARGIN):
 
 
 def cats(anchors, truth, res):
-    out = {"correct": 0, "wrong": 0, "missed": 0, "correct_detach": 0, "false_attach": 0}
+    out = {
+        "correct": 0,
+        "wrong": 0,
+        "missed": 0,
+        "correct_detach": 0,
+        "false_attach": 0,
+    }
     for a in anchors:
         r, t = res[a.id], truth[a.id]
         if t["accept"] is None:
@@ -69,30 +75,70 @@ def cats(anchors, truth, res):
 
 # --- anchors / parsing reuse ---------------------------------------------
 
+
 def test_anchors_one_per_block():
     before, pbs = PB.annotate(DOC1)
     anchors = R.build_anchors(before)
     n_blocks = sum(len(pb.ids) for pb in pbs)
     check("one anchor per identified block", len(anchors) == n_blocks)
-    check("anchor ids match block ids",
-          {a.id for a in anchors} == {i for pb in pbs for i in pb.ids})
+    check(
+        "anchor ids match block ids",
+        {a.id for a in anchors} == {i for pb in pbs for i in pb.ids},
+    )
+
+
+def test_subhash_markers_are_not_block_anchors_or_marker_tier_hits():
+    before = (
+        "Child-addressed body.\n"
+        "<!-- stay:child subhash=bogus -->\n\n"
+        "Extension-key body.\n"
+        "<!-- stay:extension x-subhash=sha256:abcd -->\n"
+    )
+    anchors = R.build_anchors(before)
+    check(
+        "subhash marker does not build a block anchor",
+        {a.id for a in anchors} == {"extension"},
+    )
+
+    external = R.Anchor(
+        id="child",
+        hash="not-a-body-hash",
+        selector=Selector("text that cannot match the after document"),
+    )
+    result = R.resolve([external], before)["child"]
+    check("subhash marker is not a block MARKER-tier hit", result.method != "marker")
+    legacy = _legacy_resolve_map([external], before)["child"]
+    check(
+        "frozen resolver map also refuses a subhash MARKER-tier hit",
+        legacy[0] != "marker",
+    )
 
 
 # --- tiers ----------------------------------------------------------------
 
+
 def test_marker_tier():
     anchors, truth, res = _run(DOC1, "reorder", strip=False)
-    check("markers kept -> all resolve by marker",
-          all(res[a.id].method == "marker" for a in anchors))
-    check("markers kept -> all correct", cats(anchors, truth, res)["correct"] == len(anchors))
+    check(
+        "markers kept -> all resolve by marker",
+        all(res[a.id].method == "marker" for a in anchors),
+    )
+    check(
+        "markers kept -> all correct",
+        cats(anchors, truth, res)["correct"] == len(anchors),
+    )
 
 
 def test_hash_tier():
     anchors, truth, res = _run(DOC1, "reorder", strip=True)
-    check("stripped + reorder -> hash recovers every block",
-          all(res[a.id].method == "hash" for a in anchors))
-    check("stripped + reorder -> all correct, none wrong",
-          cats(anchors, truth, res)["wrong"] == 0)
+    check(
+        "stripped + reorder -> hash recovers every block",
+        all(res[a.id].method == "hash" for a in anchors),
+    )
+    check(
+        "stripped + reorder -> all correct, none wrong",
+        cats(anchors, truth, res)["wrong"] == 0,
+    )
 
 
 def test_quote_tier():
@@ -110,12 +156,15 @@ def test_every_anchor_resolved():
 
 # --- structural edits -----------------------------------------------------
 
+
 def test_delete_detaches():
     anchors, truth, res = _run(DOC1, "delete", strip=True)
     deleted = [a.id for a in anchors if truth[a.id]["accept"] is None]
     check("delete produces at least one detach target", len(deleted) >= 1)
-    check("deleted ids resolve to DETACHED",
-          all(res[i].method == "detached" for i in deleted))
+    check(
+        "deleted ids resolve to DETACHED",
+        all(res[i].method == "detached" for i in deleted),
+    )
     check("delete -> no false attach", cats(anchors, truth, res)["false_attach"] == 0)
 
 
@@ -125,20 +174,26 @@ def test_split_lands_on_a_child():
     check("split marks a multi-child acceptance set", len(split_ids) >= 1)
     for i in split_ids:
         r = res[i]
-        check(f"split id {i} lands on a child or safely detaches",
-              r.method == "detached" or r.target in truth[i]["accept"])
+        check(
+            f"split id {i} lands on a child or safely detaches",
+            r.method == "detached" or r.target in truth[i]["accept"],
+        )
 
 
 def test_merge_both_ids_to_merged_block():
     # On distinct (non-adversarial) blocks the merged pair should co-locate.
     anchors, truth, res = _run(DOC1, "merge", strip=True)
-    check("merge on distinct blocks -> no false attach",
-          cats(anchors, truth, res)["false_attach"] == 0)
-    check("merge on distinct blocks -> no wrong",
-          cats(anchors, truth, res)["wrong"] == 0)
+    check(
+        "merge on distinct blocks -> no false attach",
+        cats(anchors, truth, res)["false_attach"] == 0,
+    )
+    check(
+        "merge on distinct blocks -> no wrong", cats(anchors, truth, res)["wrong"] == 0
+    )
 
 
 # --- the guard ------------------------------------------------------------
+
 
 def test_clone_refuses_to_guess():
     # An identical twin with the marker stripped is unrecoverable; the resolver
@@ -152,7 +207,9 @@ def test_clone_refuses_to_guess():
 def test_margin_guard_reduces_false_attach():
     # The adversarial fixture is the only place a false attach is reachable.
     _, _, res_off = _run(ADV, "edit_in_place", strip=True, threshold=0.3, margin=0.0)
-    anchors, truth, res_on = _run(ADV, "edit_in_place", strip=True, threshold=0.5, margin=0.05)
+    anchors, truth, res_on = _run(
+        ADV, "edit_in_place", strip=True, threshold=0.5, margin=0.05
+    )
     a2, t2, _ = _run(ADV, "edit_in_place", strip=True, threshold=0.3, margin=0.0)
     wrong_off = cats(a2, t2, res_off)["wrong"]
     wrong_on = cats(anchors, truth, res_on)["wrong"]
@@ -164,15 +221,21 @@ def test_adversarial_is_harder_than_realistic():
     a1, t1, r1 = _run(DOC1, "edit_in_place", strip=True)
     a2, t2, r2 = _run(ADV, "edit_in_place", strip=True)
     check("realistic blocks: 0 wrong", cats(a1, t1, r1)["wrong"] == 0)
-    check("near-duplicate blocks: recovery is strictly harder",
-          cats(a2, t2, r2)["wrong"] + cats(a2, t2, r2)["missed"] >= 1)
+    check(
+        "near-duplicate blocks: recovery is strictly harder",
+        cats(a2, t2, r2)["wrong"] + cats(a2, t2, r2)["missed"] >= 1,
+    )
 
 
 # --- quote matcher units --------------------------------------------------
 
+
 def test_quote_matcher():
-    cands = ["the quick brown fox jumps", "a totally different sentence here",
-             "the quick brown fox leaps high"]
+    cands = [
+        "the quick brown fox jumps",
+        "a totally different sentence here",
+        "the quick brown fox leaps high",
+    ]
     idx, score, runner = best_match(Selector(quote="the quick brown fox jumps"), cands)
     check("exact quote wins", idx == 0 and score == 1.0)
     idx2, score2, _ = best_match(Selector(quote="completely unrelated text xyz"), cands)
@@ -181,54 +244,79 @@ def test_quote_matcher():
 
 # --- determinism ----------------------------------------------------------
 
+
 def test_determinism():
     a, t, r1 = _run(ADV, "heavy_paraphrase", strip=True)
     _, _, r2 = _run(ADV, "heavy_paraphrase", strip=True)
-    check("resolution is deterministic",
-          all(r1[x.id].target == r2[x.id].target for x in a))
+    check(
+        "resolution is deterministic",
+        all(r1[x.id].target == r2[x.id].target for x in a),
+    )
 
 
 # --- CommonMark-tree attachment (SPEC.md §5.2, v1.1) ----------------------
+
 
 def test_commonmark_loose_list_binds_whole_list():
     # The §5.2 contrast: the `list` stay binds the *last item* under blank-line
     # segmentation but the *whole list* under commonmark. (Both modes yield 3
     # anchors, since only marked blocks anchor and the bare items carry none.)
-    before = ("Intro paragraph here.\n<!-- stay:intro -->\n\n"
-              "- item one\n\n- item two\n\n- item three\n<!-- stay:list -->\n\n"
-              "Closing paragraph here.\n<!-- stay:close -->\n")
+    before = (
+        "Intro paragraph here.\n<!-- stay:intro -->\n\n"
+        "- item one\n\n- item two\n\n- item three\n<!-- stay:list -->\n\n"
+        "Closing paragraph here.\n<!-- stay:close -->\n"
+    )
     a_bl = {a.id: a for a in R.build_anchors(before, mode="blank-line")}
     a_cm = {a.id: a for a in R.build_anchors(before, mode="commonmark")}
-    check("blank-line: list stay binds the last item only (the §5.2 limit)",
-          a_bl["list"].selector.quote == "- item three")
-    check("commonmark: list stay binds the whole loose list",
-          all(x in a_cm["list"].selector.quote
-              for x in ("item one", "item two", "item three")))
+    check(
+        "blank-line: list stay binds the last item only (the §5.2 limit)",
+        a_bl["list"].selector.quote == "- item three",
+    )
+    check(
+        "commonmark: list stay binds the whole loose list",
+        all(
+            x in a_cm["list"].selector.quote
+            for x in ("item one", "item two", "item three")
+        ),
+    )
 
 
 def test_commonmark_loose_list_recovers_as_whole_block():
     # Strip every marker and move the loose list to the top. commonmark mode must
     # recover the whole list as a single block via the hash tier, no false attach.
-    before = ("Intro paragraph here.\n<!-- stay:intro -->\n\n"
-              "- item one\n\n- item two\n\n- item three\n<!-- stay:list -->\n\n"
-              "Closing paragraph here.\n<!-- stay:close -->\n")
-    after = ("- item one\n\n- item two\n\n- item three\n\n"
-             "Intro paragraph here.\n\nClosing paragraph here.\n")
+    before = (
+        "Intro paragraph here.\n<!-- stay:intro -->\n\n"
+        "- item one\n\n- item two\n\n- item three\n<!-- stay:list -->\n\n"
+        "Closing paragraph here.\n<!-- stay:close -->\n"
+    )
+    after = (
+        "- item one\n\n- item two\n\n- item three\n\n"
+        "Intro paragraph here.\n\nClosing paragraph here.\n"
+    )
     anchors = R.build_anchors(before, mode="commonmark")
     res = R.resolve(anchors, after, mode="commonmark")
     check("loose list recovered by the hash tier", res["list"].method == "hash")
-    after_blocks = [b for b in R.L.parse_document(after, mode="commonmark") if b.index >= 0]
+    after_blocks = [
+        b for b in R.L.parse_document(after, mode="commonmark") if b.index >= 0
+    ]
     tgt = after_blocks[res["list"].target].content
-    check("recovered target is the whole list",
-          "item one" in tgt and "item three" in tgt)
-    check("every other stay also recovered (no detach on a survivor)",
-          res["intro"].method == "hash" and res["close"].method == "hash")
+    check(
+        "recovered target is the whole list", "item one" in tgt and "item three" in tgt
+    )
+    check(
+        "every other stay also recovered (no detach on a survivor)",
+        res["intro"].method == "hash" and res["close"].method == "hash",
+    )
 
 
 def test_commonmark_blank_line_fence_recovers_as_whole_block():
-    before = ("Lead-in line.\n<!-- stay:lead -->\n\n"
-              "```py\nx = 1\n\ny = 2\n```\n<!-- stay:code -->\n")
-    after = ("```py\nx = 1\n\ny = 2\n```\n\nLead-in line.\n")  # markers stripped, fence moved
+    before = (
+        "Lead-in line.\n<!-- stay:lead -->\n\n"
+        "```py\nx = 1\n\ny = 2\n```\n<!-- stay:code -->\n"
+    )
+    after = (
+        "```py\nx = 1\n\ny = 2\n```\n\nLead-in line.\n"  # markers stripped, fence moved
+    )
     anchors = R.build_anchors(before, mode="commonmark")
     check("fence with internal blank is one anchor", len(anchors) == 2)
     res = R.resolve(anchors, after, mode="commonmark")
@@ -246,67 +334,80 @@ def test_heading_level_reads_atx_and_setext():
     check("setext h1", PB.heading_level("Title\n=====") == 1)
     check("setext h2", PB.heading_level("Appendix\n--------") == 2)
     check("paragraph is not a heading", PB.heading_level("Just prose.") == 0)
-    check("a thematic break is not a setext heading",
-          PB.heading_level("---") == 0)
-    check("hash without a space is not an ATX heading",
-          PB.heading_level("#notaheading") == 0)
+    check("a thematic break is not a setext heading", PB.heading_level("---") == 0)
+    check(
+        "hash without a space is not an ATX heading",
+        PB.heading_level("#notaheading") == 0,
+    )
 
 
 def test_cross_section_move_keeps_every_id_and_block():
     _, pbs = PB.annotate(XSEC)
     out, adj = PB.cross_section_move(pbs)
     check("move drops no block", len(out) == len(pbs))
-    check("move drops no id",
-          sorted(i for p in out for i in p.ids) ==
-          sorted(i for p in pbs for i in p.ids))
-    check("move overrides no ground truth (SPEC.md 2.2: movement is survivable)",
-          adj == {})
-    check("something actually moved",
-          [p.text for p in out] != [p.text for p in pbs])
+    check(
+        "move drops no id",
+        sorted(i for p in out for i in p.ids) == sorted(i for p in pbs for i in p.ids),
+    )
+    check(
+        "move overrides no ground truth (SPEC.md 2.2: movement is survivable)",
+        adj == {},
+    )
+    check("something actually moved", [p.text for p in out] != [p.text for p in pbs])
 
 
 def test_section_move_relocates_a_whole_section_intact():
     _, pbs = PB.annotate(XSEC)
     out, _ = PB.section_move(pbs)
-    check("section move preserves the multiset of blocks",
-          sorted(p.text for p in out) == sorted(p.text for p in pbs))
+    check(
+        "section move preserves the multiset of blocks",
+        sorted(p.text for p in out) == sorted(p.text for p in pbs),
+    )
     heads = [i for i, p in enumerate(out) if PB.heading_level(p.text)]
-    moved = out[heads[-1]:] if heads else []
-    check("the relocated section still leads with its heading",
-          bool(moved) and PB.heading_level(moved[0].text) > 0)
+    moved = out[heads[-1] :] if heads else []
+    check(
+        "the relocated section still leads with its heading",
+        bool(moved) and PB.heading_level(moved[0].text) > 0,
+    )
 
 
 def test_heading_rename_keeps_levels_and_ids():
     _, pbs = PB.annotate(XSEC)
     out, _ = PB.heading_rename(pbs)
     before = [PB.heading_level(p.text) for p in pbs]
-    check("rename preserves every heading level", before ==
-          [PB.heading_level(p.text) for p in out])
+    check(
+        "rename preserves every heading level",
+        before == [PB.heading_level(p.text) for p in out],
+    )
     check("rename preserves block count", len(out) == len(pbs))
     renamed = [a.text != b.text for a, b in zip(pbs, out)]
     check("rename touches some headings but not all", any(renamed))
-    check("rename touches no body block",
-          all(not changed or PB.heading_level(a.text)
-              for a, changed in zip(pbs, renamed)))
+    check(
+        "rename touches no body block",
+        all(
+            not changed or PB.heading_level(a.text) for a, changed in zip(pbs, renamed)
+        ),
+    )
 
 
 def test_heading_delete_forces_its_own_id_to_detach():
     _, pbs = PB.annotate(XSEC)
     out, adj = PB.heading_delete(pbs)
     check("delete removes exactly one block", len(out) == len(pbs) - 1)
-    check("the deleted heading's id must detach",
-          len(adj) == 1 and all(v["accept"] is None for v in adj.values()))
-    gone = (set(i for p in pbs for i in p.ids) -
-            set(i for p in out for i in p.ids))
+    check(
+        "the deleted heading's id must detach",
+        len(adj) == 1 and all(v["accept"] is None for v in adj.values()),
+    )
+    gone = set(i for p in pbs for i in p.ids) - set(i for p in out for i in p.ids)
     check("the detaching id is the deleted heading's", gone == set(adj))
 
 
 def test_cross_section_fixture_is_segmenter_agnostic():
     bl = [b.content for b in R.L.parse_document(XSEC) if b.index >= 0]
-    cm = [b.content for b in R.L.parse_document(XSEC, mode="commonmark")
-          if b.index >= 0]
-    check("fixture parses identically under both segmenters (SPEC.md 5.4)",
-          bl == cm)
+    cm = [
+        b.content for b in R.L.parse_document(XSEC, mode="commonmark") if b.index >= 0
+    ]
+    check("fixture parses identically under both segmenters (SPEC.md 5.4)", bl == cm)
 
 
 def test_cross_section_fixture_holds_both_twin_classes():
@@ -314,15 +415,22 @@ def test_cross_section_fixture_holds_both_twin_classes():
     *and* the case it provably cannot touch. Assert both are present, so a later
     edit cannot quietly turn it into a one-sided corpus."""
     import run_attach_eval as RA
+
     shape = RA.fixture_shape(XSEC, 1)
-    check("has cross-section rivals (the target class)",
-          shape["cross_section_blocks"] > 0)
-    check("has same-section-only rivals (the negative control)",
-          shape["same_section_only_blocks"] > 0)
-    check("has uncontested blocks (the regression guard)",
-          shape["uncontested_blocks"] > 0)
-    check("clears the ~1% bar's sizing rule at 13 operators",
-          shape["cross_section_blocks"] * 13 >= 300)
+    check(
+        "has cross-section rivals (the target class)", shape["cross_section_blocks"] > 0
+    )
+    check(
+        "has same-section-only rivals (the negative control)",
+        shape["same_section_only_blocks"] > 0,
+    )
+    check(
+        "has uncontested blocks (the regression guard)", shape["uncontested_blocks"] > 0
+    )
+    check(
+        "clears the ~1% bar's sizing rule at 13 operators",
+        shape["cross_section_blocks"] * 13 >= 300,
+    )
 
 
 # --- the heading-path experiment (all flags default to off) ----------------
@@ -356,11 +464,13 @@ def test_no_stored_path_makes_every_arm_inert():
     guard a bonus arm rewards every candidate for matching the empty path, and
     a filter arm keeps only candidates that are equally unscoped."""
     import heading_arms as HA
+
     flat = HA.strip_headings(DOC1)
     for op in ("edit_in_place", "clone"):
         control, _, anchors = _resolve_all(flat, op)
-        check(f"{op}: no anchor stored a path",
-              all(not a.heading_path for a in anchors))
+        check(
+            f"{op}: no anchor stored a path", all(not a.heading_path for a in anchors)
+        )
         for mode in ("bonus", "penalty", "filter"):
             arm, _, _ = _resolve_all(flat, op, heading_path=mode)
             check(f"{op}: {mode} is inert with no stored path", _same(control, arm))
@@ -369,12 +479,13 @@ def test_no_stored_path_makes_every_arm_inert():
 def test_blockquote_nested_headings_do_not_scope_blocks():
     """A heading inside a blockquote does not change outer structure, so a
     document written that way carries no paths and every arm stays inert."""
-    md = ("> # Quoted heading\n\nThe ingest stage validates each record before "
-          "the queue accepts it.\n\n> ## Another quoted heading\n\nThe dispatch "
-          "stage validates each record before the queue accepts it.\n")
+    md = (
+        "> # Quoted heading\n\nThe ingest stage validates each record before "
+        "the queue accepts it.\n\n> ## Another quoted heading\n\nThe dispatch "
+        "stage validates each record before the queue accepts it.\n"
+    )
     control, _, anchors = _resolve_all(md, "edit_in_place")
-    check("blockquote headings store no path",
-          all(not a.heading_path for a in anchors))
+    check("blockquote headings store no path", all(not a.heading_path for a in anchors))
     for mode in ("bonus", "penalty", "filter"):
         arm, _, _ = _resolve_all(md, "edit_in_place", heading_path=mode)
         check(f"blockquote headings: {mode} is inert", _same(control, arm))
@@ -384,8 +495,10 @@ def test_penalty_cannot_lift_a_candidate_over_the_commit_threshold():
     """The bonus form can: body at the noise floor plus a full context stack
     plus a heading bonus can cross 0.5 on non-body evidence. A penalty only ever
     lowers a mismatched candidate, so the commit bar stays a body-score bar."""
-    sel = Selector(quote="the ingest stage validates each record",
-                   heading_path=("Deploy", "Ingest"))
+    sel = Selector(
+        quote="the ingest stage validates each record",
+        heading_path=("Deploy", "Ingest"),
+    )
     cands = ["something else entirely, unrelated words here", "and another one"]
     paths = [["Deploy", "Ingest"], ["Other"]]
     _, base, _ = best_match(sel, cands)
@@ -407,8 +520,10 @@ def test_a_uniform_bonus_is_not_a_no_op_under_the_clamp():
         bonus, _, _ = _resolve_all(ADV, op, heading_path="bonus")
         penalty, _, _ = _resolve_all(ADV, op, heading_path="penalty")
         moved = moved or detached(bonus) > detached(control)
-        check(f"{op}: a penalty leaves the single-section control untouched",
-              _same(control, penalty))
+        check(
+            f"{op}: a penalty leaves the single-section control untouched",
+            _same(control, penalty),
+        )
     check("a clamped bonus detaches more on a single-section document", moved)
 
 
@@ -420,29 +535,41 @@ def test_a_filter_cannot_recover_a_block_that_changed_section():
     shipped."""
     op = "cross_section_move_edit"
     control, truth, _ = _resolve_all(XSEC, op)
-    moved = [i for i, t in truth.items()
-             if control[i].method == "quote" and control[i].target in (t["accept"] or ())]
-    check("the shipped resolver recovers a moved, drifted block by quote",
-          bool(moved))
+    moved = [
+        i
+        for i, t in truth.items()
+        if control[i].method == "quote" and control[i].target in (t["accept"] or ())
+    ]
+    check("the shipped resolver recovers a moved, drifted block by quote", bool(moved))
     pen, _, _ = _resolve_all(XSEC, op, heading_path="penalty")
     filt, _, _ = _resolve_all(XSEC, op, heading_path="filter")
-    check("a penalty still recovers it",
-          all(pen[i].target == control[i].target for i in moved))
-    check("a filter detaches at least one of them",
-          any(filt[i].method == "detached" for i in moved))
+    check(
+        "a penalty still recovers it",
+        all(pen[i].target == control[i].target for i in moved),
+    )
+    check(
+        "a filter detaches at least one of them",
+        any(filt[i].method == "detached" for i in moved),
+    )
 
 
 def test_heading_paths_compare_component_by_component():
     """A joined string leaves the delimiter and its escaping unspecified, and
     lets a one-component path collide with a two-component one."""
     from quote import canonical_path
-    check("a/b is not the same path as a then b",
-          canonical_path(["a/b"]) != canonical_path(["a", "b"]))
-    check("emphasis does not change a path",
-          canonical_path(["**Rollback**"]) == canonical_path(["Rollback"]))
+
+    check(
+        "a/b is not the same path as a then b",
+        canonical_path(["a/b"]) != canonical_path(["a", "b"]),
+    )
+    check(
+        "emphasis does not change a path",
+        canonical_path(["**Rollback**"]) == canonical_path(["Rollback"]),
+    )
 
 
 # --- detached diagnostics, protected by the pre-change oracle ----------------
+
 
 def _legacy_best_match(
     sel,
@@ -496,7 +623,7 @@ def _legacy_resolve_map(
     surviving = {}
     for index, block in enumerate(blocks):
         for marker in block.markers:
-            if marker.id and not marker.malformed:
+            if marker.id and not marker.malformed and not marker.has_subhash:
                 surviving.setdefault(marker.id, index)
     hash_to_indices = {}
     for index, body in enumerate(bodies):
@@ -533,7 +660,9 @@ def test_ranked_matcher_is_bit_identical_to_the_frozen_oracle():
         (Selector("missing"), []),
     ]
     for selector, candidates in direct:
-        assert best_match(selector, candidates) == _legacy_best_match(selector, candidates)
+        assert best_match(selector, candidates) == _legacy_best_match(
+            selector, candidates
+        )
 
     for vector in _corpus_vectors("score"):
         if vector["fn"] != "best_match":
@@ -542,7 +671,9 @@ def test_ranked_matcher_is_bit_identical_to_the_frozen_oracle():
             vector["quote"], prefix=vector["prefix"], suffix=vector["suffix"]
         )
         candidates = vector["candidates"]
-        assert best_match(selector, candidates) == _legacy_best_match(selector, candidates)
+        assert best_match(selector, candidates) == _legacy_best_match(
+            selector, candidates
+        )
 
     selector = Selector("body", heading_path=("Section",))
     candidates = ["body", "body"]
@@ -565,8 +696,12 @@ def test_committed_map_is_identical_and_anchor_order_inert_over_every_corpus():
         threshold = vector.get("threshold", R.DEFAULT_THRESHOLD)
         margin = vector.get("margin", R.DEFAULT_MARGIN)
         expected = _legacy_resolve_map(anchors, vector["after"], threshold, margin)
-        current = R.resolve(anchors, vector["after"], threshold=threshold, margin=margin)
-        assert {key: (value.method, value.target) for key, value in current.items()} == expected
+        current = R.resolve(
+            anchors, vector["after"], threshold=threshold, margin=margin
+        )
+        assert {
+            key: (value.method, value.target) for key, value in current.items()
+        } == expected
 
     before, blocks = PB.annotate(ADV)
     after_blocks, _ = PB.edit_in_place(blocks)
@@ -574,7 +709,9 @@ def test_committed_map_is_identical_and_anchor_order_inert_over_every_corpus():
     anchors = R.build_anchors(before)
     expected = _legacy_resolve_map(anchors, after)
     reversed_current = R.resolve(list(reversed(anchors)), after)
-    assert {key: (value.method, value.target) for key, value in reversed_current.items()} == expected
+    assert {
+        key: (value.method, value.target) for key, value in reversed_current.items()
+    } == expected
 
 
 def test_detached_reason_and_candidate_policy():
@@ -586,8 +723,14 @@ def test_detached_reason_and_candidate_policy():
     assert ambiguous.reason == "ambiguous"
     assert [candidate.target for candidate in ambiguous.candidates] == [1, 0]
     assert ambiguous.runner_up_score == 1.0
-    assert all(candidate.provenance == "independent-per-anchor" for candidate in ambiguous.candidates)
-    assert all(candidate.evidence[0].code == "body_similarity" for candidate in ambiguous.candidates)
+    assert all(
+        candidate.provenance == "independent-per-anchor"
+        for candidate in ambiguous.candidates
+    )
+    assert all(
+        candidate.evidence[0].code == "body_similarity"
+        for candidate in ambiguous.candidates
+    )
 
     unmatched = R.resolve(anchor, "xxxxxxxxxxxxxxxxxxxxxxxx\n")["a"]
     assert unmatched.method == "detached"

@@ -52,7 +52,6 @@ import resolver as R  # noqa: E402
 import markstay_lint as L  # noqa: E402  (path set up by resolver import)
 from quote import normalize  # noqa: E402
 
-
 # --- rewrite tasks: a spread of intensities to span the similarity range ----
 # Each keeps blocks 1:1 (same set, same order) so the per-block similarity and
 # the id->block ground truth stay clean; intensity drives how far the wording
@@ -105,11 +104,18 @@ RETURN_ONLY = (
 
 
 def build_prompt(task_key: str, annotated_md: str) -> str:
-    return (TASKS[task_key] + STRUCTURE + PRESERVE + RETURN_ONLY
-            + "\n\n---\n\n" + annotated_md)
+    return (
+        TASKS[task_key]
+        + STRUCTURE
+        + PRESERVE
+        + RETURN_ONLY
+        + "\n\n---\n\n"
+        + annotated_md
+    )
 
 
 # --- output cleanup ---------------------------------------------------------
+
 
 def strip_outer_fence(text: str) -> str:
     """Some models wrap the whole document in a ```markdown fence despite the
@@ -118,9 +124,13 @@ def strip_outer_fence(text: str) -> str:
     if t.startswith("```"):
         first_nl = t.find("\n")
         if first_nl != -1 and t.endswith("```"):
-            inner = t[first_nl + 1:-3]
+            inner = t[first_nl + 1 : -3]
             # only treat as an outer wrapper if the opener was a bare fence line
-            if "\n" in t[:first_nl] or t[:first_nl].strip("`").isalpha() or t[:first_nl].strip() == "```":
+            if (
+                "\n" in t[:first_nl]
+                or t[:first_nl].strip("`").isalpha()
+                or t[:first_nl].strip() == "```"
+            ):
                 return inner.strip()
     return t
 
@@ -128,18 +138,19 @@ def strip_outer_fence(text: str) -> str:
 def strip_markers(md: str) -> str:
     """Remove every markstay marker token, leaving the prose. This reproduces the
     naive-rewrite output (markers dropped) from the instructed rewrite."""
-    return L.MDX_MARKER.sub("", L.HTML_MARKER.sub("", md))
+    return L._strip_markers(md)
 
 
 # --- ground truth from preserved markers ------------------------------------
 
+
 @dataclass
 class GroundTruth:
-    id_to_idx: dict[str, int]       # gold: original id -> after content-block index
-    dropped: set[str]               # ids the rewrite lost (no gold; excluded)
-    duplicated: set[str]            # ids the rewrite duplicated (excluded)
-    relocated: set[str]             # ids swapped onto other content (excluded)
-    after_bodies: list[str]         # content-block bodies of the stripped after-doc
+    id_to_idx: dict[str, int]  # gold: original id -> after content-block index
+    dropped: set[str]  # ids the rewrite lost (no gold; excluded)
+    duplicated: set[str]  # ids the rewrite duplicated (excluded)
+    relocated: set[str]  # ids swapped onto other content (excluded)
+    after_bodies: list[str]  # content-block bodies of the stripped after-doc
 
 
 def ground_truth(before_md: str, after_with_markers: str) -> GroundTruth:
@@ -155,7 +166,7 @@ def ground_truth(before_md: str, after_with_markers: str) -> GroundTruth:
     id_to_idx: dict[str, int] = {}
     for b in marked_blocks:
         for mk in b.markers:
-            if mk.id and not mk.malformed and mk.id not in bad:
+            if mk.id and not mk.malformed and not mk.has_subhash and mk.id not in bad:
                 id_to_idx.setdefault(mk.id, b.index)
 
     # The resolver operates on the STRIPPED doc; its block indices must line up
@@ -165,16 +176,20 @@ def ground_truth(before_md: str, after_with_markers: str) -> GroundTruth:
     stripped_blocks = [b for b in L.parse_document(stripped) if b.index >= 0]
     assert len(stripped_blocks) == len(marked_blocks), (
         f"block-count mismatch after stripping markers: "
-        f"{len(stripped_blocks)} vs {len(marked_blocks)}")
+        f"{len(stripped_blocks)} vs {len(marked_blocks)}"
+    )
     for mb, sb in zip(marked_blocks, stripped_blocks):
-        assert normalize(mb.content) == normalize(sb.content), \
-            "stripped block content diverged from marked block content"
+        assert normalize(mb.content) == normalize(
+            sb.content
+        ), "stripped block content diverged from marked block content"
 
-    return GroundTruth(id_to_idx, dropped, duplicated, relocated,
-                       [b.content for b in stripped_blocks])
+    return GroundTruth(
+        id_to_idx, dropped, duplicated, relocated, [b.content for b in stripped_blocks]
+    )
 
 
 # --- similarity (same normalization the quote tier uses) --------------------
+
 
 def similarity(a: str, b: str) -> float:
     na, nb = normalize(a), normalize(b)
@@ -196,20 +211,24 @@ def band_label(s: float) -> str:
 
 # --- scoring one rewritten document -----------------------------------------
 
+
 @dataclass
 class IdResult:
     id: str
-    cat: str            # correct | wrong | missed | no_truth
-    method: str         # marker | hash | quote | detached
-    score: float        # resolver confidence
-    sim: float          # measured before/after text similarity of the block
+    cat: str  # correct | wrong | missed | no_truth
+    method: str  # marker | hash | quote | detached
+    score: float  # resolver confidence
+    sim: float  # measured before/after text similarity of the block
     target: int | None
     gold: int | None
 
 
-def score_document(before_md: str, after_with_markers: str,
-                   threshold: float = R.DEFAULT_THRESHOLD,
-                   margin: float = R.DEFAULT_MARGIN) -> list[IdResult]:
+def score_document(
+    before_md: str,
+    after_with_markers: str,
+    threshold: float = R.DEFAULT_THRESHOLD,
+    margin: float = R.DEFAULT_MARGIN,
+) -> list[IdResult]:
     """Resolve every original id against the stripped rewrite and score it against
     the preserved-marker gold mapping. Ids the rewrite dropped/duplicated/relocated
     are returned as `no_truth` (excluded from recovery metrics by the aggregator)."""
@@ -226,18 +245,18 @@ def score_document(before_md: str, after_with_markers: str,
         res = resolutions[a.id]
         gold = gt.id_to_idx.get(a.id)
         if gold is None:
-            out.append(IdResult(a.id, "no_truth", res.method, res.score, 0.0,
-                                res.target, None))
+            out.append(
+                IdResult(a.id, "no_truth", res.method, res.score, 0.0, res.target, None)
+            )
             continue
         sim = similarity(before_body[a.id], gt.after_bodies[gold])
         if res.method == "detached":
-            cat = "missed"            # gold block exists, resolver safely gave up
+            cat = "missed"  # gold block exists, resolver safely gave up
         elif res.target == gold:
             cat = "correct"
         else:
-            cat = "wrong"            # false reattachment, the dangerous outcome
-        out.append(IdResult(a.id, cat, res.method, res.score, sim,
-                            res.target, gold))
+            cat = "wrong"  # false reattachment, the dangerous outcome
+        out.append(IdResult(a.id, cat, res.method, res.score, sim, res.target, gold))
     return out
 
 
@@ -271,15 +290,22 @@ ITEM_STRUCTURE = (
 
 
 def build_item_prompt(task_key: str, annotated_md: str) -> str:
-    return (TASKS[task_key] + STRUCTURE + ITEM_STRUCTURE + PRESERVE_ITEMS
-            + RETURN_ONLY + "\n\n---\n\n" + annotated_md)
+    return (
+        TASKS[task_key]
+        + STRUCTURE
+        + ITEM_STRUCTURE
+        + PRESERVE_ITEMS
+        + RETURN_ONLY
+        + "\n\n---\n\n"
+        + annotated_md
+    )
 
 
 @dataclass
 class ChildGroundTruth:
-    id_to_idx: dict[str, int]   # gold: original child id -> after child index
-    dropped: set[str]           # ids the rewrite lost (no gold; excluded)
-    after_bodies: list[str]     # child bodies of the stripped after-doc
+    id_to_idx: dict[str, int]  # gold: original child id -> after child index
+    dropped: set[str]  # ids the rewrite lost (no gold; excluded)
+    after_bodies: list[str]  # child bodies of the stripped after-doc
 
 
 def child_ground_truth(before_md: str, after_with_markers: str) -> ChildGroundTruth:
@@ -289,14 +315,14 @@ def child_ground_truth(before_md: str, after_with_markers: str) -> ChildGroundTr
     that lost one of its item markers. Those ids have no trustworthy label, so
     they are excluded from scoring rather than guessed at."""
 
-    diff = L.lint_diff(before_md, after_with_markers, mode=ITEM_MODE,
-                       child_blocks=True)
+    diff = L.lint_diff(before_md, after_with_markers, mode=ITEM_MODE, child_blocks=True)
     dropped = {f.id for f in diff if f.code in ("CHILD_DROPPED", "DROPPED_ID") and f.id}
 
     marked = [
         child
-        for block in L.parse_document(after_with_markers, mode=ITEM_MODE,
-                                      child_blocks=True)
+        for block in L.parse_document(
+            after_with_markers, mode=ITEM_MODE, child_blocks=True
+        )
         for child in block.children
     ]
     id_to_idx: dict[str, int] = {}
@@ -318,10 +344,10 @@ def child_ground_truth(before_md: str, after_with_markers: str) -> ChildGroundTr
     if len(stripped_children) != len(marked):
         raise AssertionError(
             f"child-count mismatch after stripping markers: "
-            f"{len(stripped_children)} vs {len(marked)}")
+            f"{len(stripped_children)} vs {len(marked)}"
+        )
 
-    return ChildGroundTruth(id_to_idx, dropped,
-                            [c.content for c in stripped_children])
+    return ChildGroundTruth(id_to_idx, dropped, [c.content for c in stripped_children])
 
 
 def score_document_items(before_md: str, after_with_markers: str) -> list[IdResult]:
@@ -339,8 +365,7 @@ def score_document_items(before_md: str, after_with_markers: str) -> list[IdResu
         method, target = resolved.get(anchor.id, ("detached", None))
         gold = gt.id_to_idx.get(anchor.id)
         if gold is None:
-            out.append(IdResult(anchor.id, "no_truth", method, 0.0, 0.0,
-                                target, None))
+            out.append(IdResult(anchor.id, "no_truth", method, 0.0, 0.0, target, None))
             continue
         sim = similarity(before_body[anchor.id], gt.after_bodies[gold])
         if method == "detached":
@@ -349,12 +374,22 @@ def score_document_items(before_md: str, after_with_markers: str) -> list[IdResu
             cat = "correct"
         else:
             cat = "wrong"
-        out.append(IdResult(anchor.id, cat, method, 1.0 if cat == "correct" else 0.0,
-                            sim, target, gold))
+        out.append(
+            IdResult(
+                anchor.id,
+                cat,
+                method,
+                1.0 if cat == "correct" else 0.0,
+                sim,
+                target,
+                gold,
+            )
+        )
     return out
 
 
 # --- aggregation ------------------------------------------------------------
+
 
 def recovery_falserate(cats: dict[str, int]) -> tuple[float, float, int]:
     """recovery = correct / scored; false-rate = wrong / scored. `scored` excludes

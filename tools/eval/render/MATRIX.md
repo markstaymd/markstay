@@ -4,7 +4,7 @@ Does a `stay:` marker survive the Markdown toolchain people push `.md` through? 
 
 Legend: ✅ survives · ⚠️ survives but degraded (named below) · ❌ lost.
 
-## Source round-trip (md → md) — the load-bearing axis
+## Source round-trip (md → md): the load-bearing axis
 
 Does the formatter preserve the marker, on the right block, when it reflows the doc? A §8 hash drift on reflow is expected and is **not** a failure.
 
@@ -14,10 +14,10 @@ Does the formatter preserve the marker, on the right block, when it reflows the 
 | `mdformat` | ✅ SURVIVES | clean; §8 hash drifts on reflow (expected) |
 | `remark + remark-stringify` | ✅ SURVIVES | clean, no drift |
 | `pandoc (gfm → gfm)` | ✅ SURVIVES | clean; §8 hash drifts on reflow (expected) |
-| `pandoc (markdown → markdown)` | ⚠️ MANGLED | marker(s) rewritten to a non-comment form (code span / escaped): l2, p2, q2 (differs on: blocks, hash) — **→** trailing inline markers are rewritten to a `<!-- ... -->`{=html} code span; keep markers on their own line (marker-only chunk) or use the `gfm` writer, which preserves them |
+| `pandoc (markdown → markdown)` | ❌ DROPPED | marker(s) lost: c1, h1, l1, p1, q1, t1; **→** use the `gfm` writer, which preserves both block and row carriers |
 | `remark-mdx (§3.2 round-trip)` | ✅ SURVIVES | clean, no drift |
 
-## Render-emit (md → HTML) — the visibility axis
+## Render-emit (md → HTML): the visibility axis
 
 The marker should be invisible in the render (the good default for a comment) and must not leak as visible text.
 
@@ -25,35 +25,35 @@ The marker should be invisible in the render (the good default for a comment) an
 |------|---------|-------|
 | `GitHub (cmark-gfm)` | ✅ INVISIBLE | comment dropped from output (invisible) |
 | `markdown-it (html: true)` | ✅ INVISIBLE | comment retained in HTML source (invisible) |
-| `markdown-it (default, html: false)` | ❌ LEAKED | marker(s) rendered as visible text: c1, h1, l1, p1, q1, t1 — **→** the default config HTML-escapes the comment to visible text; set `html: true`, or rely on the consumer detecting a missing expected marker |
+| `markdown-it (default, html: false)` | ❌ LEAKED | marker(s) rendered as visible text: c1, h1, l1, p1, q1, t1; **→** the default config HTML-escapes the comment to visible text; set `html: true`, or rely on the consumer detecting a missing expected marker |
 | `marked` | ✅ INVISIBLE | comment retained in HTML source (invisible) |
 | `python-markdown (MkDocs)` | ✅ INVISIBLE | comment retained in HTML source (invisible) |
-| `MDX (@mdx-js/mdx)` | ✅ INVISIBLE | compiles; marker hoisted to a JS comment, renders as an empty expression; blocks fixture: ERROR — **→** the HTML-comment form is invalid MDX and is rejected at compile; use the §3.2 `{/* stay:id */}` form (which compiles away invisibly) |
+| `MDX (@mdx-js/mdx)` | ✅ INVISIBLE | compiles; marker hoisted to a JS comment, renders as an empty expression; blocks fixture: ERROR; **→** the HTML-comment form is invalid MDX and is rejected at compile; use the §3.2 `{/* stay:id */}` form (which compiles away invisibly) |
 
-## Table-row carrier (in-cell marker) — SPEC.md §14
+## Table-row carrier (in-cell marker), the historical §14 gate now settled by §5.6
 
-A GFM row is one line, so a row marker has one position available: inside the **last cell**, before the closing pipe. `SPEC.md` §14 defers table-row identity *"until that carrier is shown to survive real renderers"*, and this is that measurement, from the `rows` fixture alone. A table is one block to every segmenter, so the round-trip oracle adds a row-level test here: the marker must come out on a line that still carries its row's other cells (❌ LEFT ITS ROW when it does not).
+A GFM row is one line. A §5.6 writer has one canonical carrier position, inside the **last cell** before the closing pipe; a reader accepts a `subhash` marker anywhere on an accepted body-row source line. This measurement discharged the gate that §14 originally placed on table-row identity. In this blank-surrounded standalone fixture both built-in profiles select the same containing block, so the round-trip oracle adds a row-level test: the marker must come out as a `subhash` stay on an accepted §5.6 body row with the same exact cell signature and selected container (❌ LEFT ITS ROW when it does not).
 
 | Tool | Axis | Verdict | Notes |
 |------|------|---------|-------|
-| `prettier` | roundtrip | ✅ SURVIVES | clean; §8 hash drifts on reflow (expected); 3 in-cell row marker(s) still on their row |
-| `mdformat` | roundtrip | ✅ SURVIVES | clean; §8 hash drifts on reflow (expected); 3 in-cell row marker(s) still on their row |
-| `remark + remark-stringify` | roundtrip | ✅ SURVIVES | clean, no drift; 3 in-cell row marker(s) still on their row |
-| `pandoc (gfm → gfm)` | roundtrip | ✅ SURVIVES | clean; §8 hash drifts on reflow (expected); 3 in-cell row marker(s) still on their row |
-| `pandoc (markdown → markdown)` | roundtrip | ❌ LEFT ITS ROW | marker(s) no longer on their table row's line: rw1, rw2 |
+| `prettier` | roundtrip | ✅ SURVIVES | clean; §8 hash drifts on reflow (expected); 9 in-cell row marker(s) still on accepted rows |
+| `mdformat` | roundtrip | ✅ SURVIVES | clean; §8 hash drifts on reflow (expected); 9 in-cell row marker(s) still on accepted rows |
+| `remark + remark-stringify` | roundtrip | ✅ SURVIVES | clean, no drift; 9 in-cell row marker(s) still on accepted rows |
+| `pandoc (gfm → gfm)` | roundtrip | ✅ SURVIVES | clean; §8 hash drifts on reflow (expected); 9 in-cell row marker(s) still on accepted rows |
+| `pandoc (markdown → markdown)` | roundtrip | ❌ DROPPED | marker(s) lost: tblc, tblf, tbls |
 | `GitHub (cmark-gfm)` | render | ✅ INVISIBLE | comment dropped from output (invisible) |
 | `markdown-it (html: true)` | render | ✅ INVISIBLE | comment retained in HTML source (invisible) |
-| `markdown-it (default, html: false)` | render | ❌ LEAKED | marker(s) rendered as visible text: rw1, rw2, rw3, tbl1 |
+| `markdown-it (default, html: false)` | render | ❌ LEAKED | marker(s) rendered as visible text: rc1, rc2, rc3, rf1, rf2, rf3, rs1, rs2, rs3, tblc, tblf, tbls |
 | `marked` | render | ✅ INVISIBLE | comment retained in HTML source (invisible) |
 | `python-markdown (MkDocs)` | render | ✅ INVISIBLE | comment retained in HTML source (invisible) |
 
-## Anchor after sanitizer (rehype-stay `id=` emit) — gap 4
+## Anchor after sanitizer (rehype-stay `id=` emit): gap 4
 
 Does the HTML `id=` that makes `doc.md#stay-id` resolve survive an HTML sanitizer?
 
 | Sanitizer | Verdict | Notes |
 |-----------|---------|-------|
-| `rehype-sanitize` | ⚠️ ID renamed | id kept but renamed (e.g. user-content-): #id deep link breaks — **→** GitHub's schema clobbers `id` to `user-content-<id>`, so the anchor survives but the `doc.md#stay-id` deep link must target the prefixed id (or the consumer re-derives it) |
+| `rehype-sanitize` | ⚠️ ID renamed | id kept but renamed (e.g. user-content-): #id deep link breaks; **→** GitHub's schema clobbers `id` to `user-content-<id>`, so the anchor survives but the `doc.md#stay-id` deep link must target the prefixed id (or the consumer re-derives it) |
 | `DOMPurify` | ✅ ID kept | id preserved verbatim |
 
 ## Pinned versions

@@ -107,13 +107,8 @@ def run_pymarkdown(text):
 
 HTML_FIXTURES = ["blocks", "blocks_trailing", "hash", "rows"]
 
-# The row carrier is a separate question from "does a marker survive this tool":
-# SPEC.md §14 still defers table-row identity, and the marker placements a spec'd
-# document actually uses are the other three fixtures. So `rows` runs against every
-# tool but is kept OUT of the tool's headline verdict and reported in its own
-# section, where a failure reads as "this carrier does not survive here" rather than
-# as a tool that eats markers.
-AGGREGATE_EXCLUDE = {"rows"}
+# The row carrier originally discharged §14's gate and is normative under §5.6, so
+# it contributes to each tool's headline verdict as well as its detailed section.
 
 TOOLS = [
     # --- source round-trip (md -> md) -------------------------------------
@@ -127,9 +122,8 @@ TOOLS = [
      "run": lambda t: run_pandoc("gfm", "gfm", t), "fixtures": HTML_FIXTURES},
     {"key": "pandoc-markdown", "label": "pandoc (markdown → markdown)", "axis": "roundtrip",
      "run": lambda t: run_pandoc("markdown", "markdown", t), "fixtures": HTML_FIXTURES,
-     "remediation": "trailing inline markers are rewritten to a `<!-- ... -->`{=html} "
-                    "code span; keep markers on their own line (marker-only chunk) or "
-                    "use the `gfm` writer, which preserves them"},
+     "remediation": "use the `gfm` writer, which preserves both block and row "
+                    "carriers"},
     {"key": "remark-mdx", "label": "remark-mdx (§3.2 round-trip)", "axis": "roundtrip",
      "run": lambda t: run_node("remark-mdx", t), "fixtures": ["mdx"]},
 
@@ -199,7 +193,7 @@ def process_tool(tool):
     # (primary) fixture; the HTML-comment ERROR is the documented limitation, noted
     # but not the headline.
     sev_axis = "render" if axis == "render" else axis
-    headline = [r for r in records if r["fixture"] not in AGGREGATE_EXCLUDE]
+    headline = records
     if tool.get("primary"):
         primary = next(r for r in records if r["fixture"] == tool["primary"])
         cell_verdict = primary["verdict"]
@@ -290,7 +284,7 @@ def render_matrix_md(cells, versions):
     out.append("Legend: ✅ survives · ⚠️ survives but degraded "
                "(named below) · ❌ lost.\n")
 
-    out.append("## Source round-trip (md → md) — the load-bearing axis\n")
+    out.append("## Source round-trip (md → md): the load-bearing axis\n")
     out.append("Does the formatter preserve the marker, on the right block, when it "
                "reflows the doc? A §8 hash drift on reflow is expected and is **not** a "
                "failure.\n")
@@ -300,7 +294,7 @@ def render_matrix_md(cells, versions):
         out.append("| `%s` | %s | %s |" % (c["label"], VERDICT_MARK[c["verdict"]], _cellnote(c)))
     out.append("")
 
-    out.append("## Render-emit (md → HTML) — the visibility axis\n")
+    out.append("## Render-emit (md → HTML): the visibility axis\n")
     out.append("The marker should be invisible in the render (the good default for a "
                "comment) and must not leak as visible text.\n")
     out.append("| Tool | Verdict | Notes |")
@@ -309,15 +303,18 @@ def render_matrix_md(cells, versions):
         out.append("| `%s` | %s | %s |" % (c["label"], VERDICT_MARK[c["verdict"]], _cellnote(c)))
     out.append("")
 
-    out.append("## Table-row carrier (in-cell marker) — SPEC.md §14\n")
-    out.append("A GFM row is one line, so a row marker has one position available: "
-               "inside the **last cell**, before the closing pipe. `SPEC.md` §14 "
-               "defers table-row identity *\"until that carrier is shown to survive "
-               "real renderers\"*, and this is that measurement, from the `rows` "
-               "fixture alone. A table is one block to every segmenter, so the "
-               "round-trip oracle adds a row-level test here: the marker must come "
-               "out on a line that still carries its row's other cells (❌ LEFT ITS "
-               "ROW when it does not).\n")
+    out.append("## Table-row carrier (in-cell marker), the historical §14 gate "
+               "now settled by §5.6\n")
+    out.append("A GFM row is one line. A §5.6 writer has one canonical carrier "
+               "position, inside the **last cell** before the closing pipe; a reader "
+               "accepts a `subhash` marker anywhere on an accepted body-row source "
+               "line. This measurement discharged the gate that §14 originally placed "
+               "on table-row identity. In this blank-surrounded standalone "
+               "fixture both built-in profiles select the same containing block, so "
+               "the round-trip oracle adds a row-level test: the marker must come out "
+               "as a `subhash` stay on an accepted §5.6 body row with the same exact "
+               "cell signature and selected container (❌ LEFT ITS ROW when it does "
+               "not).\n")
     out.append("| Tool | Axis | Verdict | Notes |")
     out.append("|------|------|---------|-------|")
     for c in cells:
@@ -328,7 +325,7 @@ def render_matrix_md(cells, versions):
                    % (c["label"], c["axis"], VERDICT_MARK[fx["verdict"]], fx["note"]))
     out.append("")
 
-    out.append("## Anchor after sanitizer (rehype-stay `id=` emit) — gap 4\n")
+    out.append("## Anchor after sanitizer (rehype-stay `id=` emit): gap 4\n")
     out.append("Does the HTML `id=` that makes `doc.md#stay-id` resolve survive an HTML "
                "sanitizer?\n")
     out.append("| Sanitizer | Verdict | Notes |")
@@ -355,11 +352,11 @@ def _cellnote(c):
     note = c["note"]
     # Show the §13 remediation when the headline verdict is non-green, OR when a
     # green headline still hides a per-fixture failure (MDX: §3.2 renders fine, but
-    # the HTML-comment form is rejected — the adopter needs that caveat).
+    # the HTML-comment form is rejected, so the adopter needs that caveat).
     fixture_failed = any(v["verdict"] not in _GREEN
-                         for k, v in c["fixtures"].items() if k not in AGGREGATE_EXCLUDE)
+                         for v in c["fixtures"].values())
     if c["remediation"] and (c["verdict"] not in _GREEN or fixture_failed):
-        note += " — **→** %s" % c["remediation"]
+        note += "; **→** %s" % c["remediation"]
     return note
 
 

@@ -47,35 +47,25 @@ import json
 import re
 import string
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from difflib import SequenceMatcher
 from pathlib import Path
 
 # --- marker grammar -------------------------------------------------------
 
-# A marker body always begins with the `stay:` namespace. We capture the body
-# lazily up to the closing delimiter, then pull id/hash out of it. Capturing the
-# whole body (rather than a fixed attribute order) tolerates reordered or extra
-# attributes, which the spec's free-order attribute grammar allows (SPEC.md §4).
+# These compatibility regexes describe the old permissive surface. Core discovery,
+# stripping, and rewriting all use the strict host-first scanner below. They remain
+# exported for one development-only mutation harness that is migrated in Phase 3.
 HTML_MARKER = re.compile(r"<!--\s*(?P<body>stay:.*?)\s*-->", re.DOTALL)
 MDX_MARKER = re.compile(r"\{/\*\s*(?P<body>stay:.*?)\s*\*/\}", re.DOTALL)
+COMBINED_MARKER = re.compile(
+    r"<!--\s*(?P<html>stay:.*?)\s*-->|\{/\*\s*(?P<mdx>stay:.*?)\s*\*/\}", re.DOTALL
+)
 
-# The id is positional: the first token right after the `stay:` namespace
-# (`stay:8f24`). A first token that contains `=` (a bare k=v with no id) leaves
-# the marker without an id, which is malformed.
-ID_RE = re.compile(r"stay:\s*(?P<id>[A-Za-z0-9_-]+)(?=\s|$)")
-# The boundary is whitespace, not `\b`: an attribute is a whitespace-separated token
-# (SPEC.md §4), and a word boundary accepts a custom key merely ENDING in a reserved
-# one, since a hyphen is not a word character. Under `\b`, `x-hash=sha256:ab` reads as
-# the block hash and `restamp` rewrites its value, destroying a key §4 requires to be
-# preserved verbatim. `rehash` was already refused; the hyphenated form was not.
-HASH_RE = re.compile(r"(?<![^\s])hash\s*=\s*sha256:(?P<hash>[0-9a-fA-F]+)")
-# SPEC.md §4: `subhash` is a reserved key, and an attribute is a whitespace-separated
-# token, so the boundary that identifies it is whitespace (or the body's start), not a
-# word boundary. `\b` would accept a custom key ENDING in the reserved one, because a
-# hyphen is not a word character: `x-subhash=sha256:ab` would read as the reserved key
-# and a tool would act on an attribute §4 tells it to preserve and ignore.
-SUBHASH_RE = re.compile(r"(?<![^\s])subhash\s*=\s*sha256:(?P<hash>[0-9a-fA-F]+)")
+_MARKER_OPEN_RE = re.compile(r"<!--|\{/\*")
+_MARKER_ID_RE = re.compile(r"[A-Za-z0-9_-]+")
+_MARKER_KEY_RE = re.compile(r"[A-Za-z][A-Za-z0-9_-]*")
+_MARKER_HASH_RE = re.compile(r"sha256:([0-9A-Fa-f]+)")
 
 LEVELS = {"error": 0, "warn": 1, "info": 2}
 
@@ -92,6 +82,10 @@ class Marker:
     line: int
     malformed: bool = False
     subhash: str | None = None
+    # Exact parsed key presence, independent of whether its value is a digest.
+    # §16 routes on this bit: `subhash=bogus` is a child-looking marker while
+    # `x-subhash=bogus` is not.
+    has_subhash: bool = False
 
 
 @dataclass
@@ -112,6 +106,7 @@ class ChildBlock:
     ordinal: int = 0
     parent_index: int = -1
     marker_line: int = 0
+    kind: str = "list"  # `list` (§5.5) or `row` (§5.6)
 
 
 @dataclass
@@ -154,6 +149,181 @@ def body_hash(text: str, length: int | None = None) -> str:
 # --- parsing --------------------------------------------------------------
 
 
+@dataclass
+class _MarkerRecord:
+    start: int
+    end: int
+    marker: Marker
+
+
+def _normalize_lf_with_raw_boundaries(text: str) -> tuple[str, list[int]]:
+    """Normalize line endings and map normalized boundaries to raw offsets."""
+    normalized: list[str] = []
+    raw_boundaries = [0]
+    pos = 0
+    while pos < len(text):
+        if text[pos] == "\r":
+            pos += 2 if pos + 1 < len(text) and text[pos + 1] == "\n" else 1
+            normalized.append("\n")
+        else:
+            normalized.append(text[pos])
+            pos += 1
+        raw_boundaries.append(pos)
+    return "".join(normalized), raw_boundaries
+
+
+def _parse_marker_body(
+    body: str, syntax: str
+) -> tuple[str, list[tuple[str, str, bool]]] | None:
+    """Parse one complete normalized-LF §4 marker body."""
+    if not body.startswith("stay:"):
+        return None
+    pos = len("stay:")
+    id_match = _MARKER_ID_RE.match(body, pos)
+    if id_match is None:
+        return None
+    marker_id = id_match.group(0)
+    pos = id_match.end()
+    if pos < len(body) and body[pos] not in " \t":
+        return None
+
+    attributes: list[tuple[str, str, bool]] = []
+    while pos < len(body):
+        separator_start = pos
+        while pos < len(body) and body[pos] in " \t":
+            pos += 1
+        if pos == len(body):
+            break
+        if pos == separator_start:
+            return None
+        key_match = _MARKER_KEY_RE.match(body, pos)
+        if key_match is None:
+            return None
+        key = key_match.group(0)
+        pos = key_match.end()
+        if pos == len(body) or body[pos] != "=":
+            return None
+        pos += 1
+        if pos == len(body):
+            return None
+
+        quoted = body[pos] == '"'
+        if quoted:
+            pos += 1
+            value: list[str] = []
+            while pos < len(body) and body[pos] != '"':
+                char = body[pos]
+                if char == "\\":
+                    if pos + 1 == len(body) or body[pos + 1] not in '\\"':
+                        return None
+                    value.extend((char, body[pos + 1]))
+                    pos += 2
+                    continue
+                codepoint = ord(char)
+                if char != "\n" and not (0x20 <= codepoint <= 0x7E):
+                    return None
+                value.append(char)
+                pos += 1
+            if pos == len(body):
+                return None
+            pos += 1
+            attribute_value = "".join(value)
+        else:
+            value_start = pos
+            while pos < len(body) and body[pos] not in " \t":
+                codepoint = ord(body[pos])
+                if body[pos] == '"' or not (0x21 <= codepoint <= 0x7E):
+                    return None
+                pos += 1
+            if pos == value_start:
+                return None
+            attribute_value = body[value_start:pos]
+        attributes.append((key, attribute_value, quoted))
+    return marker_id, attributes
+
+
+def _malformed_key_first(body: str) -> bool:
+    """Whether §4 still requires a no-positional-id diagnostic for this body."""
+    if not body.startswith("stay:"):
+        return False
+    key = _MARKER_KEY_RE.match(body, len("stay:"))
+    return key is not None and key.end() < len(body) and body[key.end()] == "="
+
+
+def _scan_marker_records(text: str, line_offset: int = 0) -> list[_MarkerRecord]:
+    """Discover every complete §4 marker using the host comment's first close.
+
+    Openers are independent. A rejected opener therefore cannot swallow a later
+    valid marker. Recognition uses normalized LF, while offsets and ``raw`` map
+    back to the caller's exact source bytes.
+    """
+    normalized, raw_boundaries = _normalize_lf_with_raw_boundaries(text)
+    records: list[_MarkerRecord] = []
+    for opener in _MARKER_OPEN_RE.finditer(normalized):
+        syntax = "html" if opener.group(0) == "<!--" else "mdx"
+        pos = opener.end()
+        while pos < len(normalized) and normalized[pos] in " \t":
+            pos += 1
+        if not normalized.startswith("stay:", pos):
+            continue
+        body_start = pos
+        search_start = pos + len("stay:")
+        if syntax == "html":
+            closers = [
+                (at, closer)
+                for closer in ("-->", "--!>")
+                if (at := normalized.find(closer, search_start)) >= 0
+            ]
+            if not closers:
+                continue
+            close_start, closer = min(closers, key=lambda item: item[0])
+            normalized_end = close_start + len(closer)
+            valid_host_close = closer == "-->"
+        else:
+            close_start = normalized.find("*/", search_start)
+            if close_start < 0:
+                continue
+            valid_host_close = normalized.startswith("}", close_start + 2)
+            normalized_end = close_start + (3 if valid_host_close else 2)
+
+        body = normalized[body_start:close_start]
+        parsed = _parse_marker_body(body, syntax) if valid_host_close else None
+        malformed = parsed is None and _malformed_key_first(body)
+        if parsed is None and not malformed:
+            continue
+
+        attributes = parsed[1] if parsed is not None else []
+        block_hash = None
+        child_hash = None
+        for key, value, quoted in attributes:
+            digest = None if quoted else _MARKER_HASH_RE.fullmatch(value)
+            if key == "hash" and digest is not None and block_hash is None:
+                block_hash = digest.group(1).lower()
+            if key == "subhash" and digest is not None and child_hash is None:
+                child_hash = digest.group(1).lower()
+
+        raw_start = raw_boundaries[opener.start()]
+        raw_end = raw_boundaries[normalized_end]
+        records.append(
+            _MarkerRecord(
+                raw_start,
+                raw_end,
+                Marker(
+                    id=parsed[0] if parsed is not None else None,
+                    hash=block_hash,
+                    subhash=child_hash,
+                    has_subhash=any(key == "subhash" for key, _, _ in attributes),
+                    raw=text[raw_start:raw_end],
+                    syntax=syntax,
+                    line=line_offset + normalized.count("\n", 0, opener.start()) + 1,
+                    malformed=malformed,
+                ),
+            )
+        )
+    records.sort(key=lambda record: (record.start, record.end))
+    return records
+
+
 def find_markers(text: str, line_offset: int = 0) -> list[Marker]:
     """All markstay markers in `text`, ordered by position. `line_offset` is the
     0-based line index where `text` begins in the full document.
@@ -165,44 +335,51 @@ def find_markers(text: str, line_offset: int = 0) -> list[Marker]:
     because this function is handed chunks in about fifty places and a chunk that
     begins inside a fence carries no opener. Callers that segment a whole
     document filter the result against `code_lines`."""
-    raw = []
-    for pat, syntax in ((HTML_MARKER, "html"), (MDX_MARKER, "mdx")):
-        for m in pat.finditer(text):
-            raw.append((m.start(), m.group(0), syntax, m.group("body")))
-    raw.sort(key=lambda t: t[0])
-    out = []
-    for start, full, syntax, body in raw:
-        line = line_offset + text[:start].count("\n") + 1
-        # `.match` anchors the id to the FIRST token after `stay:` (SPEC.md §4:
-        # the id is positional). `.search` would rescue a later `stay:ID` in a
-        # body whose first token is a bare `k=v` (e.g. `stay:note=hello stay:ok`),
-        # wrongly reading it as well-formed; the first token containing `=` is
-        # malformed and the marker has no id.
-        idm = ID_RE.match(body)
-        hm = HASH_RE.search(body)
-        shm = SUBHASH_RE.search(body)
-        out.append(
-            Marker(
-                # Hex is stored canonically lowercase: SPEC.md §8 makes hash
-                # comparison case-insensitive, so `hash=sha256:ABCD` must not read
-                # as drift against a lowercase computed digest.
-                id=idm.group("id") if idm else None,
-                hash=hm.group("hash").lower() if hm else None,  # see ID_RE.match note
-                subhash=shm.group("hash").lower() if shm else None,
-                raw=full,
-                syntax=syntax,
-                line=line,
-                malformed=idm is None,
-            )
-        )
-    return out
+    return [record.marker for record in _scan_marker_records(text, line_offset)]
 
 
 def _strip_markers(text: str) -> str:
     """Remove every marker-shaped string. A raw grammar-level primitive: it is
     code-blind, so a caller that must honour SPEC.md §3.3 passes a document-level
     mask to `_strip_markers_outside_code` instead."""
-    return MDX_MARKER.sub("", HTML_MARKER.sub("", text))
+    records = [
+        record for record in _scan_marker_records(text) if not record.marker.malformed
+    ]
+    return _strip_record_ranges(text, records)
+
+
+def _merged_record_ranges(
+    records: list[_MarkerRecord], start: int = 0, end: int | None = None
+) -> list[tuple[int, int]]:
+    limit = (
+        max((record.end for record in records), default=start) if end is None else end
+    )
+    merged: list[tuple[int, int]] = []
+    for record in records:
+        left = max(start, record.start)
+        right = min(limit, record.end)
+        if left >= right:
+            continue
+        if merged and left < merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], right))
+        else:
+            merged.append((left, right))
+    return merged
+
+
+def _strip_record_ranges(
+    text: str, records: list[_MarkerRecord], *, source_start: int = 0
+) -> str:
+    spans = _merged_record_ranges(records, source_start, source_start + len(text))
+    if not spans:
+        return text
+    out: list[str] = []
+    previous = source_start
+    for start, end in spans:
+        out.append(text[previous - source_start : start - source_start])
+        previous = end
+    out.append(text[previous - source_start :])
+    return "".join(out)
 
 
 # --- fenced code blocks (SPEC.md §3.3, v1.5) ------------------------------
@@ -280,15 +457,15 @@ def code_lines(text: str) -> set[int]:
     return _fence_state(text)[0]
 
 
-# One combined HTML|MDX pattern so a single ordered pass sees every marker in
-# document order (rather than all HTML then all MDX). Group `html` is the HTML
-# body, `mdx` the MDX body; exactly one is set per match. Identical to the
-# packaged reference's COMBINED_MARKER, deliberately: the masked strip below is
-# the one place the two Python trees could diverge silently, and giving them the
-# same single-pass scan removes the question rather than testing it.
-COMBINED_MARKER = re.compile(
-    r"<!--\s*(?P<html>stay:.*?)\s*-->|\{/\*\s*(?P<mdx>stay:.*?)\s*\*/\}", re.DOTALL
-)
+def _marker_outside_code(marker: Marker, code: set[int] | None) -> bool:
+    """Whether SPEC.md §3.3's fenced-code mask leaves `marker` active.
+
+    §3.3 judges a marker by the line it *opens* on, which is the only line a
+    reader can see it start on; the grammar is DOTALL, so one marker can span
+    lines and close inside a fence it opened outside. Every path that separates
+    active markers from marker-shaped content asks here, so the reading is one
+    decision rather than a copy of the same expression at each seam."""
+    return not code or marker.line not in code
 
 
 def _strip_markers_outside_code(text: str, code: set[int], line_offset: int = 0) -> str:
@@ -301,15 +478,12 @@ def _strip_markers_outside_code(text: str, code: set[int], line_offset: int = 0)
     can see it start on; the grammar is DOTALL, so one can span lines."""
     if not code:
         return _strip_markers(text)
-    out: list[str] = []
-    prev = 0
-    for m in COMBINED_MARKER.finditer(text):
-        if line_offset + text.count("\n", 0, m.start()) + 1 in code:
-            continue
-        out.append(text[prev : m.start()])
-        prev = m.end()
-    out.append(text[prev:])
-    return "".join(out)
+    records = [
+        record
+        for record in _scan_marker_records(text, line_offset)
+        if not record.marker.malformed and _marker_outside_code(record.marker, code)
+    ]
+    return _strip_record_ranges(text, records)
 
 
 _FRONTMATTER_OPEN_RE = re.compile(r"^---[ \t]*$")
@@ -453,9 +627,16 @@ class _ChildSpan:
     text: str
     marker_line: int
     excluded_lines: set[int] = field(default_factory=set)
+    kind: str = "list"
 
 
-def child_body(text: str, code: set[int] | None = None, line_offset: int = 0) -> str:
+def child_body(
+    text: str,
+    code: set[int] | None = None,
+    line_offset: int = 0,
+    kind: str = "list",
+    markers_already_stripped: bool = False,
+) -> str:
     """The hashed body of one child block (SPEC.md §5.5): the item's own text with
     its list prefix and continuation indent removed.
 
@@ -466,10 +647,24 @@ def child_body(text: str, code: set[int] | None = None, line_offset: int = 0) ->
     keeps it: one document, two §8 answers. Only the CommonMark child profile can
     reach that shape, since the dependency-free profile refuses any item carrying a
     fence, but the parameter is threaded from both."""
+    if kind == "row":
+        cells = _row_cells(text)
+        if cells is None:
+            return ""
+        return "|".join(
+            cell.replace("\\", "\\\\").replace("|", "\\|") for cell in cells
+        )
+    if kind != "list":
+        raise ValueError(f"unknown child kind: {kind!r}")
+
     clean = (
-        _strip_markers(text)
-        if not code
-        else _strip_markers_outside_code(text, code, line_offset)
+        text
+        if markers_already_stripped
+        else (
+            _strip_markers(text)
+            if not code
+            else _strip_markers_outside_code(text, code, line_offset)
+        )
     )
     lines = clean.split("\n")
     if lines:
@@ -498,6 +693,216 @@ def child_body(text: str, code: set[int] | None = None, line_offset: int = 0) ->
     return "\n".join(lines).strip(" \t\n\r\f\v")
 
 
+_DELIMITER_CELL_RE = re.compile(r"^:?-+:?$")
+
+
+def _line_marker_spans(line: str) -> list[tuple[int, int]]:
+    return [
+        (record.start, record.end)
+        for record in _scan_marker_records(line)
+        if not record.marker.malformed
+    ]
+
+
+def _spans_overlap(spans: list[tuple[int, int]]) -> bool:
+    return any(
+        start < previous_end for (_, previous_end), (start, _) in zip(spans, spans[1:])
+    )
+
+
+def _remove_spans(text: str, spans: list[tuple[int, int]]) -> str:
+    out: list[str] = []
+    previous = 0
+    for start, end in spans:
+        out.append(text[previous:start])
+        previous = end
+    out.append(text[previous:])
+    return "".join(out)
+
+
+def _row_cells(line: str) -> list[str] | None:
+    """Return §5.6 cells after fixing boundaries around opaque marker tokens."""
+    leading_spaces = len(line) - len(line.lstrip(" "))
+    if leading_spaces > 3:
+        return None
+    working = line[leading_spaces:].rstrip(" \t\f\v")
+    if not working:
+        return None
+    spans = _line_marker_spans(working)
+    if _spans_overlap(spans):
+        return None
+
+    delimiters: list[int] = []
+    backslashes = 0
+    pos = 0
+    span_index = 0
+    while pos < len(working):
+        if span_index < len(spans) and pos == spans[span_index][0]:
+            pos = spans[span_index][1]
+            span_index += 1
+            backslashes = 0
+            continue
+        char = working[pos]
+        if char == "\\":
+            backslashes += 1
+            pos += 1
+            continue
+        if char == "|" and backslashes % 2 == 0:
+            delimiters.append(pos)
+        backslashes = 0
+        pos += 1
+    if len(delimiters) < 2 or delimiters[0] != 0 or delimiters[-1] != len(working) - 1:
+        return None
+
+    cells: list[str] = []
+    for start, end in zip(delimiters, delimiters[1:]):
+        cell_spans = [
+            (
+                max(marker_start, start + 1) - (start + 1),
+                min(marker_end, end) - (start + 1),
+            )
+            for marker_start, marker_end in spans
+            if start < marker_start and marker_end <= end
+        ]
+        cell = _remove_spans(working[start + 1 : end], cell_spans)
+        cells.append(cell.strip(" \t\f\v"))
+    return cells
+
+
+def _marker_only_line(line: str) -> bool:
+    spans = _line_marker_spans(line)
+    return (
+        bool(spans)
+        and not _spans_overlap(spans)
+        and _remove_spans(line, spans).strip(" \t\f\v") == ""
+    )
+
+
+def _row_refused_marker_lines(text: str, code: set[int]) -> set[int]:
+    records = [
+        record
+        for record in _scan_marker_records(text)
+        if not record.marker.malformed and _marker_outside_code(record.marker, code)
+    ]
+    refused: set[int] = set()
+    spans: list[tuple[int, int, int, int]] = []
+    for record in records:
+        first = text.count("\n", 0, record.start) + 1
+        last = text.count("\n", 0, max(record.start, record.end - 1)) + 1
+        spans.append((record.start, record.end, first, last))
+        if first != last:
+            refused.update(range(first, last + 1))
+    for index, (start, end, first, last) in enumerate(spans):
+        for other_start, other_end, other_first, other_last in spans[index + 1 :]:
+            if other_start >= end:
+                break
+            if other_end > start:
+                refused.update(range(first, last + 1))
+                refused.update(range(other_first, other_last + 1))
+    return refused
+
+
+@dataclass
+class _TableCandidate:
+    header_line: int
+    end_line: int
+    rows: list[_ChildSpan]
+
+
+def _table_candidates(
+    text: str, code: set[int], provenance: set[int] | None = None
+) -> list[_TableCandidate]:
+    """Complete document-level §5.6 scan before selected-container filtering."""
+    lines = text.split("\n")
+    refused_marker_lines = _row_refused_marker_lines(text, code)
+    candidates: list[_TableCandidate] = []
+    i = 0
+    while i + 1 < len(lines):
+        header = (
+            None
+            if i + 1 in code or i + 1 in refused_marker_lines
+            else _row_cells(lines[i])
+        )
+        delimiter = (
+            None
+            if i + 2 in code or i + 2 in refused_marker_lines
+            else _row_cells(lines[i + 1])
+        )
+        delimiter_shaped = (
+            delimiter is not None
+            and bool(delimiter)
+            and all(_DELIMITER_CELL_RE.fullmatch(cell) for cell in delimiter)
+        )
+        if provenance is not None and header is not None and delimiter_shaped:
+            provenance.update((i + 1, i + 2))
+        if (
+            header is None
+            or delimiter is None
+            or bool(_line_marker_spans(lines[i + 1]))
+            or "\f" in lines[i + 1]
+            or "\v" in lines[i + 1]
+            or len(header) != len(delimiter)
+            or not delimiter_shaped
+        ):
+            i += 1
+            continue
+
+        rows: list[_ChildSpan] = []
+        refused = False
+        j = i + 2
+        while j < len(lines):
+            line_number = j + 1
+            line = lines[j]
+            if line_number in code or line_number in refused_marker_lines:
+                if provenance is not None:
+                    provenance.add(line_number)
+                refused = True
+                j += 1
+                continue
+            if line.strip(" \t\f\v") == "" or _marker_only_line(line):
+                break
+            if provenance is not None:
+                provenance.add(line_number)
+            cells = _row_cells(line)
+            if cells is None:
+                refused = True
+            else:
+                rows.append(
+                    _ChildSpan(
+                        line_number,
+                        line_number,
+                        line,
+                        line_number,
+                        kind="row",
+                    )
+                )
+            j += 1
+        if not refused:
+            candidates.append(_TableCandidate(i + 1, max(i + 2, j), rows))
+        if j >= len(lines):
+            break
+        i = j + 1
+    return candidates
+
+
+def _table_spans_by_container(
+    text: str, chunks: list[tuple[int, str]], code: set[int]
+) -> dict[int, list[_ChildSpan]]:
+    """Map accepted candidates to §5 blocks, then enforce one per container."""
+    candidates_by_start: dict[int, list[_TableCandidate]] = {}
+    for candidate in _table_candidates(text, code):
+        for start, chunk in chunks:
+            end = start + len(chunk.split("\n")) - 1
+            if start <= candidate.header_line and candidate.end_line <= end:
+                candidates_by_start.setdefault(start, []).append(candidate)
+                break
+    return {
+        start: candidates[0].rows
+        for start, candidates in candidates_by_start.items()
+        if len(candidates) == 1
+    }
+
+
 def _restricted_child_spans(chunk: str, start: int) -> list[_ChildSpan]:
     """Fail-closed profile: flat, tight, single-paragraph list items."""
     lines = chunk.split("\n")
@@ -524,7 +929,9 @@ def _restricted_child_spans(chunk: str, start: int) -> list[_ChildSpan]:
             if item_start is not None:
                 items.append((item_start, off - 1, "\n".join(item_lines)))
             marker = m.group("marker")
-            kind = ("ordered", marker[-1]) if marker[0].isdigit() else ("bullet", marker)
+            kind = (
+                ("ordered", marker[-1]) if marker[0].isdigit() else ("bullet", marker)
+            )
             # The marker's own indentation is part of the signature: an indented
             # `  - Nested` matches _LIST_PREFIX_RE as happily as a top-level one
             # and would be emitted as a *sibling* of the item containing it, a
@@ -624,6 +1031,76 @@ def segment_child_items(chunk: str, start_line: int, mode: str) -> list[_ChildSp
     raise ValueError(f"unknown parse mode: {mode!r} (use 'blank-line' or 'commonmark')")
 
 
+def _line_starts(text: str) -> list[int]:
+    starts = [0]
+    starts.extend(match.end() for match in re.finditer("\n", text))
+    return starts
+
+
+def _document_marker_records(md: str, text: str) -> list[_MarkerRecord]:
+    """Normalized/frontmatter-blanked records retaining exact caller bytes."""
+    normalized = md.replace("\r\n", "\n").replace("\r", "\n")
+    normalized_lines = normalized.split("\n")
+    blanked_lines = text.split("\n")
+    frontmatter_lines = {
+        line
+        for line, (source, blanked) in enumerate(
+            zip(normalized_lines, blanked_lines), 1
+        )
+        if source != blanked
+    }
+    raw_records = [
+        record
+        for record in _scan_marker_records(md)
+        if record.marker.line not in frontmatter_lines
+    ]
+    normalized_records = _scan_marker_records(text)
+
+    def facts(record: _MarkerRecord) -> tuple:
+        marker = record.marker
+        return (
+            marker.line,
+            marker.syntax,
+            marker.id,
+            marker.hash,
+            marker.subhash,
+            marker.has_subhash,
+            marker.malformed,
+        )
+
+    if [facts(record) for record in raw_records] != [
+        facts(record) for record in normalized_records
+    ]:
+        return normalized_records
+    return [
+        _MarkerRecord(
+            normalized_record.start,
+            normalized_record.end,
+            replace(normalized_record.marker, raw=raw_record.marker.raw),
+        )
+        for normalized_record, raw_record in zip(normalized_records, raw_records)
+    ]
+
+
+def _record_line_bounds(text: str, record: _MarkerRecord) -> tuple[int, int]:
+    """Inclusive source lines occupied by one complete marker record."""
+    return (
+        record.marker.line,
+        text.count("\n", 0, max(record.start, record.end - 1)) + 1,
+    )
+
+
+def _record_belongs_to_child(
+    text: str, record: _MarkerRecord, span: _ChildSpan
+) -> bool:
+    first, last = _record_line_bounds(text, record)
+    return (
+        span.start_line <= first
+        and last <= span.end_line
+        and not any(line in span.excluded_lines for line in range(first, last + 1))
+    )
+
+
 def parse_document(
     md: str, mode: str = "blank-line", child_blocks: bool = False
 ) -> list[Block]:
@@ -654,6 +1131,17 @@ def parse_document(
             f"unknown parse mode: {mode!r} (use 'blank-line' or 'commonmark')"
         )
 
+    document_records = _document_marker_records(md, text)
+    active_records = [
+        record
+        for record in document_records
+        if _marker_outside_code(record.marker, code)
+    ]
+    removable_records = [
+        record for record in active_records if not record.marker.malformed
+    ]
+    line_starts = _line_starts(text)
+
     child_spans: dict[int, list[_ChildSpan]] = {}
     if child_blocks:
         for start, chunk in chunks:
@@ -668,17 +1156,32 @@ def parse_document(
                     for loose_start in run:
                         child_spans[loose_start] = []
                 run = []
+        table_spans = _table_spans_by_container(text, chunks, code)
+        for start, spans in table_spans.items():
+            # Row ownership wins when a table sits inside a direct list item.
+            # The two child kinds retain separate ordinals and sibling scopes.
+            child_spans.setdefault(start, []).extend(spans)
+        for spans in child_spans.values():
+            spans.sort(
+                key=lambda span: (span.start_line, 0 if span.kind == "row" else 1)
+            )
 
     blocks: list[Block] = []
     cidx = 0
     child_idx = 0
     for start, chunk in chunks:
-        markers = [
-            mk
-            for mk in find_markers(chunk, line_offset=start - 1)
-            if mk.line not in code  # §3.3: content, not a marker
+        chunk_start = line_starts[start - 1]
+        chunk_end = chunk_start + len(chunk)
+        chunk_records = [
+            record
+            for record in active_records
+            if chunk_start <= record.start < chunk_end
         ]
-        content = _strip_markers_outside_code(chunk, code, line_offset=start - 1).strip(
+        markers = [record.marker for record in chunk_records]
+        record_by_marker = {id(record.marker): record for record in chunk_records}
+        content = _strip_record_ranges(
+            chunk, removable_records, source_start=chunk_start
+        ).strip(
             " \t\n\r\f\v"
         )  # ASCII strip (SPEC.md §5/§8)
         if content == "":
@@ -691,26 +1194,56 @@ def parse_document(
             children: list[ChildBlock] = []
             child_marker_ids: set[int] = set()
             if child_blocks:
-                for ordinal, span in enumerate(child_spans.get(start, []), 1):
+                ordinals: dict[str, int] = {}
+                row_marker_ids = {
+                    id(mk)
+                    for span in child_spans.get(start, [])
+                    if span.kind == "row"
+                    for mk in markers
+                    if mk.has_subhash
+                    and _record_belongs_to_child(text, record_by_marker[id(mk)], span)
+                }
+                for span in child_spans.get(start, []):
+                    ordinals[span.kind] = ordinals.get(span.kind, 0) + 1
                     owned = [
                         mk
                         for mk in markers
-                        if mk.subhash is not None
-                        and span.start_line <= mk.line <= span.end_line
-                        and mk.line not in span.excluded_lines
+                        if mk.has_subhash
+                        and id(mk) not in child_marker_ids
+                        and (span.kind == "row" or id(mk) not in row_marker_ids)
+                        and _record_belongs_to_child(
+                            text, record_by_marker[id(mk)], span
+                        )
                     ]
                     child_marker_ids.update(id(mk) for mk in owned)
+                    span_text = span.text
+                    if span.kind == "list":
+                        # Strip using full-document record ranges so a marker
+                        # crossing an item boundary does not leave a dangling
+                        # opener or closer in either child's hash. Ownership is
+                        # still stricter: only a record wholly contained in one
+                        # direct item can address it.
+                        span_text = _strip_record_ranges(
+                            span_text,
+                            removable_records,
+                            source_start=line_starts[span.start_line - 1],
+                        )
                     children.append(
                         ChildBlock(
                             content=child_body(
-                                span.text, code, span.start_line - 1
+                                span_text,
+                                code,
+                                span.start_line - 1,
+                                span.kind,
+                                markers_already_stripped=span.kind == "list",
                             ),
                             markers=owned,
                             line=span.start_line,
                             index=child_idx,
-                            ordinal=ordinal,
+                            ordinal=ordinals[span.kind],
                             parent_index=cidx,
                             marker_line=span.marker_line,
+                            kind=span.kind,
                         )
                     )
                     child_idx += 1
@@ -772,8 +1305,10 @@ _HTML_TAGS_6 = (
     "search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul"
 )
 _HTML_OPEN = (
-    (re.compile(r"^ {0,3}<(?:script|pre|style|textarea)(?:[ \t>]|$)", re.I),
-     re.compile(r"</(?:script|pre|style|textarea)>", re.I)),
+    (
+        re.compile(r"^ {0,3}<(?:script|pre|style|textarea)(?:[ \t>]|$)", re.I),
+        re.compile(r"</(?:script|pre|style|textarea)>", re.I),
+    ),
     (re.compile(r"^ {0,3}<!--"), re.compile(r"-->")),
     (re.compile(r"^ {0,3}<\?"), re.compile(r"\?>")),
     (re.compile(r"^ {0,3}<![A-Za-z]"), re.compile(r">")),
@@ -786,19 +1321,23 @@ _HTML_OPEN = (
 # punctuation (`*.py` with `.py`, `~/.config` with `/.config`, `A * B` with
 # `A B`), which is a worse failure than missing an unpaired delimiter.
 _INLINE_RES = (
-    (re.compile(r"!?\[(?P<text>[^\]]*)\]\([^()]*\)"), r"\g<text>"),   # inline link
-    (re.compile(r"!?\[(?P<text>[^\]]*)\]\[[^\]]*\]"), r"\g<text>"),   # ref link
-    (re.compile(r"`+(?P<text>[^`]+)`+"), r"\g<text>"),                # code span
+    (re.compile(r"!?\[(?P<text>[^\]]*)\]\([^()]*\)"), r"\g<text>"),  # inline link
+    (re.compile(r"!?\[(?P<text>[^\]]*)\]\[[^\]]*\]"), r"\g<text>"),  # ref link
+    (re.compile(r"`+(?P<text>[^`]+)`+"), r"\g<text>"),  # code span
     (re.compile(r"\*\*(?=\S)(?P<text>.+?)(?<=\S)\*\*"), r"\g<text>"),
-    (re.compile(r"(?<![0-9A-Za-z_])__(?=\S)(?P<text>.+?)(?<=\S)__(?![0-9A-Za-z_])"),
-     r"\g<text>"),
+    (
+        re.compile(r"(?<![0-9A-Za-z_])__(?=\S)(?P<text>.+?)(?<=\S)__(?![0-9A-Za-z_])"),
+        r"\g<text>",
+    ),
     (re.compile(r"~~(?=\S)(?P<text>.+?)(?<=\S)~~"), r"\g<text>"),
     (re.compile(r"\*(?=\S)(?P<text>.+?)(?<=\S)\*"), r"\g<text>"),
     # `_` opens or closes emphasis only at a word boundary: intraword underscores
     # are literal, so `sync_corpus.sh` keeps its underscore while `_Rollback_`
     # loses its delimiters.
-    (re.compile(r"(?<![0-9A-Za-z_])_(?=\S)(?P<text>.+?)(?<=\S)_(?![0-9A-Za-z_])"),
-     r"\g<text>"),
+    (
+        re.compile(r"(?<![0-9A-Za-z_])_(?=\S)(?P<text>.+?)(?<=\S)_(?![0-9A-Za-z_])"),
+        r"\g<text>",
+    ),
 )
 
 
@@ -829,25 +1368,38 @@ def _paths_by_line(md: str) -> list[list[str]]:
     records `["Deploy"]` rather than the path of the sibling section above it.
     A setext title line is rescoped the same way once its underline is read."""
     text = _blank_frontmatter(md.replace("\r\n", "\n").replace("\r", "\n"))
+    # SPEC.md §3.3 fence geometry, computed once over the document by
+    # `_fence_state` and threaded here on the `parse_document` precedent, rather
+    # than re-derived below. A second recogniser is a second answer: this one used
+    # to run over the marker-stripped lines, so a marker whose line ended in a
+    # backtick run became a bare fence opener to it and no fence at all to §3.3,
+    # and every heading after it was swallowed by a fence that never closed.
+    # Blanking preserves line numbers, so the mask indexes `lines` directly.
+    code = code_lines(text)
     # Markers are stripped per line rather than document-wide: a multi-line
     # marker would otherwise take its newlines with it and shift every line
     # number after it.
     lines = [_strip_markers(raw) for raw in text.split("\n")]
     stack: list[tuple[int, str]] = []
     out: list[list[str]] = []
-    fence: str | None = None
     html_close: re.Pattern | None = None
     html_blank_ends = False
     para: list[int] = []  # line indices of an open paragraph (a setext candidate)
-    container = False     # inside a blockquote or list item, until a blank line
+    container = False  # inside a blockquote or list item, until a blank line
 
     def pop_to(level: int) -> None:
         while stack and stack[-1][0] >= level:
             stack.pop()
 
-    for line in lines:
+    for line_no, line in enumerate(lines, 1):
         blank = line.strip(" \t\f\v") == ""
 
+        # An open HTML block is tested first, so it can still close on a
+        # fence-shaped line: §3.3's line scan has no concept of an HTML block, so
+        # letting the mask short-circuit here would leave the block open to the end
+        # of the document and lose every heading under it. Once it closes, the mask
+        # below still applies, so a line either recogniser calls code contributes no
+        # heading.
         if html_close is not None or html_blank_ends:
             if (html_blank_ends and blank) or (
                 html_close is not None and html_close.search(line)
@@ -857,23 +1409,9 @@ def _paths_by_line(md: str) -> list[list[str]]:
             para = []
             continue
 
-        if fence is not None:
-            close = _FENCE_CLOSE_RE.match(line)
-            if (
-                close
-                and close.group("run")[0] == fence[0]
-                and len(close.group("run")) >= len(fence)
-            ):
-                fence = None
-            out.append([t for _, t in stack])
-            para = []
-            continue
-
-        opener = _FENCE_OPEN_RE.match(line)
-        if opener and not (
-            opener.group("run")[0] == "`" and "`" in opener.group("info")
-        ):
-            fence = opener.group("run")
+        if line_no in code:
+            # Fence lines included: a heading cannot open inside a fenced block,
+            # and a fenced line is not a lazy continuation of an open container.
             out.append([t for _, t in stack])
             para, container = [], False
             continue
@@ -947,6 +1485,13 @@ def heading_paths(md: str, blocks: list[Block]) -> list[list[str]]:
     * Fenced code, indented code, HTML blocks, blockquotes and list items cannot
       contribute a heading, and a link reference definition or a lazy
       continuation line cannot become a setext title.
+    * **Fenced code is SPEC.md §3.3's geometry exactly**, read from `_fence_state`
+      rather than re-derived here, so there is one fence recogniser in this module
+      and not two. That makes it narrower than CommonMark where the two part
+      company: a fence opened inside an HTML block is open, and an unclosed fence
+      runs to the end of the document. Agreeing with §3.3 is the point, since a
+      second reading of the same lines is what let a marker sitting before a
+      backtick run open a fence nothing else could see.
 
     Titles come back as written; use `canonical_heading` to compare them.
     Experimental: no spec text defines this yet (see eval/attachment/)."""
@@ -954,6 +1499,7 @@ def heading_paths(md: str, blocks: list[Block]) -> list[list[str]]:
     if not by_line:
         return [[] for _ in blocks]
     return [by_line[max(0, min(len(by_line) - 1, b.line - 1))] for b in blocks]
+
 
 # --- checks ---------------------------------------------------------------
 
@@ -966,7 +1512,17 @@ def lint_document(
     findings: list[Finding] = []
     seen: dict[str, int] = {}
 
-    def check_marker(mk: Marker, body: str, orphan: bool = False, child: bool = False):
+    # Malformed and duplicate checks are lexical and document-global. Run them
+    # once in source order before attachment separates block and child markers.
+    normalized = md.replace("\r\n", "\n").replace("\r", "\n")
+    scannable = _blank_frontmatter(normalized)
+    code = code_lines(scannable)
+    table_scan_lines: set[int] = set()
+    _table_candidates(scannable, code, table_scan_lines)
+    for record in _document_marker_records(md, scannable):
+        mk = record.marker
+        if not _marker_outside_code(mk, code):
+            continue
         if mk.malformed:
             findings.append(
                 Finding(
@@ -976,17 +1532,7 @@ def lint_document(
                     line=mk.line,
                 )
             )
-            return
-        if orphan:
-            findings.append(
-                Finding(
-                    "error",
-                    "ORPHAN_MARKER",
-                    f"marker {mk.id} has no preceding block to attach to",
-                    id=mk.id,
-                    line=mk.line,
-                )
-            )
+            continue
         if mk.id in seen:
             findings.append(
                 Finding(
@@ -999,8 +1545,28 @@ def lint_document(
             )
         else:
             seen[mk.id] = mk.line
+
+    def check_marker(mk: Marker, body: str, orphan: bool = False, child: bool = False):
+        if mk.malformed:
+            return
+        if orphan:
+            findings.append(
+                Finding(
+                    "error",
+                    "ORPHAN_MARKER",
+                    f"marker {mk.id} has no preceding block to attach to",
+                    id=mk.id,
+                    line=mk.line,
+                )
+            )
+            # An orphan has no body to attribute or hash. Exact `subhash`
+            # presence excludes containing-block attribution (§16), but does
+            # not waive the required orphan diagnostic (§5).
+            return
+        if mk.has_subhash and not child:
+            return
         stored = mk.subhash if child else mk.hash
-        if stored and body:
+        if stored and (child or body):
             now = body_hash(body, len(stored))
             if now != stored:
                 key = "subhash" if child else "hash"
@@ -1026,23 +1592,28 @@ def lint_document(
             # either. Reporting it is the SHOULD in §5.5: silence is
             # indistinguishable from a marker that resolved.
             for mk in b.markers:
-                if mk.subhash is not None and mk.id and not mk.malformed:
-                    why = (
-                        "nested items are not child blocks in v1.3"
-                        if b.children
-                        else "this segmenter emitted no child blocks for the block"
-                    )
+                if mk.has_subhash and mk.id and not mk.malformed:
+                    if mk.line in table_scan_lines:
+                        target = "table row"
+                        why = "the complete §5.6 scan did not accept this as a body row"
+                    else:
+                        target = "list item"
+                        why = (
+                            "nested items are not child blocks in v1.3"
+                            if any(child.kind == "list" for child in b.children)
+                            else "this segmenter emitted no list child blocks for the block"
+                        )
                     findings.append(
                         Finding(
                             "warn",
                             "CHILD_UNADDRESSED",
-                            f"child id {mk.id} addresses no list item ({why})",
+                            f"child id {mk.id} addresses no {target} ({why})",
                             id=mk.id,
                             line=mk.line,
                         )
                     )
             has_parent = any(
-                mk.id and not mk.malformed and mk.subhash is None for mk in b.markers
+                mk.id and not mk.malformed and not mk.has_subhash for mk in b.markers
             )
             for child in b.children:
                 for mk in child.markers:
@@ -1066,7 +1637,7 @@ def _id_index(blocks: list[Block]) -> dict[str, list[Block]]:
         if b.index < 0:
             continue
         for mk in b.markers:
-            if mk.id and not mk.malformed:
+            if mk.id and not mk.malformed and not mk.has_subhash:
                 out.setdefault(mk.id, []).append(b)
     return out
 
@@ -1156,6 +1727,7 @@ class _ChildAnchor:
     parent_suffix: str
     sibling_hash_count: int
     document_hash_count: int
+    kind: str
 
 
 def _build_child_anchors(md: str, mode: str) -> list[_ChildAnchor]:
@@ -1173,11 +1745,17 @@ def _build_child_anchors(md: str, mode: str) -> list[_ChildAnchor]:
             (
                 mk
                 for mk in block.markers
-                if mk.id and not mk.malformed and mk.subhash is None
+                if mk.id and not mk.malformed and not mk.has_subhash
             ),
             None,
         )
-        for ci, child in enumerate(block.children):
+        for child in block.children:
+            siblings = [
+                candidate
+                for candidate in block.children
+                if candidate.kind == child.kind
+            ]
+            ci = siblings.index(child)
             digest = body_hash(child.content)
             for mk in child.markers:
                 if mk.id and not mk.malformed:
@@ -1187,13 +1765,13 @@ def _build_child_anchors(md: str, mode: str) -> list[_ChildAnchor]:
                             hash=digest,
                             quote=child.content,
                             prefix=(
-                                block.children[ci - 1].content[-_CONTEXT_CHARS:]
+                                siblings[ci - 1].content[-_CONTEXT_CHARS:]
                                 if ci > 0
                                 else ""
                             ),
                             suffix=(
-                                block.children[ci + 1].content[:_CONTEXT_CHARS]
-                                if ci + 1 < len(block.children)
+                                siblings[ci + 1].content[:_CONTEXT_CHARS]
+                                if ci + 1 < len(siblings)
                                 else ""
                             ),
                             ordinal=child.ordinal,
@@ -1212,10 +1790,11 @@ def _build_child_anchors(md: str, mode: str) -> list[_ChildAnchor]:
                             ),
                             sibling_hash_count=sum(
                                 1
-                                for candidate in block.children
+                                for candidate in siblings
                                 if body_hash(candidate.content) == digest
                             ),
                             document_hash_count=doc_counts[digest],
+                            kind=child.kind,
                         )
                     )
     return anchors
@@ -1244,7 +1823,10 @@ def _resolve_parents(
 
     for pid in reps:
         for idx, block in enumerate(blocks):
-            if any(mk.id == pid and not mk.malformed for mk in block.markers):
+            if any(
+                mk.id == pid and not mk.malformed and not mk.has_subhash
+                for mk in block.markers
+            ):
                 out[pid] = (idx, "marker")
                 claimed.add(idx)
                 break
@@ -1328,7 +1910,7 @@ def _resolve_children(
         mk.id
         for block in blocks
         for mk in block.markers
-        if mk.subhash is not None and mk.id and not mk.malformed
+        if mk.has_subhash and mk.id and not mk.malformed
     } - set(marked)
 
     parents = _resolve_parents(anchors, blocks)
@@ -1378,10 +1960,11 @@ def _resolve_children(
         parent = _parent_of(anchor)
         if parent is None or body_hash(parent.content) != anchor.parent_hash:
             continue
+        siblings = [child for child in parent.children if child.kind == anchor.kind]
         ordinal = anchor.ordinal - 1
-        if not 0 <= ordinal < len(parent.children):
+        if not 0 <= ordinal < len(siblings):
             continue
-        candidate = parent.children[ordinal]
+        candidate = siblings[ordinal]
         if candidate.markers or candidate.index in claimed:
             continue
         ordinal_proposals[anchor.id] = candidate.index
@@ -1397,7 +1980,9 @@ def _resolve_children(
         hits = [
             child
             for child in parent.children
-            if body_hash(child.content) == anchor.hash and child.index not in claimed
+            if child.kind == anchor.kind
+            and body_hash(child.content) == anchor.hash
+            and child.index not in claimed
         ]
         if len(hits) == 1:
             sibling_proposals[anchor.id] = hits[0].index
@@ -1424,7 +2009,9 @@ def _resolve_children(
         if parent is None:
             continue
         candidates = [
-            child for child in parent.children if child.index not in claimed
+            child
+            for child in parent.children
+            if child.kind == anchor.kind and child.index not in claimed
         ]
         idx, score, runner = _best_match(
             anchor.quote,

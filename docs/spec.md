@@ -1,5 +1,5 @@
-# markstay specification, version 1.5
-<!-- stay:umd0IOWq hash=sha256:ba0222fbb86b -->
+# markstay specification, version 1.6
+<!-- stay:umd0IOWq hash=sha256:cfc371d51ead -->
 
 Status: **normative, stable.** This is the markstay standard, not a proposal.
 Version 1 pins the marker grammar, attachment model, hashing, and recovery
@@ -13,12 +13,14 @@ also corrects §9.2's prose and reference implementations so permitted sibling
 context can distinguish historically duplicate child bodies at CHILD QUOTE.
 Version 1.5 makes text inside a fenced code block content rather than markup
 (§3.3), so a marker in an example is an example, for every fence a line scan can
-recognise. The
-reference linter (`linter/`) and the resolver used by the
-attachment eval (`eval/attachment/`) implement this document; where this document
-and the reference code disagree, this document is authoritative and the code is a
-bug.
-<!-- stay:DraQ5ZPq hash=sha256:5a0a23c806b5 -->
+recognise. Version 1.6 lifts the rest of the §5.1 deferral: a table body row may
+carry its own stay (§5.6), on the carrier §14 gated it on and with §5.5's identity
+model unchanged, and one reader rule now binds every tool rather than only those
+implementing child identity (§16). The reference linter (`linter/`) and the resolver
+used by the attachment eval (`eval/attachment/`) implement versions through 1.5;
+v1.6 row support is the active implementation phase. Where this document and the
+reference code disagree, this document is authoritative and the code is a bug.
+<!-- stay:DraQ5ZPq hash=sha256:abe99b10b771 -->
 
 **Version 1.3 adds §5.5 and §9.2**, which let a **direct list item carry its own
 stay**, addressed inside its list rather than as a block of its own. It is an
@@ -28,8 +30,8 @@ document that does not use it. It is **less optional than §5.2** in one respect
 stating up front: segmenting and resolving child blocks is a tool's choice, but two
 write-path rules that stop an unaware tool damaging a child-stamped document bind
 every version 1.3 writer (§16). §5.1 and §14 are amended to match; table-row
-and inline-span identity remain deferred.
-<!-- stay:I4mnY6hN hash=sha256:af2ced6ba14d -->
+identity followed in version 1.6 (§5.6) and inline-span identity remains deferred.
+<!-- stay:I4mnY6hN hash=sha256:b3e9441fc699 -->
 
 **Version 1.2 changed §5** (see §17 for the full history), in two ways:
 <!-- stay:J5JkYEAd hash=sha256:11e4c98bd990 -->
@@ -290,7 +292,7 @@ about:
  used to report disappears with the stays.
 
 Nothing about the marker grammar (§4), identity (§7), or recovery (§9) changes.
-<!-- stay:zvT5cQlG -->
+<!-- stay:zvT5cQlG hash=sha256:cb077ed5aa0b -->
 
 ## 4. Marker grammar
 <!-- stay:p3a9OsnE hash=sha256:eba0ba2af4c9 -->
@@ -309,10 +311,10 @@ attribute   = key "=" value
 key         = ALPHA *( ALPHA / DIGIT / "_" / "-" )
 value       = bare-value / quoted-value
 bare-value  = 1*( %x21-7E except WSP and DQUOTE )    ; no spaces, no quotes
-quoted-value= DQUOTE *( qchar ) DQUOTE               ; spaces allowed
-qchar       = %x20-21 / %x23-5B / %x5D-7E / "\" DQUOTE / "\\"
+quoted-value= DQUOTE *( qchar ) DQUOTE               ; spaces and LF allowed
+qchar       = LF / %x20-21 / %x23-5B / %x5D-7E / "\" DQUOTE / "\\"
 ```
-<!-- stay:9zEUvi7Y hash=sha256:c7b547a5e838 -->
+<!-- stay:9zEUvi7Y hash=sha256:6795ad2e3b05 -->
 
 Rules:
 <!-- stay:GIjJJe34 hash=sha256:09e09762d2d1 -->
@@ -329,15 +331,35 @@ Rules:
  reserved for future versions; a conforming tool MUST preserve any key it does
  not understand verbatim and MUST NOT act on it.
 - **The same holds for a reserved key from a section a tool does not implement.**
- A key being reserved is not permission to act on it: a tool that does not
- implement §5.5 MUST preserve `subhash` verbatim and MUST NOT act on it, exactly
- as if it were unrecognised. Without this clause the preservation rule above would
- cover only future-version keys, and a key would lose its protection on the day it
- was given a meaning.
+ A key being reserved is not permission to interpret it: a tool that does not
+ implement §5.5 or §5.6 MUST preserve `subhash` verbatim and MUST NOT interpret it
+ as child identity. It MUST still apply §16's mandatory non-attribution and writer
+ safety guards; those compare the key without segmenting or resolving a child.
+ Without this clause the preservation rule above would cover only future-version
+ keys, and a key would lose its protection on the day it was given a meaning.
 - **Values** are either a bare token (no whitespace, no double quote) or a
  double-quoted string. A value containing whitespace MUST be double-quoted.
  Inside a quoted value, `\"` and `\\` are the only escapes.
-<!-- stay:KLMBH6Ia hash=sha256:4b1a51fd43e6 -->
+- **Line endings** are normalized from CRLF or CR to LF before applying this
+ grammar, as in §8 step 1. LF is valid only inside a quoted value; it is not `WSP`
+ between attributes. Recognition uses the normalized copy, while preservation
+ remains verbatim. A conforming writer emits a marker on one line (§3.3), so the
+ multiline form is reader syntax for hand-written input rather than writer output.
+- **The host comment owns its close delimiter.** An HTML marker body MUST NOT
+ contain either literal sequence `-->` or `--!>`, and an MDX marker body MUST NOT
+ contain `*/`. Double quotes do not escape those sequences from the HTML or
+ JavaScript comment parser. An HTML reader stops at the earlier of `-->` and `--!>`;
+ only `-->` completes the `html-marker` production. An MDX reader stops at the first
+ `*/`; only one immediately followed by `}` completes `mdx-marker`. A rejected
+ opener does not consume a later opener. If the preceding body is not a complete
+ grammar match, it is not a valid marker for attachment, hashing, row-token
+ recognition, or preservation evidence. That validity boundary does not cancel the
+ required malformed-marker diagnostic above: a comment whose `stay:` namespace is
+ followed by a first `key=value` token still has no id and a conforming linter MUST
+ report it. A writer MUST NOT emit any forbidden sequence in that marker form.
+ Recovery evidence that needs it can use the other marker form where the document
+ permits one, or the side index below.
+<!-- stay:KLMBH6Ia hash=sha256:ccab39a2cfed -->
 
 A marker MUST carry an `id`. It SHOULD carry a `hash` (§8). It MAY carry
 `quote`/`prefix`/`suffix` recovery evidence inline (§9); equivalently a tool MAY
@@ -389,10 +411,13 @@ Every stay identifies a whole block:
  also carry a stay of its own, addressed inside the list rather than as a block of
  its own (§5.5, v1.3); a marker with no `subhash` still identifies the whole list.
 - **Code fence**: a marker after the closing fence identifies the **whole fence**.
-- **Table**: a marker after the table identifies the **whole table**; row-level
- identity is deferred.
+- **Table**: a marker after the table identifies the table's selected §5 block,
+ which is the **whole table** when segmentation isolates it. If adjacent content
+ shares that block, the marker identifies the whole selected block. A body row MAY
+ also carry a stay of its own, addressed inside that container rather than as a block
+ of its own (§5.6, v1.6); a marker with no `subhash` still identifies the container.
 - **Blockquote**: a marker after the quote identifies the **whole quote**.
-<!-- stay:xUUypf7e hash=sha256:48921e617e92 -->
+<!-- stay:xUUypf7e hash=sha256:285fdcac82d2 -->
 
 ### 5.2 CommonMark-tree attachment (v1.1)
 <!-- stay:RPoNeLUp hash=sha256:d3e87ce83401 -->
@@ -630,7 +655,12 @@ can tell the same bytes are literal code, and the reference mdast adapter declin
 bind them. Both readings stay defensible and this spec still does not force one. Authors
 should therefore **keep marker-shaped text out of code spans, indented code, and any
 fence that is quoted or deeply indented**, or expect one tool to see a stay there and
-another not to.
+another not to. **Table-row recognition is the narrow exception for a tool that
+implements table-child identity:** §5.6 requires that tool to treat §4 marker spans as
+opaque row-scan tokens outside a §3.3-recognised fence, including inside inline and
+indented code, so cell boundaries and row ownership do not inherit this divergence.
+The mandatory §16 rule for every reader remains narrower: never attribute a marker
+carrying `subhash` to its containing block. It does not require running this scan.
 
 **What version 1.2 changed here.** Version 1.1 stated this condition as "lists
 tight and fences free of internal blank lines", which is case 2 alone. Cases 1 and
@@ -647,10 +677,10 @@ author, which is what §5.2 was already doing for case 2.
 <!-- stay:BIvjZW2q hash=sha256:18ca5fad8733 -->
 
 Version 1.3 lifts the §5.1 deferral for one construct: **a list item MAY carry its
-own stay.** Nothing else in that deferral moves. Table rows and inline spans stay
-deferred (§14), and every rule below is written so that adding row identity later
-needs a carrier rather than a second identity model.
-<!-- stay:fFwU4hgn hash=sha256:f66a27ba2b90 -->
+own stay.** Every rule below is written so that adding row identity later needs a
+carrier rather than a second identity model, and version 1.6 took it up on exactly
+that basis (§5.6). Inline spans stay deferred (§14).
+<!-- stay:fFwU4hgn hash=sha256:b93f69ae9377 -->
 
 A **child block** is a **direct** list item of a block that is a list. Direct is the
 whole depth rule: only the items at the top level of the container are child blocks.
@@ -789,13 +819,330 @@ as an ordinary block.
 <!-- stay:UmwMU3qe hash=sha256:43202b759054 -->
 
 So a loose list can carry child stays under §5.2 and cannot under the baseline, and
-**the agreement subset of §5.4 does not extend to child blocks**: a document can sit
-inside it and still have the two segmenters disagree about whether its list items are
-addressable. An author who wants child identity to travel across both segmenters
-keeps the list tight and its items single paragraphs. This is the §5.2 split
-reappearing one level down, and it is stated rather than closed, for the same reason
-§5.4 states its condition rather than changing a segmenter.
-<!-- stay:7rUXV7zH hash=sha256:2352a0cc5bce -->
+**the agreement subset of §5.4 does not extend to the child items of a list**: a
+document can sit inside it and still have the two segmenters disagree about whether
+its list items are addressable. That is a property of this section rather than of
+child identity in general, and §5.6 does not inherit it: both built-in segmenters
+recognise candidate table rows with the same parser-free line scan. Each row uses its
+selected §5 block as a container. Outside §5.4's agreement subset, ordinary
+CommonMark boundaries can make the two built-in segmenters select different
+containers around the same rows. A tool MAY use a GFM table extension for rendering
+or its own AST, but that extension is not a third §5 segmenter and MUST NOT replace the
+selected built-in block with a table node when choosing the §9.2 container. An
+author who wants child identity to travel across both built-in segmenters keeps the
+list tight and its items single paragraphs. This is the §5.2 split reappearing one
+level down, and it is stated rather than closed, for the same reason §5.4 states its
+condition rather than changing a segmenter.
+<!-- stay:7rUXV7zH hash=sha256:dba136452b4e -->
+
+### 5.6 Child-block identity: table rows (v1.6)
+<!-- stay:e0TFIglO hash=sha256:d3595c191d58 -->
+
+Version 1.6 lifts the rest of the §5.1 deferral: **a body row of a GFM table MAY
+carry its own stay**, addressed inside its table rather than as a block of its own.
+Inline-span identity stays deferred (§14).
+<!-- stay:HXlL5EtE hash=sha256:36bdaeedd14c -->
+
+This is §5.5's model with a different carrier and a different body rule, and nothing
+else. A row stay's id is an ordinary id, §9.2 resolves it with the ladder it already
+has, and every §5.5 rule phrased about `subhash` rather than about lists holds here
+unchanged. §5.5's opening paragraph promised that adding rows would need a carrier
+rather than a second identity model; this section is that promise being kept.
+<!-- stay:wKPQU9KY hash=sha256:048dd3a0d66e -->
+
+A **child block** of a table is one of its **body rows**. The header row and the
+delimiter row are the table's schema rather than its content: a conforming tool MUST
+NOT mint a stay on either, and a marker carrying `subhash` found on one addresses
+nothing (below). A row's **ordinal** is its 1-based position among its table's body
+rows; as in §5.5 it is evidence, never identity (§2.1), and §9.2 bars it from the
+commit rule.
+<!-- stay:gmRtuEWc hash=sha256:bb34ebe37add -->
+
+**A child block is not a block, and a table candidate does not create one.** Every
+line from the candidate's header through its last body row MUST lie inside one block
+under the tool's selected §5 segmenter; otherwise the candidate has no child blocks.
+That existing §5 block is the rows' **container** for §9.2. A marker with no `subhash`
+binds to it, and its `hash` is computed over that whole block. Inside §5.4's agreement
+subset both built-in segmenters select the same block, but that block can include
+adjacent prose as well as the table-shaped lines. Outside the subset, an ordinary
+CommonMark boundary such as a touching heading can make the built-in segmenters choose
+different containers around the same rows. A GFM table node does not change this
+choice: §5 defines exactly two segmenters, and an extension AST MUST map the candidate
+back to the block selected by the tool's chosen §5 profile. Nothing about segmentation
+or a document without row markers changes under either profile.
+<!-- stay:9wuNMD1z hash=sha256:a79fe4ea0cd8 -->
+
+After the complete scan, an accepted candidate has child blocks only when it is the
+**only accepted candidate in its selected §5 container**. If two or more candidates
+share one container, none of their rows is a child block. A `subhash` marker on any of
+those rows addresses nothing and the linter report required below applies. This is the
+same fail-closed reason as rule 4: §9.2 records the container and the row ordinal, not a
+second table discriminator, so two ordinal-1 rows inside one container cannot be
+recovered unambiguously. This filter is applied after recognition and does not change
+the parser-free scan or its candidate boundaries.
+<!-- stay:single-row-table-per-container hash=sha256:2a66c5889afb -->
+
+**Recognising a table** is a parser-free line scan, and every tool that implements
+table-child segmentation applies the same one. The rule uses a conceptual **marker
+token** while it scans: every part of a marker span
+on a line is one opaque token that is not ASCII whitespace, `\\`, or `|`, and that
+breaks a run of backslashes. Bytes inside the token are never inspected as table
+syntax. The token is deleted only after cell boundaries have been fixed. This is
+what lets a marker value contain `|` without letting marker removal turn a closing
+pipe into an escaped one.
+<!-- stay:cFmVUxy5 hash=sha256:8ffa547059ae -->
+
+Two marker spans that share any source byte, or one marker span that crosses an LF,
+make every line they touch ineligible as a row line and as a marker-only terminator.
+Tools detect both conditions over the complete frontmatter-excluded document before
+scanning individual lines. If such a line lies in a started candidate body, rule 4
+refuses the candidate. This fail-closed rule is about table recognition only: the scan
+does not merge, discard, or choose a semantic owner between §4 grammar matches.
+Whatever markers §4 recognises remain preserved ordinary markers, and a `subhash`
+marker among them addresses no row because the candidate is refused.
+<!-- stay:overlapping-row-markers hash=sha256:9b6f -->
+
+0. The scan runs after §5.3 has excluded a recognised leading YAML frontmatter block,
+ on lines split at LF after §8's line-ending normalization. Frontmatter lines never
+ start or belong to a candidate. A line §3.3 masks as fenced code is ineligible as a
+ row line; if one occurs inside a candidate body, rule 4 refuses that candidate rather
+ than bridging across the code. On every other eligible line, §4 marker spans are
+ replaced by the opaque tokens above before any delimiter is sought. **For this row
+ scan and for row ownership, that token rule also applies inside inline code spans,
+ indented code, and any other literal-code form §5.4 otherwise permits a tree reader
+ to ignore.** This local rule overrides that latitude: outside a §3.3-recognised fence,
+ a parsed marker carrying `subhash` on an accepted body row addresses that row.
+1. A line has a **working slice** only when it starts with zero to three **spaces**,
+ U+0020, followed by a non-space. Remove those initial spaces, then remove trailing
+ ASCII whitespace (space, tab, form feed, vertical tab). A tab is not a leading
+ space here, for §3.3's reason: expanding one needs a column model this rule
+ deliberately does not have. A **row line** is one whose working slice contains at
+ least two distinct unescaped `|` delimiters, begins with the first, and ends with the
+ last.
+2. At each line, the scan tests a possible **header** row line followed immediately
+ by a possible **delimiter** row line whose cell count equals the header's. Fix the
+ cell boundaries first. The delimiter source line MUST contain no marker token, form
+ feed, or vertical tab; these checks use the LF-split source line before rule 1 removes
+ trailing whitespace. Each delimiter cell, trimmed of spaces and tabs only, MUST then
+ be an optional `:`, one or more `-`, an optional `:`, and nothing else. A candidate
+ starts only when that whole pair passes. When it fails, no candidate owns or reserves
+ either line; advance one line and test again.
+3. Starting after the delimiter, the **candidate body** continues to the first blank
+ line (§5), the first **marker-only line**, or the end of the document. A marker-only
+ line is a nonblank LF-split line that, after deleting one or more complete marker
+ spans, contains only ASCII whitespace. Those are the only successful terminators and
+ are not part of the body. A line §3.3 masks as fenced code never terminates a
+ candidate, even if its source has that shape. Every other line in the candidate body
+ MUST be a row line. If all are, the candidate is a table and they are its body rows.
+4. A started candidate with any non-row line in its candidate body has **no child
+ blocks at all**, including the row lines before the refusal. That is per table
+ rather than per row, and the reason is ordinals: §9.2 tier 2 maps markerless
+ children by position, so two tools that disagree about whether one line is a row
+ disagree about the ordinal of every row after it. Refusing the whole table is the
+ only failure that keeps them in step.
+5. The scan is left-to-right and candidates do not nest. Once a pair passes rule 2
+ and starts a candidate, the lines through its successful terminator belong to that
+ candidate for this scan whether it succeeds or is refused. A later pair inside that
+ extent MUST NOT start a second candidate table.
+<!-- stay:5zNzAzaz hash=sha256:6fdda5703e41 -->
+
+A `|` is **escaped** where an odd number of consecutive `\` immediately precedes it
+in the tokenized working slice, and is a cell delimiter otherwise. A marker token
+breaks that consecutive run. **Cells** are what the unescaped delimiters separate,
+discarding the empty field before the first and after the last. After those boundaries
+are fixed, marker tokens are deleted from the cells. A cell keeps every other escape
+verbatim: a tool that turned `\|` back into `|` would give `| a\|b |` and `| a | b |`
+the same row body.
+<!-- stay:sw6uqdt4 hash=sha256:4b55ff565b0b -->
+
+**This rule is narrower than GFM's, in the direction of refusing rather than
+guessing**, and the differences were checked rather than assumed. GFM recognises rows
+without outer pipes, treats an ordinary non-blank line as a one-cell body row, and can
+end a table at a block-level construct. This parser-free rule refuses the first two and
+accepts only a blank line, a marker-only line, or EOF as the end: a heading or other
+block construct touching the table therefore refuses child addressability unless a
+blank line separates it. It is also narrower than a GFM **parser's** view of a row it
+does accept: a parser pads or truncates a row to the header's cell count and this rule
+does neither, so a tool implementing §5.6 MUST take a row's cells from the rule above
+rather than from a parser's cell list even where it has one. Two tools that read the
+same ragged row through those two routes hash it differently. The delimiter-line
+marker rule preserves that refusal-only relation: a marker is not deleted to
+manufacture delimiter syntax. Form feed and vertical tab are a separate deliberate
+narrowing. `cmark-gfm` accepts them where the pinned MarkdownIt table rule refuses
+them, so §5.6 rejects both rather than making child addressability depend on the parser
+an implementation happened to test against.
+<!-- stay:NJuv6zuU hash=sha256:499a473f0ef5 -->
+
+**Body and hash.** The **row body** is the row line with, in order:
+<!-- stay:TOHH9OVO hash=sha256:974c4bcf4347 -->
+
+1. its tokenized working slice split into cells as above;
+2. every marker token deleted from its cell (§3);
+3. each cell's leading and trailing ASCII whitespace (space, tab, form feed,
+ vertical tab) removed;
+4. inside each cell, every `\` replaced with `\\`, then every `|` replaced with
+ `\|`, in that order;
+5. the encoded cells joined with a single unescaped `|`.
+<!-- stay:AYBz6TkN hash=sha256:8243bacba0e6 -->
+
+What remains is normalized and hashed exactly as §8 specifies, and written under
+`subhash`, the reserved key §5.5 defines.
+<!-- stay:ykGYB0DP hash=sha256:8f1992d93a64 -->
+
+**Trimmed rather than source-sliced, and that is the whole difference from §5.5's body
+rule.** Every table formatter re-pads cells, and §8 strips trailing whitespace per line
+but never collapses interior whitespace, so a row body taken from the source slice
+would drift on a format run that changed no content at all. Trimming each cell makes
+cell padding and column alignment non-drift, which is the consequence §5.5 gets from
+stripping the list marker: a bullet glyph is not drift there, a column width is not
+drift here.
+<!-- stay:Tvlt3ksC hash=sha256:3e183592f335 -->
+
+The encoding makes the join reversible. `\\` represents a literal backslash, `\|`
+represents a pipe that belonged to a cell, and only an unescaped `|` separates cells.
+Escaping both characters matters: without it, the two cells in `| a\ | b |` and the
+one cell in `| a\|b |` would both produce `a\|b`. The separator is `|` rather than a
+newline or a space so an empty cell survives; joining with LF would put a blank line at
+one end of the body for §8 step 3 to drop and hash `| | a |` the same as `| a |`.
+<!-- stay:FzFrVCd4 hash=sha256:0c5f2e5395b5 -->
+
+**Carrier.** A row marker sits **inside the row's last cell, flush against that cell's
+content**: no whitespace at all between the cell's last character and the marker's
+opening delimiter.
+<!-- stay:pM6UX7pY hash=sha256:5a86474bcc78 -->
+
+```md
+| fruit  | crates | note                                              |
+|--------|--------|---------------------------------------------------|
+| apples | 3      | picked early<!-- stay:r1 subhash=sha256:fb1c -->   |
+| pears  | 5      | still ripening<!-- stay:r2 subhash=sha256:4879 --> |
+
+<!-- stay:tb1 hash=sha256:9c04 -->
+```
+
+A last cell that is the marker and nothing else is permitted. In that case **flush**
+means that the marker's opening delimiter immediately follows the last cell's opening
+unescaped `|`; any padding that was already between the empty cell and its closing pipe
+stays after the marker. It is the degenerate case of the same placement and it survives
+the same tools.
+<!-- stay:48HhqNh6 hash=sha256:3f2caaf6cb5b -->
+
+**Flush is a MUST, and the reason is §8 rather than taste.** §8 removes markers and then
+strips trailing whitespace **per line**. A list-item marker sits at the end of its line,
+so removing it leaves whitespace §8 strips, and stamping an item leaves its list's hash
+byte-identical for free. A row marker sits mid-line, so a space written in front of it
+survives that removal as interior whitespace §8 keeps, and stamping a row would drift
+its own table for nothing. Written flush, the removal restores the row's bytes exactly.
+This is the one place where the two forms of child identity do not behave alike, and
+writing the marker flush is what hides the difference.
+<!-- stay:AAdenEdx hash=sha256:7ab5ad4ee7cb -->
+
+**Rules for readers.** §5.5's reader rules are phrased about `subhash` and apply here
+unamended. Two are worth restating in the table's terms:
+<!-- stay:bPrvTru8 hash=sha256:e2003e6f2ca5 -->
+
+- A marker carrying `subhash` on a body row of the **sole accepted candidate in its
+ selected §5 container** addresses **that row** and MUST NOT be treated as binding to
+ the selected container. Wherever in that accepted row's source line it sits, it is
+ addressing that row and nothing else.
+- A marker carrying `subhash` anywhere else in a table, on the header line, on the
+ delimiter line, or anywhere in a table the rule above refused, addresses no child
+ block. It is nobody's stay: a conforming tool MUST NOT resolve it, MUST NOT treat it
+ as identifying the selected §5 container either, and MUST preserve it verbatim (§4).
+ A linter SHOULD report it, and §5.5's requirement on that report holds here too, that
+ a refused table and an unaddressed marker are told apart rather than merged into one
+ silence.
+<!-- stay:GS9ytnPY hash=sha256:71bab0ff4ad8 -->
+
+**Rules for writers.**
+<!-- stay:jAdLcTTL hash=sha256:160a99efe65e -->
+
+- A bare selected-container marker written before v1.6 MAY legally follow the last
+ row's closing pipe under §5. A row-stamping writer MUST NOT let that legacy carrier make the table
+ impossible to upgrade. If the ordinary scan plus the post-scan selected-container
+ filter does not place the requested row in an addressable candidate, the writer MUST
+ test one **migration probe** when the selected §5 block's last content line has this
+ exact suffix after its final unescaped delimiter in the tokenized line: only ASCII
+ whitespace and one or more complete marker spans, all without `subhash`. The probe
+ relocates those spans verbatim and in order to a marker-only line after the
+ prospective candidate body, leaving every non-marker byte unchanged. It then reruns
+ the selected §5 segmenter over the complete in-memory proposed document, performs the
+ complete ordinary scan and the post-scan selected-container filter, and succeeds only
+ when the suffix-bearing line becomes the candidate's last body row and the requested
+ row belongs to the sole accepted candidate in that selected container. The probe
+ itself MUST NOT write. If it fails, the source stays byte-identical. Readers never use
+ this probe.
+- A tool that mints a row stay MUST write the marker in the row's last cell, flush
+ as the Carrier rule defines (against its content, or its opening delimiter when the
+ cell has none), and MUST NOT write one on a header or delimiter row.
+- A tool that mints a row stay MUST put the selected §5 container's own stay on a
+ marker-only line after the candidate body, moving the container block's existing stay
+ there if necessary or minting one there if the container has none. The marker-only
+ line MAY be the candidate's terminator or MAY follow a blank-line terminator. The tool
+ MUST NOT put that marker after a body row's closing pipe: the opaque marker token would
+ follow the last delimiter, rule 1 would reject the line, and the write would make its
+ new row stays unaddressable. This is §5.5's container-stay rule with the surviving
+ table-adjacent carrier made explicit.
+- Moving an existing container marker, whether found by the migration probe or by the
+ ordinary scan, is provisional until the selected §5 segmenter has run over the
+ complete proposed document, the complete ordinary scan and post-scan
+ selected-container filter have run again, and the requested row remains a child block
+ of the sole accepted candidate in its container. A marker carrying `subhash` is never
+ eligible to move as a container marker. A writer MUST commit the relocation and row
+ write atomically, or leave the source byte-identical.
+- **A tool whose write changes the selected §5 container's normalized body MUST refresh
+ every stored `hash` that binds to that container in the same pass.** Minting alone
+ does not change the container body, because the carrier is flush; a pass that also
+ reflows or re-pads the table can. Before writing, the tool MUST compare every such
+ stored hash with the complete pre-write container body, including any adjacent prose
+ in that block. If one is already drifted, the tool MUST report that fact and MAY abort
+ without changing the source. If it proceeds, it MUST refresh the hash from the complete
+ post-write container body. This container rule does not exempt the tool from refreshing
+ a row's `subhash` when it changes that row's body. The two forbidden outcomes are
+ preserving a hash made stale by the tool's own write, and clearing pre-existing drift
+ without first reporting it.
+- §5.5's hash-filling rules apply unchanged: a tool that fills in missing hashes MUST
+ write `subhash` for a row marker, and MUST NOT add a `hash` to any marker that
+ already carries `subhash`.
+<!-- stay:ABOUzu6d hash=sha256:56fd5ce6c8ea -->
+
+**One row scan, with the existing §5 container split.** Neither built-in segmenter
+parses GFM tables: blank-line segmentation sees a run of lines, and the CommonMark
+segmenter of §5.2 reads the table source as a paragraph. Both apply the same
+parser-free scan to find candidate rows, and every candidate row uses its selected
+§5 block as the §9.2 container. Outside §5.4's agreement subset those selected blocks
+can differ even though the rows do not. A parser with a GFM table extension may also
+hold a narrower table node, but that node is not a third §5 profile and does not
+replace the selected container. Neither built-in profile has a second row-recognition
+rule.
+<!-- stay:W84ejxWc hash=sha256:e72c68c4fe64 -->
+
+That buys the thing §5.5 could not offer: **a document using row identity can sit
+inside the agreement subset of §5.4.** A table with a blank line on each side is one run
+and one node, and its rows are addressable identically under both segmenters, where
+§5.4 has to warn that the subset does not extend to child list items. Outside that
+subset, ordinary built-in boundaries can change the **container** rather than the row:
+for example, a touching heading can make the blank-line and CommonMark segmenters
+select different blocks. A GFM extension can represent the table separately for its
+own purposes, but conforming attachment still uses the block chosen by one of those
+two profiles. The candidate row lines do not change. Authors who need the same
+container across both profiles should blank-separate adjacent constructs from the
+table.
+<!-- stay:lxYwDhFE hash=sha256:65132407a9e7 -->
+
+**What the carrier cannot buy, stated rather than claimed away.** A formatter that
+aligns a table's columns pads every cell to its column's width, so a row marker widens
+its column and the **next** format run re-pads the whole table. The table's hash drifts
+with no content change, and no placement can prevent it: the marker is inside the cell
+and the padding is outside it. Both measured tools that actually format tables align
+columns and lose the table's hash under the flush carrier. The two holds came from
+tools that treated the source as paragraph text, not from table formatting. The
+consequence belongs to §9.2: tier 2 is gated on the container's hash matching, so it is
+**weaker for rows than for list items** on any document a column-aligning formatter
+maintains, and tiers 3 and 4 carry the load there.
+A hash rule that knew what a table was could close this, which is exactly the coupling
+§8 has never had and does not acquire here.
+<!-- stay:jtxAgFVL hash=sha256:fc1cb405d9c0 -->
 
 ## 6. IDs
 <!-- stay:HxEBSxMP hash=sha256:c80e52bb8b4f -->
@@ -934,12 +1281,16 @@ A conforming resolver applies the evidence strongest-first:
 ### 9.2 The child resolution ladder (v1.3)
 <!-- stay:wsG5Ieyn hash=sha256:3d9f10bf89f0 -->
 
-A child stay (§5.5) resolves on the same discipline as §9.1, strongest evidence
+A child stay (§5.5, §5.6) resolves on the same discipline as §9.1, strongest evidence
 first, with one addition: a child is resolved **inside its container**, so its rivals
 are its siblings rather than the whole document. That containment is what answers
 §5.1's stated reason for deferring item identity, which was near-duplicate items:
-`Done` competes only with the other items of its own list.
-<!-- stay:7mqLi8iw hash=sha256:9c0afea0a147 -->
+`Done` competes only with the other items of its own list. Every tier below is written
+about child blocks and containers rather than about lists, which is why version 1.6's
+table rows resolve on it unchanged: §5.6 makes an addressable candidate the only table
+candidate in its container, so a row's container siblings are exactly that table's
+other body rows.
+<!-- stay:7mqLi8iw hash=sha256:92df494a3a6f -->
 
 0. **Resolve the container** by §9.1, applied **exclusively**: containers are
  resolved tier by tier across the document, and a block claimed by a stronger tier
@@ -954,12 +1305,16 @@ are its siblings rather than the whole document. That containment is what answer
  markers removed (§8), so two child markers can be swapped while the container's
  hash still matches; a ladder that tried ordinals first would silently override the
  surviving ids, which contradicts §9.1.
-2. **CONTAINER HASH**, the container's stored hash matches → the list is unchanged
+2. **CONTAINER HASH**, the container's stored hash matches → the container is unchanged
  modulo §8 normalization, so the remaining markerless children map by ordinal.
  This tier is narrower than it looks: a container's body keeps its `- ` and `1. `
  prefixes, so a bullet-glyph change or a renumber breaks the container hash even
  though §5.5 makes both non-drift for every child. Those edits fall through to
- tier 3, where the child hashes correctly see no drift.
+ tier 3, where the child hashes correctly see no drift. **A table's cell padding is
+ the same shape and bites harder**, because a formatter re-pads columns without being
+ asked and a row marker is what makes it re-pad: §5.6 makes padding non-drift for a
+ row, and the table's own hash breaks on it anyway, so this tier is weaker for rows
+ than for list items on any document a column-aligning formatter maintains.
  **Ordinal decides *which* child, never *whether* a match is good enough**, and that
  split collapses easily in either direction, so read it here once: at this tier, with
  the container hash matched, position is the whole mapping and item *n* is item *n*,
@@ -979,7 +1334,7 @@ are its siblings rather than the whole document. That containment is what answer
  is restricted to the **exact hash**; quote recovery is deliberately not offered at
  document scope, because on short near-duplicate items that is precisely the
  false-attachment case §9 warns about.
-<!-- stay:BHNQSFUx hash=sha256:2956b717227e -->
+<!-- stay:BHNQSFUx hash=sha256:dc1980a0e5d2 -->
 
  **Its known exposure, stated rather than claimed away:** uniqueness in the edited
  document is weaker evidence than provenance. If an item's text was *copied*
@@ -1128,21 +1483,22 @@ documents.
 
 - Annotation, comment storage, threads.
 - Transclusion / embedding.
-- Row-level table identity, inline-span identity.
+- Inline-span identity.
 - Recognising **indented** code blocks or **inline** code spans as content the way
  §3.3 recognises a fenced block. Both need context a dependency-free tool does not
  have, and §3.3 states why each is left out.
 - Provenance tracking and knowledge-graph construction.
 - A backend, accounts, a hosted registry, or any global / cross-repo stay
  namespace.
-<!-- stay:Itv36Vd3 hash=sha256:d9d9c9c7581f -->
+<!-- stay:Itv36Vd3 hash=sha256:1f55f9d4341a -->
 
 (Loose-list and blank-line-fence single-stay attachment was a v1 non-goal; it is
 resolved by CommonMark-tree attachment in v1.1, §5.2. List-item identity was a v1
-non-goal; it is resolved for direct list items in v1.3, §5.5. Table rows are the same
-idea with a different carrier, a marker inside the last cell of a one-line row, and
-stay deferred until that carrier is shown to survive real renderers.)
-<!-- stay:umfBvzuc hash=sha256:3ad402cfc62f -->
+non-goal; it is resolved for direct list items in v1.3, §5.5. Table rows were the
+same idea with a different carrier, a marker inside the last cell of a one-line row,
+deferred until that carrier was shown to survive real renderers; it was, and they are
+resolved in v1.6, §5.6.)
+<!-- stay:umfBvzuc hash=sha256:cfa156aee6a3 -->
 
 ## 15. Closest existing standards
 <!-- stay:FqGyVOjF hash=sha256:a5cda24dd2fa -->
@@ -1190,11 +1546,12 @@ DETACHED remains conforming, and candidate or evidence detail is not a conforman
 requirement. The resolver used by `eval/attachment/` is such a tool.
 <!-- stay:tpIZKKBm hash=sha256:df90dced5eba -->
 
-Child-block identity (§5.5) splits into an optional half and a mandatory one, and the
-split is not the same as §5.2's. **Segmenting and resolving child blocks is optional**:
-a tool that never sees a list item is conforming. **Recognising `subhash` on the write
-path is not**, and every conforming version 1.3 writer MUST:
-<!-- stay:gY4kwGJH hash=sha256:0b91dea134cc -->
+Child-block identity (§5.5 for list items, §5.6 for table rows) splits into an optional
+half and a mandatory one, and the split is not the same as §5.2's. **Segmenting and
+resolving child blocks is optional**: a tool that never sees a list item or a table row
+is conforming. **Recognising `subhash` on the write path is not**, and every conforming
+writer MUST:
+<!-- stay:gY4kwGJH hash=sha256:f217a5e2ae9f -->
 
 - not add a `hash` to a marker that already carries a `subhash`, and
 - not treat a block as stamped on the strength of a marker that carries one.
@@ -1205,14 +1562,29 @@ because §4's preserve-unknown-keys rule does not reach them: a writer that adds
 of its own, or that reads a child marker as evidence the block is done, is not acting
 on a key it does not understand, it is acting on its own idea of the document. A tool
 without the shim damages a document that uses §5.5, in both of the ways named above and
-both measured rather than predicted, so "ignore the section entirely" is conforming only
-for a reader.
-<!-- stay:Ap9TiTxs hash=sha256:25552b2b7dc7 -->
+both measured rather than predicted, so "ignore the section entirely" is conforming for
+a reader, subject to the one rule below, and never for a writer. Both rules are phrased
+about `subhash` rather than about lists, so they already cover a row-stamped document;
+that was checked against every published write path rather than inferred from the
+wording.
+<!-- stay:Ap9TiTxs hash=sha256:4136380c47da -->
 
-A tool that does implement the section MUST apply the §9.2 ladder for child stays, and
-MUST emit no child blocks at all for a list that falls outside its segmenter's profile
-rather than guess an item boundary.
-<!-- stay:3dCNYT0A hash=sha256:32c15853bd94 -->
+**Version 1.6 adds a third rule, and this one binds every reader:** a tool MUST NOT
+report a marker carrying `subhash` as the stay of the block that contains it. Ignoring
+the marker is conforming, and so is ignoring §5.5 and §5.6 entirely; attributing it to
+the container is not. This promotes §5.5's first reader rule out of the optional half,
+and it is cheap enough to belong there: one key comparison, no segmentation and no
+parser. What it prevents is silent. A reader without it hands a consumer a real id
+bound to the wrong block, and nothing in the output says so. Version 1.6 makes this an
+error rather than an omission because rows widen the exposure: a row marker sits
+mid-block rather than on a line of its own, so a whole table's rows can be reported as
+one block's stays.
+
+A tool that does implement child identity MUST apply the §9.2 ladder for child stays,
+and MUST emit no child blocks at all, rather than guess a boundary, for a list that
+falls outside its segmenter's profile or for a table its §5.6 recognition rule
+refuses.
+<!-- stay:3dCNYT0A hash=sha256:7c3233f424e0 -->
 
 Any conforming tool that segments a document, whichever segmenter it implements,
 MUST exclude a leading YAML frontmatter span (§5.3) before segmenting, and MUST
@@ -1224,13 +1596,14 @@ NOT stamp, hash, or attach a marker to it.
 
 | Version | What it changed |
 |---------|-----------------|
+| **1.6** | Adds child-block identity for GFM table body rows (§5.6), on the same reserved `subhash` key and the same §9.2 ladder as list items: a different carrier and a different body rule, not a second identity model. The carrier is a marker inside the row's last cell, written flush against the cell's content, or against the cell's opening delimiter when the cell has none, so stamping a row leaves its table's hash byte-identical; the row body is the row's cells trimmed, reversibly escaped, and joined, so cell padding is not drift and cell boundaries cannot collide. Row recognition is one parser-free line scan shared by both segmenters, so unlike a child-stamped list a row-stamped table can sit inside §5.4's agreement subset. Lifts the remaining half of the §5.1 deferral and the §14 non-goal; inline spans stay deferred. Adds one rule binding every reader (§16): a marker carrying `subhash` MUST NOT be reported as the stay of the block that contains it. Reconciles §4 with §3.3 and the host comment syntaxes: normalized LF is valid inside quoted marker values, while `-->` in an HTML body and `*/` in an MDX body are forbidden and never hidden by quotes. |
 | **1.5** | Text inside a fenced code block is content, not markup (§3.3): a `stay:` marker there identifies no block, is not removed from a body before hashing (§8), and does not make its block stamped (§5). Fence recognition is line-based, so for every fence it recognises, what counts as a marker does not depend on which segmenter a tool implements, and §5.4's divergence axis narrows to what the line rule cannot see. Indented code blocks, inline code spans, and a fence that is quoted or indented more than three spaces are deliberately not covered. A block whose body contains a marker-shaped string inside a fence hashes over that string now and reports drift once; nothing else changes. |
 | **1.4** | Recommends reporting `unmatched` when quote recovery has no above-threshold candidate and `ambiguous` when a candidate reaches the threshold but fails the margin (§10), while keeping plain DETACHED conforming. A machine-readable reason, when exposed, uses those names and meanings; candidate and evidence schemas remain non-normative (§16). Also corrects §9.2's version 1.3 note and both Python references: the historical-uniqueness gate belongs to CHILD HASH tiers 3 and 4, while CHILD QUOTE may use permitted sibling context to distinguish duplicate child bodies. The commit rule, document syntax, and DETACHED outcome are unchanged. |
 | **1.3** | Adds child-block identity for direct list items (§5.5) and their resolution ladder (§9.2), carried by the new reserved key `subhash` (§4) so that a tool which does not implement the section cannot overwrite a child's evidence. Lifts the list-item half of the §5.1 deferral and the §14 non-goal; table rows and inline spans stay deferred. Segmenting and resolving child blocks is optional; two write-path rules that keep an unaware tool from damaging a child-stamped document are not (§16). A document with no child markers is unaffected under either segmenter. |
 | **1.2** | Excludes leading YAML frontmatter from segmentation under both segmenters (§5, §5.3), and restates the two segmenters' agreement condition as the agreement subset (§5.4), which v1.1 stated too narrowly. Normative change to §5; grammar, identity, hashing, and recovery unchanged. A marker already stamped onto frontmatter usually becomes an orphan error. |
 | **1.1** | Adds CommonMark-tree attachment (§5.2) as an optional segmenter, so a loose list, a blank-line fence, or a blockquote with an internal blank line can carry a single stay. Adds no requirement to a baseline tool and changes no marker's meaning; its statement of when the two segmenters agree was corrected in 1.2. |
 | **1.0** | The marker grammar (§3, §4), the identity model (§2, §7), blank-line attachment (§5), hash normalization (§8), quote recovery and the commit rule (§9), the detached state (§10), and the AI editing contract (§11). |
-<!-- stay:wpHe8SeN hash=sha256:cd2153074d2e -->
+<!-- stay:wpHe8SeN hash=sha256:0fc918fe51fa -->
 
 markstay does **not** offer a compatibility guarantee across versions at this
 stage. Where a version corrects a defect, it corrects it rather than carrying the

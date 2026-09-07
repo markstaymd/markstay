@@ -66,9 +66,10 @@ DEFAULT_HEADING_BONUS = 0.12
 class Anchor:
     """Everything stored about one original block at annotation time. In a real
     markstay tool this is what the marker plus a side index would carry."""
+
     id: str
-    hash: str            # full sha256 of the normalized body
-    selector: Selector   # quote + prefix/suffix recovery evidence
+    hash: str  # full sha256 of the normalized body
+    selector: Selector  # quote + prefix/suffix recovery evidence
 
     @property
     def heading_path(self) -> tuple[str, ...]:
@@ -80,17 +81,15 @@ class Anchor:
 @dataclass
 class Resolution:
     id: str
-    method: str          # 'marker' | 'hash' | 'quote' | 'detached'
-    target: int | None   # content-block index in the after-doc, or None
-    score: float         # confidence in [0, 1] (1.0 for marker/hash)
+    method: str  # 'marker' | 'hash' | 'quote' | 'detached'
+    target: int | None  # content-block index in the after-doc, or None
+    score: float  # confidence in [0, 1] (1.0 for marker/hash)
     reason: str | None = None  # detached only: ambiguous | unmatched
     candidates: list[Candidate] = field(default_factory=list)
     runner_up_score: float = 0.0
 
 
-def _ambiguous_candidates(
-    ranked: list[Candidate], margin: float
-) -> list[Candidate]:
+def _ambiguous_candidates(ranked: list[Candidate], margin: float) -> list[Candidate]:
     """Return only candidates that participated in the failed margin.
 
     ``unmatched`` returns no sub-threshold candidates at all. For ``ambiguous``,
@@ -126,17 +125,21 @@ def build_anchors(before_md: str, mode: str = "blank-line") -> list[Anchor]:
         # achievable ratio near 2*48/(len+48), because the candidate side is
         # windowed at match time, so a perfectly preserved long neighbour scored
         # well under the 0.05 it should.
-        sel = Selector(quote=b.content,
-                       prefix=window_prefix(prev_text),
-                       suffix=window_suffix(next_text),
-                       heading_path=tuple(paths[i]))
+        sel = Selector(
+            quote=b.content,
+            prefix=window_prefix(prev_text),
+            suffix=window_suffix(next_text),
+            heading_path=tuple(paths[i]),
+        )
         for mk in b.markers:
-            if mk.id and not mk.malformed:
-                anchors.append(Anchor(
-                    id=mk.id,
-                    hash=L.body_hash(b.content),
-                    selector=sel,
-                ))
+            if mk.id and not mk.malformed and not mk.has_subhash:
+                anchors.append(
+                    Anchor(
+                        id=mk.id,
+                        hash=L.body_hash(b.content),
+                        selector=sel,
+                    )
+                )
     return anchors
 
 
@@ -178,7 +181,7 @@ def resolve(
     surviving: dict[str, int] = {}
     for idx, b in enumerate(after_blocks):
         for mk in b.markers:
-            if mk.id and not mk.malformed:
+            if mk.id and not mk.malformed and not mk.has_subhash:
                 surviving.setdefault(mk.id, idx)
 
     # Tier 2 lookup: full-body hash -> block indices (list, to detect ambiguity).
@@ -212,9 +215,7 @@ def resolve(
         score = ranked[0].score if ranked else 0.0
         runner = ranked[1].score if len(ranked) > 1 else 0.0
         if idx >= 0 and score >= threshold and (score - runner) >= margin:
-            out[a.id] = Resolution(
-                a.id, "quote", idx, score, runner_up_score=runner
-            )
+            out[a.id] = Resolution(a.id, "quote", idx, score, runner_up_score=runner)
         elif idx >= 0 and score >= threshold:
             out[a.id] = Resolution(
                 a.id,

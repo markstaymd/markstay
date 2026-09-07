@@ -29,7 +29,7 @@ python3 markstay_lint.py --show-drift FILE
 # internal blank lines attaches as one block. Needs markdown-it-py.
 python3 markstay_lint.py --commonmark FILE
 
-# Experimental direct list-item identity and before/after recovery.
+# Optional list-item and table-row identity plus before/after recovery.
 python3 markstay_lint.py --child-blocks --commonmark FILE
 python3 markstay_lint.py --child-blocks --commonmark --before OLD.md NEW.md
 ```
@@ -47,7 +47,7 @@ Single-document (`FILE`):
 | `ORPHAN_MARKER` | error | a marker with no preceding block to attach to |
 | `DUPLICATE_ID` | error | the same id used by two markers in one document |
 | `HASH_DRIFT` | warn | a marker's stored `hash=` no longer matches its block's content (hidden from text output by default, see [Hash drift](#hash-drift)) |
-| `ORPHAN_CHILD` | warn | an opt-in child marker has no stayed parent list |
+| `ORPHAN_CHILD` | warn | an opt-in child marker has no stayed parent container |
 
 Regeneration diff (`--before OLD.md NEW.md`):
 
@@ -60,12 +60,11 @@ Regeneration diff (`--before OLD.md NEW.md`):
 | `NEW_ID` | info | id present only after the edit |
 | `CHILD_DROPPED` | error | an opt-in child id cannot be recovered from its parent, exact child hash, or sibling-scoped quote evidence |
 
-## Experimental child blocks
+## Child blocks
 
-`--child-blocks` enables the list-item identity prototype. It is off by default
-and is **not** part of the v1.1 standard, which defers item identity at `../SPEC.md`
-§5.1. A direct list item carries an ordinary stay id and stores its item hash
-under `subhash=sha256:...`:
+`--child-blocks` enables the optional child segmenter from `../SPEC.md` §5.5 and
+§5.6. A direct list item or accepted GFM table body row carries an ordinary stay
+id and stores its child hash under `subhash=sha256:...`:
 
 ```md
 - Ship the linter <!-- stay:a7c1 subhash=sha256:9d2f -->
@@ -78,6 +77,14 @@ marker, and following syntactic gap, then removes the equivalent content
 indentation from continuation lines. Bullet-glyph changes and ordered-list
 renumbering therefore do not drift a child. Nested source remains part of the
 direct item's body.
+
+Table rows use the parser-free §5.6 scan under both block segmenters. The scan
+requires outer pipes, treats complete marker spans as opaque while fixing cell
+boundaries, accepts ragged body rows without parser padding, and refuses the whole
+candidate on an unsafe body line. A row body trims named ASCII whitespace from
+each cell, escapes backslashes and pipes, then joins the cells with `|`. A table
+contributes row children only when it is the sole accepted candidate in its
+selected §5 container.
 
 CommonMark mode reads direct `listItem` source spans, including loose and
 multi-paragraph lists. The dependency-free blank-line mode deliberately accepts
@@ -99,9 +106,10 @@ Clopper-Pearson upper bound 0.92%) and real LLM rewrites of list-heavy documents
 similarity band where an item is attached at all lands on the `../SPEC.md` §9
 constants. See `../eval/attachment/README.md`.
 
-The prototype stays opt-in regardless, because safety is not the same as worth:
-catch precision on real item drops is unmeasured, so no v1.2 spec text,
-cross-language parity, or conformance category follows from it yet.
+The profile stays opt-in because §16 makes child segmentation and recovery
+optional. Exact `subhash` key presence is not optional: even without
+`--child-blocks`, `subhash=bogus` and quoted `subhash` values are never attributed
+to their containing block, while `x-subhash` remains an ordinary extension key.
 
 ## Hash drift
 
@@ -125,7 +133,12 @@ in a pipeline, read `--json` or the return tuple.
 - **Marker syntax**: the canonical HTML comment `<!-- stay:ID [hash=sha256:HEX]
   [k=v ...] -->` and the MDX profile `{/* stay:ID ... */}` (one data model, two
  serializations, per `../SPEC.md` §3, §4). Attribute order is free and extra
- attributes are tolerated; only `id` is required.
+ attributes are tolerated; only `id` is required. Recognition validates the
+ complete attribute body after normalizing line endings, with LF allowed only
+ inside a quoted value. HTML discovery stops at the first `-->` or `--!>` and
+ accepts only `-->`; MDX discovery stops at the first `*/` and accepts it only
+ when `}` follows immediately. A rejected opener cannot consume a later opener,
+ and every accepted marker retains its original source bytes.
 - **Attachment**: after-block placement (`../SPEC.md` §5). A marker binds to the
  block immediately above it, whether on the next line or as its own chunk; a chunk
  that is only markers attaches to the previous content block. Blocks are split by

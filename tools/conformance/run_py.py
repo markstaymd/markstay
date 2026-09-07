@@ -231,12 +231,75 @@ def v_check(v) -> tuple[bool, str]:
     return approx(got, v["expected"]), f"got={got}"
 
 
+def v_rows(v) -> tuple[bool, str]:
+    """SPEC.md §5.6 table-row identity: the optional `rows` profile.
+
+    One category with three operation shapes, because row identity is not one
+    function: recognition and attachment (`children`), the transactional write
+    path with its migration probe (`stamp`), and §9.2 child recovery
+    (`resolve`). Splitting them into three categories would let a runner
+    advertise the profile while implementing only the half it found easy.
+    """
+    op = v["op"]
+    if op == "children":
+        mode = v.get("mode", "blank-line")
+        blocks = [
+            b for b in L.parse_document(v["doc"], mode=mode, child_blocks=True)
+            if b.index >= 0
+        ]
+        got = {
+            "blockIds": sorted(L._id_index(blocks)),
+            "childIds": sorted(L._child_id_index(blocks)),
+            "rows": [
+                {"container": b.index, "ordinal": c.ordinal, "body": c.content,
+                 "ids": [mk.id for mk in c.markers]}
+                for b in blocks for c in b.children if c.kind == "row"
+            ],
+        }
+    elif op == "stamp":
+        ids = iter(v["ids"])
+        r = MW.stamp(v["doc"], child_blocks=True, new_id=lambda: next(ids))
+        got = {"text": r.text, "minted": r.minted, "drifted": list(r.drifted)}
+    elif op == "resolve":
+        mode = v.get("mode", "blank-line")
+        resolved = L._resolve_children(
+            L._build_child_anchors(v["before"], mode), v["after"], mode
+        )
+        got = {k: {"method": m, "target": t}
+               for k, (m, t) in sorted(resolved.items())}
+    else:
+        return False, f"unknown rows op: {op!r}"
+    return approx(got, v["expected"]), f"got={got}"
+
+
 VERIFIERS = {
     "hash": v_hash, "markers": v_markers, "parse": v_parse, "lint": v_lint,
     "diff": v_diff, "seqmatch": v_seqmatch, "score": v_score, "resolve": v_resolve,
     "stamp": v_stamp, "mint": v_mint, "preserve": v_preserve, "check": v_check,
     "anchors": v_anchors,
+    "rows": v_rows,
 }
+
+# Optional profiles a corpus file may declare with a top-level `profile` key.
+# Every full runner knows the whole set; each advertises only what it
+# implements. A profile a runner has never HEARD of is a failure rather than a
+# skip, so adding a category to the corpus without touching the runners cannot
+# pass as silence. §16 keeps §5.5 and §5.6 segmentation optional, so declining
+# `rows` is conforming; running 419 of 420 core vectors is not.
+KNOWN_PROFILES = {"rows"}
+ADVERTISED_PROFILES = {"rows"}  # the Python reference implements §5.6
+
+# A category that belongs to an optional profile is verified only by a runner
+# advertising it, so the core coverage check below must not demand its vectors.
+PROFILE_CATEGORIES = {"rows": "rows"}
+
+# The corpus inventory, asserted rather than reported. Counting and printing what
+# was found cannot catch a vector that goes missing: the denominator shrinks with
+# the numerator, so `419/419 (419 core)` passes and reads like success. The JS and
+# Rust runners have pinned these since the profile landed; this is the canonical
+# runner holding the same guarantee its own README claims.
+CORE_VECTORS = 420
+PROFILE_VECTORS = {"rows": 23}
 
 
 def main(argv=None) -> int:
@@ -247,20 +310,36 @@ def main(argv=None) -> int:
     if not files:
         print("no corpus files found under spec/ or gen/", file=sys.stderr)
         return 1
+    files += sorted((HERE / "rows").glob("*.json"))
 
     total = 0
     failed = 0
+    core_total = 0
+    profile_total: dict[str, int] = {}
+    declined: dict[str, int] = {}
     seen: set[str] = set()
     for path in files:
         data = json.loads(path.read_text())
         category = data["category"]
+        tier = path.parent.name
+        profile = data.get("profile")
+        if profile is not None and profile not in KNOWN_PROFILES:
+            print(f"  ?? {tier}/{path.name}: unknown profile {profile!r}")
+            failed += 1
+            continue
+        if profile is not None and profile not in ADVERTISED_PROFILES:
+            declined[profile] = declined.get(profile, 0) + len(data["vectors"])
+            continue
         seen.add(category)
         verify = VERIFIERS.get(category)
-        tier = path.parent.name
         if verify is None:
             print(f"  ?? {tier}/{path.name}: unknown category {category!r}")
             failed += 1
             continue
+        if profile is None:
+            core_total += len(data["vectors"])
+        else:
+            profile_total[profile] = profile_total.get(profile, 0) + len(data["vectors"])
         for v in data["vectors"]:
             total += 1
             name = v.get("name", "?")
@@ -278,11 +357,44 @@ def main(argv=None) -> int:
     # A verifier with no vectors is a check that silently is not running. That is
     # the failure class this whole project exists to catch, so a corpus missing a
     # category fails here rather than passing on the strength of the others.
-    for category in sorted(set(VERIFIERS) - seen):
+    expected = {
+        c for c in VERIFIERS
+        if PROFILE_CATEGORIES.get(c, None) in (None, *ADVERTISED_PROFILES)
+    }
+    for category in sorted(expected - seen):
         print(f"  FAIL coverage: verifier {category!r} has no vectors in the corpus")
         failed += 1
 
-    print(f"\n{total - failed}/{total} corpus vectors pass ({len(files)} files)")
+    if core_total != CORE_VECTORS:
+        print(
+            f"  FAIL inventory: {core_total} core vectors, expected {CORE_VECTORS}"
+        )
+        failed += 1
+    # Every advertised profile must DECLARE a count. Reading the declaration with
+    # .get() and skipping a missing one reinstates exactly the hole this check
+    # exists to close: an empty PROFILE_VECTORS would pass while running anything.
+    if set(PROFILE_VECTORS) != ADVERTISED_PROFILES:
+        print(
+            f"  FAIL inventory: PROFILE_VECTORS declares {sorted(PROFILE_VECTORS)}, "
+            f"advertised profiles are {sorted(ADVERTISED_PROFILES)}"
+        )
+        failed += 1
+    for profile in sorted(ADVERTISED_PROFILES & set(PROFILE_VECTORS)):
+        want = PROFILE_VECTORS[profile]
+        got = profile_total.get(profile, 0)
+        if got != want:
+            print(
+                f"  FAIL inventory: {got} {profile} vectors, expected {want}"
+            )
+            failed += 1
+
+    split = ", ".join(
+        [f"{core_total} core"]
+        + [f"{n} {p}" for p, n in sorted(profile_total.items())]
+    )
+    print(f"\n{total - failed}/{total} corpus vectors pass ({split})")
+    for profile, n in sorted(declined.items()):
+        print(f"  declined optional profile {profile!r} ({n} vectors not advertised)")
     return 1 if failed else 0
 
 

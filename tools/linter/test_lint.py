@@ -7,6 +7,8 @@
 No API credentials needed: the linter is fully local and deterministic.
 """
 
+import random
+
 import markstay_lint as L
 
 
@@ -64,6 +66,192 @@ def test_malformed_marker():
     md = "A paragraph.\n<!-- stay:note=hello -->\n"
     _, findings = L.lint_document(md)
     assert "MALFORMED_MARKER" in codes(findings)
+
+
+def test_marker_parser_is_complete_host_first_and_resumes_at_later_openers():
+    invalid = [
+        "<!-- stay:bad broken -->",
+        '<!-- stay:bad x="a\\q" -->',
+        '<!-- stay:bad x="a-->b" -->',
+        '<!-- stay:bad x="a--!>b" -->',
+        '{/* stay:bad x="a*/b" */}',
+        "<!-- stay:bad\nhash=sha256:dead -->",
+    ]
+    for raw in invalid:
+        assert L.find_markers(raw) == [], raw
+        assert L._strip_markers(raw) == raw
+
+    text = (
+        '<!-- stay:bad x="a--!>b" -->\n'
+        '{/* stay:bad x="a*/b" */}\n'
+        "<!-- stay:good hash=sha256:BEEF -->"
+    )
+    markers = L.find_markers(text)
+    assert [(mk.id, mk.hash) for mk in markers] == [("good", "beef")]
+
+
+def test_marker_parser_normalizes_quoted_line_endings_but_preserves_raw():
+    raw = '<!-- stay:a quote="one\r\ntwo\rthree" subhash="bogus" -->'
+    marker = L.find_markers(raw)[0]
+    assert marker.raw == raw
+    assert marker.id == "a"
+    assert marker.subhash is None
+    assert marker.has_subhash is True
+    parsed = L.parse_document("Body.\r\n" + raw + "\r\n")
+    assert parsed[0].markers[0].raw == raw
+
+
+def test_malformed_no_id_is_diagnostic_but_not_a_stripped_marker():
+    raw = "<!-- stay:note=hello -->"
+    marker = L.find_markers(raw)[0]
+    assert marker.malformed is True
+    assert L._strip_markers(raw) == raw
+    for rejected in (
+        "<!-- stay:note=hello --!>",
+        "{/* stay:note=hello */x",
+    ):
+        markers = L.find_markers(rejected)
+        assert len(markers) == 1 and markers[0].malformed
+        assert markers[0].raw == (
+            rejected if rejected.endswith(("--!>", "*/")) else rejected[:-1]
+        )
+        assert L._strip_markers(rejected) == rejected
+        assert codes(L.lint_document(rejected)[1]) == ["MALFORMED_MARKER"]
+
+
+def test_subhash_presence_is_lexical_for_duplicates_but_not_a_block_stay():
+    md = (
+        "Body.\n"
+        "<!-- stay:child subhash=bogus hash=sha256:dead -->\n"
+        '<!-- stay:child subhash="bogus" -->\n'
+        "<!-- stay:parent -->\n"
+    )
+    blocks, findings = L.lint_document(md)
+    assert [mk.has_subhash for mk in blocks[0].markers] == [True, True, False]
+    assert codes(findings) == ["DUPLICATE_ID"]
+    assert list(L._id_index(blocks)) == ["parent"]
+    assert (
+        L.lint_diff(
+            md, md.replace("<!-- stay:child subhash=bogus hash=sha256:dead -->\n", "")
+        )
+        == []
+    )
+
+
+def test_orphan_subhash_is_reported_without_block_attribution_or_hash_drift():
+    for value in ("sha256:dead", "bogus", '"sha256:dead"'):
+        _, findings = L.lint_document(
+            f"<!-- stay:child subhash={value} hash=sha256:dead -->"
+        )
+        assert [(finding.code, finding.id) for finding in findings] == [
+            ("ORPHAN_MARKER", "child")
+        ]
+    _, control = L.lint_document("<!-- stay:block x-subhash=bogus -->")
+    assert codes(control) == ["ORPHAN_MARKER"]
+
+
+def test_hashed_orphan_has_no_body_to_report_as_drifted():
+    _, findings = L.lint_document("<!-- stay:x hash=sha256:dead -->\n")
+    assert [(finding.code, finding.id) for finding in findings] == [
+        ("ORPHAN_MARKER", "x")
+    ]
+
+
+def test_duplicate_order_stays_lexical_when_child_ownership_is_enabled():
+    docs = [
+        ("- item <!-- stay:x subhash=bogus -->\n<!-- stay:x -->\n", 1),
+        (
+            "| h |\n|---|\n| item<!-- stay:x subhash=bogus --> |\n" "<!-- stay:x -->\n",
+            3,
+        ),
+    ]
+    for md, first_line in docs:
+        duplicate = next(
+            finding
+            for finding in L.lint_document(md, child_blocks=True)[1]
+            if finding.code == "DUPLICATE_ID"
+        )
+        assert duplicate.line > first_line
+        assert f"first at line {first_line}" in duplicate.message
+
+
+def test_multiline_quoted_marker_crosses_blank_segment_without_disappearing():
+    md = 'Body.\n<!-- stay:a quote="one\n\ntwo" -->\n'
+    for mode in ("blank-line", "commonmark"):
+        blocks, findings = L.lint_document(md, mode=mode)
+        assert findings == []
+        assert [mk.id for block in blocks for mk in block.markers] == ["a"]
+        assert [block.content for block in blocks if block.index >= 0] == ["Body."]
+
+
+def test_multiline_child_marker_must_fit_wholly_inside_one_item():
+    crossing = (
+        '- one <!-- stay:c subhash=sha256:dead x-note="bogus\n'
+        '- two" -->\n'
+        "<!-- stay:p -->\n"
+    )
+    contained = (
+        '- one <!-- stay:c subhash=sha256:dead x-note="bogus\n'
+        '  continued" -->\n'
+        "- two\n"
+        "<!-- stay:p -->\n"
+    )
+    for mode in ("blank-line", "commonmark"):
+        blocks, findings = L.lint_document(crossing, mode=mode, child_blocks=True)
+        assert [child.content for child in blocks[0].children] == ["one", ""]
+        assert all(not child.markers for child in blocks[0].children)
+        assert [(finding.code, finding.id) for finding in findings] == [
+            ("CHILD_UNADDRESSED", "c")
+        ]
+
+        blocks, findings = L.lint_document(contained, mode=mode, child_blocks=True)
+        assert [child.content for child in blocks[0].children] == ["one", "two"]
+        assert [marker.id for marker in blocks[0].children[0].markers] == ["c"]
+        assert all(not child.markers for child in blocks[0].children[1:])
+        assert [finding.code for finding in findings] == ["HASH_DRIFT"]
+
+
+def test_crossing_marker_does_not_erase_unrelated_list_child_ownership():
+    for key in ("subhash=bogus", "x-note=block"):
+        md = (
+            f'- one <!-- stay:c {key} x-note="cross\n'
+            '- two" --> text<!-- stay:d subhash=bogus -->\n'
+            "<!-- stay:p -->\n"
+        )
+        for mode in ("blank-line", "commonmark"):
+            blocks, findings = L.lint_document(md, mode=mode, child_blocks=True)
+            assert [child.content for child in blocks[0].children] == ["one", "text"]
+            assert [marker.id for marker in blocks[0].children[1].markers] == ["d"]
+            if key == "subhash=bogus":
+                assert [(finding.code, finding.id) for finding in findings] == [
+                    ("CHILD_UNADDRESSED", "c")
+                ]
+            else:
+                assert findings == []
+
+
+def test_multiline_child_strip_keeps_later_fenced_marker_as_content():
+    md = (
+        '- one <!-- stay:c subhash=bogus x-note="a\n'
+        "  b\n"
+        '  c" -->\n\n'
+        "  ```\n"
+        "  <!-- stay:example -->\n"
+        "  ```\n"
+        "<!-- stay:p -->\n"
+    )
+    blocks = L.parse_document(md, mode="commonmark", child_blocks=True)
+    child = blocks[0].children[0]
+    assert [marker.id for marker in child.markers] == ["c"]
+    assert "<!-- stay:example -->" in child.content
+
+
+def test_x_subhash_remains_a_block_level_extension_key():
+    md = "Body.\n<!-- stay:block x-subhash=bogus -->\n"
+    blocks, findings = L.lint_document(md)
+    assert findings == []
+    assert blocks[0].markers[0].has_subhash is False
+    assert list(L._id_index(blocks)) == ["block"]
 
 
 def test_orphan_marker_at_top():
@@ -285,6 +473,266 @@ def test_child_parse_and_orphan_warning_are_opt_in():
     assert [(f.code, f.level) for f in findings] == [("ORPHAN_CHILD", "warn")]
 
 
+def test_table_rows_are_children_with_canonical_bodies_in_both_modes():
+    row_body = r"a\\\|b||tail\\"
+    digest = L.body_hash(row_body, 12)
+    md = (
+        "| one | two | three |\n"
+        "|---|---|---|\n"
+        rf"| a\|b | | tail\<!-- stay:r1 subhash=sha256:{digest} --> |"
+        "\n"
+        "<!-- stay:table -->\n"
+    )
+    for mode in ("blank-line", "commonmark"):
+        blocks, findings = L.lint_document(md, mode=mode, child_blocks=True)
+        rows = [child for child in blocks[0].children if child.kind == "row"]
+        assert [(row.ordinal, row.content) for row in rows] == [(1, row_body)]
+        assert [marker.id for marker in rows[0].markers] == ["r1"]
+        assert findings == []
+
+
+def test_empty_table_row_body_still_checks_subhash_drift():
+    md = (
+        "| h |\n"
+        "|---|\n"
+        "|<!-- stay:r subhash=sha256:dead -->|\n"
+        "<!-- stay:table -->\n"
+    )
+    blocks, findings = L.lint_document(md, child_blocks=True)
+    assert [(child.kind, child.content) for child in blocks[0].children] == [
+        ("row", "")
+    ]
+    drift = [finding for finding in findings if finding.code == "HASH_DRIFT"]
+    assert [(finding.id, "sha256:e3b0" in finding.message) for finding in drift] == [
+        ("r", True)
+    ]
+
+
+def test_table_row_scan_accepts_ragged_rows_and_refuses_unsafe_candidates():
+    ragged = (
+        "| h1 | h2 |\n|---|---|\n"
+        "| one | two | three<!-- stay:r subhash=bogus --> |\n"
+        "<!-- stay:t -->\n"
+    )
+    rows = L.parse_document(ragged, child_blocks=True)[0].children
+    assert [(row.kind, row.content) for row in rows] == [("row", "one|two|three")]
+
+    opaque = (
+        "| h |\n|---|\n"
+        '| a\\<!-- stay:r subhash=bogus x-note="|" -->|\n'
+        "<!-- stay:t -->\n"
+    )
+    opaque_row = L.parse_document(opaque, child_blocks=True)[0].children[0]
+    assert opaque_row.content == "a\\\\"
+    assert [marker.id for marker in opaque_row.markers] == ["r"]
+
+    refused = [
+        "| h |\n|---|\n| ok<!-- stay:r subhash=bogus --> |\nnot a row\n",
+        "| h |\n|---<!-- stay:d -->|\n| ok<!-- stay:r subhash=bogus --> |\n",
+        (
+            "| h |\n|---|\n| one<!-- stay:r1 subhash=bogus --> |\n"
+            "<!-- stay:split -->\n| h |\n|---|\n"
+            "| two<!-- stay:r2 subhash=bogus --> |\n"
+        ),
+        (
+            "| h |\n|---|\n"
+            '| one<!-- stay:r subhash=bogus x-note="two\n'
+            'three" --> |\n'
+        ),
+        (
+            "| h |\n|---|\n"
+            "| one<!-- stay:outer subhash=bogus x=<!--stay:inner --> |\n"
+        ),
+    ]
+    for md in refused:
+        assert not [
+            child
+            for block in L.parse_document(md, child_blocks=True)
+            for child in block.children
+            if child.kind == "row"
+        ]
+
+
+def test_table_header_subhash_is_lexical_but_unaddressed():
+    md = (
+        "| h<!-- stay:header subhash=bogus --> |\n"
+        "|---|\n"
+        "| body |\n"
+        "<!-- stay:table -->\n"
+    )
+    blocks, findings = L.lint_document(md, child_blocks=True)
+    assert [child.content for child in blocks[0].children] == ["body"]
+    assert "header" not in L._id_index(blocks)
+    assert [(finding.code, finding.id) for finding in findings] == [
+        ("CHILD_UNADDRESSED", "header")
+    ]
+    assert "complete §5.6 scan" in findings[0].message
+
+
+def test_unaddressed_reason_uses_scan_provenance_not_a_pipe_heuristic():
+    nested = (
+        "- outer\n"
+        "  - nested text | still a list <!-- stay:kid subhash=bogus -->\n"
+        "<!-- stay:parent -->\n"
+    )
+    nested_finding = next(
+        finding
+        for finding in L.lint_document(nested, mode="commonmark", child_blocks=True)[1]
+        if finding.code == "CHILD_UNADDRESSED"
+    )
+    assert "nested items" in nested_finding.message
+
+    refused = (
+        "| h |\n|---|\n"
+        "not a row <!-- stay:kid subhash=bogus -->\n"
+        "<!-- stay:parent -->\n"
+    )
+    refused_finding = next(
+        finding
+        for finding in L.lint_document(refused, child_blocks=True)[1]
+        if finding.code == "CHILD_UNADDRESSED"
+    )
+    assert "complete §5.6 scan" in refused_finding.message
+
+    delimiter = (
+        "| h |\n"
+        "|---<!-- stay:kid subhash=bogus -->|\n"
+        "| body |\n"
+        "<!-- stay:parent -->\n"
+    )
+    delimiter_finding = next(
+        finding
+        for finding in L.lint_document(delimiter, child_blocks=True)[1]
+        if finding.code == "CHILD_UNADDRESSED"
+    )
+    assert "complete §5.6 scan" in delimiter_finding.message
+
+    prose = (
+        "| prose |\n"
+        "| also prose <!-- stay:kid subhash=bogus --> |\n"
+        "<!-- stay:parent -->\n"
+    )
+    prose_finding = next(
+        finding
+        for finding in L.lint_document(prose, child_blocks=True)[1]
+        if finding.code == "CHILD_UNADDRESSED"
+    )
+    assert "complete §5.6 scan" not in prose_finding.message
+
+
+def test_list_and_row_children_keep_separate_ordinals_and_ownership():
+    md = (
+        "- item\n"
+        "  | h |\n"
+        "  |---|\n"
+        "  | value<!-- stay:row subhash=bogus --> |\n"
+        "<!-- stay:parent -->\n"
+    )
+    block = L.parse_document(md, mode="commonmark", child_blocks=True)[0]
+    assert [(child.kind, child.ordinal) for child in block.children] == [
+        ("list", 1),
+        ("row", 1),
+    ]
+    row = next(child for child in block.children if child.kind == "row")
+    assert [marker.id for marker in row.markers] == ["row"]
+    list_child = next(child for child in block.children if child.kind == "list")
+    assert list_child.markers == []
+
+
+def test_row_anchors_use_row_ordinals_and_row_sibling_context_only():
+    md = (
+        "- list one <!-- stay:l1 subhash=bogus -->\n"
+        "- list two <!-- stay:l2 subhash=bogus -->\n"
+        "  | h |\n"
+        "  |---|\n"
+        "  | row one<!-- stay:r1 subhash=bogus --> |\n"
+        "  | row two<!-- stay:r2 subhash=bogus --> |\n"
+        "<!-- stay:p -->\n"
+    )
+    anchors = {anchor.id: anchor for anchor in L._build_child_anchors(md, "commonmark")}
+    assert [(anchors[mid].kind, anchors[mid].ordinal) for mid in ("l1", "l2")] == [
+        ("list", 1),
+        ("list", 2),
+    ]
+    assert [(anchors[mid].kind, anchors[mid].ordinal) for mid in ("r1", "r2")] == [
+        ("row", 1),
+        ("row", 2),
+    ]
+    assert anchors["r1"].prefix == ""
+    assert anchors["r1"].suffix == "row two"
+    assert anchors["r2"].prefix == "row one"
+    assert anchors["r2"].suffix == ""
+
+
+def test_markerless_row_recovers_by_parent_hash_and_document_hash():
+    row_marker = _child_marker("r", "Move row")
+    table = (
+        "| h |\n"
+        "|---|\n"
+        f"| Move row{row_marker} |\n"
+        "| Keep row<!-- stay:k subhash=bogus --> |\n"
+    )
+    parent_hash = L.body_hash(L.parse_document(table, child_blocks=True)[0].content, 12)
+    before = table + f"<!-- stay:p hash=sha256:{parent_hash} -->\n"
+    after = before.replace(row_marker, "")
+    anchor = next(
+        anchor
+        for anchor in L._build_child_anchors(before, "blank-line")
+        if anchor.id == "r"
+    )
+    assert L._resolve_children([anchor], after, "blank-line")["r"][0] == "parent-hash"
+
+    first = "| h |\n|---|\n" f"| Move row{row_marker} |\n" "<!-- stay:p1 -->\n"
+    second = (
+        "| h |\n|---|\n"
+        "| Stable<!-- stay:s subhash=bogus --> |\n"
+        "<!-- stay:p2 -->\n"
+    )
+    before_move = first + "\n" + second
+    moved_line = f"| Move row{row_marker} |"
+    after_move = before_move.replace(moved_line + "\n", "", 1).replace(
+        "| Stable<!-- stay:s subhash=bogus --> |\n",
+        "| Stable<!-- stay:s subhash=bogus --> |\n| Move row |\n",
+        1,
+    )
+    anchor = next(
+        anchor
+        for anchor in L._build_child_anchors(before_move, "blank-line")
+        if anchor.id == "r"
+    )
+    assert (
+        L._resolve_children([anchor], after_move, "blank-line")["r"][0]
+        == "document-hash"
+    )
+
+
+def test_row_quote_candidates_exclude_overlapping_list_children(monkeypatch):
+    marker = _child_marker("r", "target original")
+    before = (
+        "- outer\n"
+        "  | h |\n"
+        "  |---|\n"
+        f"  | target original{marker} |\n"
+        "<!-- stay:p -->\n"
+    )
+    after = before.replace(f"target original{marker}", "target revised")
+    anchor = next(
+        anchor
+        for anchor in L._build_child_anchors(before, "commonmark")
+        if anchor.id == "r"
+    )
+    calls = []
+    original = L._best_match
+
+    def record_candidates(quote, prefix, suffix, candidates):
+        calls.append(list(candidates))
+        return original(quote, prefix, suffix, candidates)
+
+    monkeypatch.setattr(L, "_best_match", record_candidates)
+    assert L._resolve_children([anchor], after, "commonmark")["r"][0] == "quote"
+    assert calls == [["target revised"]]
+
+
 def test_child_boundaries_agree_inside_restricted_profile_and_fail_closed_outside():
     inside = "1. Alpha\n2. Beta\n"
     blank = L.parse_document(inside, child_blocks=True)
@@ -357,9 +805,7 @@ def test_child_quote_context_can_separate_original_duplicate_hashes():
         "<!-- stay:parent -->\n"
     )
     anchors = [
-        anchor
-        for anchor in _child_anchors(before)
-        if anchor.quote == "Shared task"
+        anchor for anchor in _child_anchors(before) if anchor.quote == "Shared task"
     ]
     assert [anchor.sibling_hash_count for anchor in anchors] == [2, 2]
 
@@ -388,9 +834,7 @@ def test_child_duplicate_history_still_blocks_exact_hash_tiers():
         "<!-- stay:parent -->\n"
     )
     anchors = [
-        anchor
-        for anchor in _child_anchors(before)
-        if anchor.quote == "Shared task"
+        anchor for anchor in _child_anchors(before) if anchor.quote == "Shared task"
     ]
     assert len(anchors) == 1
     assert anchors[0].sibling_hash_count == 2
@@ -434,7 +878,9 @@ def test_child_surviving_marker_outlives_an_unresolvable_parent():
 
     before = _child_doc()
     after = (
-        "\n".join(line for line in before.splitlines() if line != "<!-- stay:parent -->")
+        "\n".join(
+            line for line in before.splitlines() if line != "<!-- stay:parent -->"
+        )
         .replace("Ship the linter", "Roll out the ingestion pipeline")
         .replace("Document the command", "Smoke-test downstream consumers")
         .replace("Publish package", "Cut the release candidate")
@@ -470,9 +916,9 @@ def test_child_same_tier_contest_is_order_invariant_and_goes_to_neither():
         f" <!-- stay:a2 subhash=sha256:{digest} -->\n"
         "- Beta\n<!-- stay:parent -->\n"
     )
-    after = before.replace(
-        f" <!-- stay:a1 subhash=sha256:{digest} -->", ""
-    ).replace(f" <!-- stay:a2 subhash=sha256:{digest} -->", "")
+    after = before.replace(f" <!-- stay:a1 subhash=sha256:{digest} -->", "").replace(
+        f" <!-- stay:a2 subhash=sha256:{digest} -->", ""
+    )
     anchors = L._build_child_anchors(before, "blank-line")
     forward = L._resolve_children(anchors, after, "blank-line")
     reverse = L._resolve_children(list(reversed(anchors)), after, "blank-line")
@@ -511,8 +957,7 @@ def test_child_parent_hash_contest_goes_to_neither_in_both_orders():
         "<!-- stay:pb -->\n"
     )
     after = (
-        "Interlude.\n<!-- stay:mid -->\n\n"
-        "- Deploy shared service\n- Tail shared\n"
+        "Interlude.\n<!-- stay:mid -->\n\n" "- Deploy shared service\n- Tail shared\n"
     )
     anchors = L._build_child_anchors(before, "blank-line")
     blocks = [
@@ -554,9 +999,7 @@ def test_child_demoted_to_a_nested_item_detaches_rather_than_moving():
     a shape where every sibling is stamped hides the defect.
     """
     before = (
-        "- Alpha\n"
-        f"- Beta {_child_marker('b', 'Beta')}\n"
-        "<!-- stay:parent -->\n"
+        "- Alpha\n" f"- Beta {_child_marker('b', 'Beta')}\n" "<!-- stay:parent -->\n"
     )
     beta = next(line for line in before.splitlines() if line.startswith("- Beta"))
     after = before.replace(beta + "\n", "  " + beta + "\n", 1)
@@ -751,7 +1194,11 @@ def test_frontmatter_metadata_edit_does_not_drift_a_hash():
 
 def test_frontmatter_with_no_closing_fence_is_a_thematic_break():
     md = "---\n\n# Heading\n\nBody para.\n"
-    assert [b.content for b in L.parse_document(md)] == ["---", "# Heading", "Body para."]
+    assert [b.content for b in L.parse_document(md)] == [
+        "---",
+        "# Heading",
+        "Body para.",
+    ]
 
 
 def test_frontmatter_does_not_swallow_two_thematic_breaks():
@@ -913,9 +1360,11 @@ def test_child_anchor_context_is_windowed_to_48_characters():
     asymmetry corrected in the block path: whole neighbours stored against a
     candidate side windowed at match time, which caps a long neighbour's
     contribution well under the 0.05 §9 allows it."""
-    long_sibling = ("Ship the linter and then "
-                    + "wait for the release train " * 3
-                    + "wait for the release train")
+    long_sibling = (
+        "Ship the linter and then "
+        + "wait for the release train " * 3
+        + "wait for the release train"
+    )
     long_before = "A preceding block far longer than forty-eight characters, easily."
     long_after = "A following block also far longer than forty-eight characters here."
     md = (
@@ -943,9 +1392,7 @@ def test_context_bonus_windows_an_over_long_stored_selector():
     to the asymmetry."""
     long_prev = "Operators can override these retry defaults on a per-partner basis."
     candidates = [long_prev, "the target block body", "an unrelated block body"]
-    over_long, _, _ = L._best_match(
-        "the target block body", long_prev, "", candidates
-    )
+    over_long, _, _ = L._best_match("the target block body", long_prev, "", candidates)
     windowed_idx, windowed_score, _ = L._best_match(
         "the target block body", long_prev[-48:], "", candidates
     )
@@ -975,11 +1422,11 @@ def _paths(md, mode="blank-line"):
 def test_heading_path_atx_nests_by_level():
     md = "# Alpha\n\nOne.\n\n## Beta\n\nTwo.\n\n# Gamma\n\nThree.\n"
     assert _paths(md) == [
-        ("# Alpha", []),          # a heading is scoped by its parents, not itself
+        ("# Alpha", []),  # a heading is scoped by its parents, not itself
         ("One.", ["Alpha"]),
         ("## Beta", ["Alpha"]),
         ("Two.", ["Alpha", "Beta"]),
-        ("# Gamma", []),          # level 1 pops Beta and Alpha both
+        ("# Gamma", []),  # level 1 pops Beta and Alpha both
         ("Three.", ["Gamma"]),
     ]
 
@@ -990,7 +1437,7 @@ def test_heading_path_skipped_level_nests_rather_than_replaces():
         ("# Alpha", []),
         ("### Deep", ["Alpha"]),
         ("Body.", ["Alpha", "Deep"]),
-        ("## Mid", ["Alpha"]),    # level 2 pops the level-3 sibling
+        ("## Mid", ["Alpha"]),  # level 2 pops the level-3 sibling
         ("After.", ["Alpha", "Mid"]),
     ]
 
@@ -1000,10 +1447,10 @@ def test_heading_path_atx_closing_hashes_and_empty_title():
     assert _paths(md) == [
         ("## Alpha ##", []),
         ("One.", ["Alpha"]),
-        ("### Beta#", ["Alpha"]),   # no space before the hash: not a closer
+        ("### Beta#", ["Alpha"]),  # no space before the hash: not a closer
         ("Two.", ["Alpha", "Beta#"]),
         ("#", []),
-        ("Three.", [""]),           # an empty title is still a level
+        ("Three.", [""]),  # an empty title is still a level
     ]
 
 
@@ -1012,7 +1459,7 @@ def test_heading_path_setext():
     assert _paths(md) == [
         ("Alpha\n=====", []),
         ("One.", ["Alpha"]),
-        ("Beta\n----", ["Alpha"]),   # `-` is level 2, so it nests under Alpha
+        ("Beta\n----", ["Alpha"]),  # `-` is level 2, so it nests under Alpha
         ("Two.", ["Alpha", "Beta"]),
     ]
 
@@ -1133,6 +1580,152 @@ def test_heading_path_frontmatter_is_not_a_setext_heading():
     assert _paths(md) == [("# Alpha", []), ("Body.", ["Alpha"])]
 
 
+# The derivation reads SPEC.md §3.3 fence geometry from `_fence_state` rather than
+# tracking fences itself. The four tests below pin that single-recogniser property,
+# because a second recogniser is what this code shipped with and the two disagreed.
+
+
+def test_heading_path_marker_line_ending_in_a_fence_run_opens_no_fence():
+    """The derivation strips markers per line to keep line numbers stable, so a
+    marker followed by a backtick run on the same line used to leave a bare fence
+    opener behind and swallow every heading after it. §3.3 reads the raw line, where
+    the leading `<!--` is not a fence, and the derivation now reads the same
+    geometry."""
+    md = (
+        "# Alpha\n\n"
+        "<!-- stay:AbCdEfGh hash=sha256:0123456789ab -->```\n\n"
+        "# Later\n\nBody.\n"
+    )
+    assert not L.code_lines(md)
+    assert [p for _, p in _paths(md)] == [[], ["Alpha"], [], ["Later"]]
+
+
+def test_heading_path_html_block_closes_on_a_line_inside_a_fence():
+    """An open HTML block is tested before the fence mask, so its closer still
+    counts when §3.3 calls that line code. Testing the mask first would leave the
+    block open to the end of the document, which loses strictly more headings than
+    the disagreement it would be avoiding."""
+    md = "<script>\n```\n</script>\n```\n\n# Later\n\nBody.\n"
+    assert sorted(L.code_lines(md)) == [2, 3, 4]
+    assert [p for _, p in _paths(md)] == [[], [], ["Later"]]
+
+
+def test_heading_path_unclosed_fence_in_an_html_block_masks_to_the_end():
+    """§3.3's line scan has no concept of an HTML block, so a fence opened inside
+    one is open, and an unclosed fence runs to the end of the document. The
+    derivation agrees with it rather than second-guessing it: `# Later` is code, so
+    it contributes no heading. Narrower than CommonMark on purpose, and it is the
+    price of one recogniser."""
+    md = "# Alpha\n\n<script>\n```\n</script>\n\n# Later\n\nBody.\n"
+    assert sorted(L.code_lines(md)) == [4, 5, 6, 7, 8, 9, 10]
+    assert [p for _, p in _paths(md)] == [[], ["Alpha"], ["Alpha"], ["Alpha"]]
+
+
+def test_heading_path_a_marker_before_a_fence_run_kills_the_fence_for_both():
+    """The defect class rather than the one document. A marker prepended to a fence
+    opener leaves a line that §3.3 does not read as a fence, because the raw line
+    opens with `<!--`, and the derivation has to reach the same answer or it swallows
+    everything under a fence §3.3 says is not there. Run over four opener shapes,
+    each with a heading below the run that must survive.
+
+    Appending is the benign direction and is checked alongside: a marker after the
+    run leaves a fence both recognisers still see, so the paths must not move at
+    all."""
+    marker = "<!-- stay:AbCdEfGh hash=sha256:0123456789ab -->"
+    openers = ("```", "```sh", "~~~", "   ```")
+    for opener in openers:
+        md = f"# Alpha\n\n{opener}\n\n# Later\n\nBody.\n"
+        assert L.code_lines(md), opener  # the fence is real without a marker
+        assert [p for _, p in _paths(md)] == [
+            [],
+            ["Alpha"],
+            ["Alpha"],
+            ["Alpha"],
+        ], opener  # the run swallows `# Later`, which is what a fence is for
+
+        before = md.replace(opener, marker + opener, 1)
+        assert not L.code_lines(before), opener
+        assert [p for _, p in _paths(before)] == [[], ["Alpha"], [], ["Later"]], opener
+
+        after = md.replace(opener, opener + marker, 1)
+        assert L.code_lines(after) == L.code_lines(md), opener
+        assert L._paths_by_line(after) == L._paths_by_line(md), opener
+
+
+def test_heading_path_a_masked_line_is_not_a_lazy_container_continuation():
+    """A masked line resets the open-container state as well as the paragraph, and
+    that does real work rather than following from the fence opener having done it
+    already: when the opener sits inside an HTML block, the HTML branch consumes it
+    and the derivation reaches the interior lines without having seen an opener at
+    all.
+
+    Here §3.3 opens a fence on line 2 and closes it on line 5, so the `> quote` on
+    line 4 is literal content and opens no blockquote, which leaves `text` / `====`
+    outside the fence as a genuine setext H1. Reading line 4 as a container instead
+    makes `text` a lazy continuation and loses the heading."""
+    md = "<script>\n```\n</script>\n> quote\n```\ntext\n====\n"
+    assert sorted(L.code_lines(md)) == [2, 3, 4, 5]
+    assert L._paths_by_line(md)[-1] == ["text"]
+
+
+def test_heading_path_agrees_with_the_code_mask_in_both_directions():
+    """The single-recogniser property, over generated fence-edge documents rather
+    than hand-written ones.
+
+    The oracle is deliberately not a second copy of the derivation: over a grammar
+    with no HTML block, container, setext underline or thematic break, a heading is
+    just an ATX line that §3.3 does not call code, so `code_lines` is the only thing
+    that can suppress one. Comparing the whole path list catches **both**
+    directions, which is the point: a one-directional check that only asks whether a
+    code line pushed a heading is blind to the defect this replaced, where a marker
+    before a backtick run masked lines §3.3 says are not code at all.
+
+    136 of these 1500 documents disagree with the oracle against the version that
+    tracked fences itself, in both directions.
+    """
+    marker = "<!-- stay:AbCdEfGh hash=sha256:0123456789ab -->"
+    frags = (
+        "# Alpha",
+        "## Beta",
+        "### Gamma",
+        "Body.",
+        "",
+        "```",
+        "```sh",
+        "~~~",
+        "   ```",
+        "    ```",
+        marker + "```",
+        "```" + marker,
+        marker,
+        "````",
+        "~~~~",
+        "``` bad`info",
+    )
+
+    def oracle(md):
+        text = L._blank_frontmatter(md.replace("\r\n", "\n").replace("\r", "\n"))
+        code = L.code_lines(text)
+        stack, out = [], []
+        for num, raw in enumerate(text.split("\n"), 1):
+            atx = None if num in code else L._ATX_RE.match(L._strip_markers(raw))
+            if atx is None:
+                out.append([t for _, t in stack])
+                continue
+            level = len(atx.group("hashes"))
+            title = L._ATX_CLOSE_RE.sub("", atx.group("title") or "").strip(" \t")
+            while stack and stack[-1][0] >= level:
+                stack.pop()
+            out.append([t for _, t in stack])
+            stack.append((level, title))
+        return out
+
+    rng = random.Random(20260829)
+    for _ in range(1500):
+        md = "\n".join(rng.choice(frags) for _ in range(rng.randint(3, 9))) + "\n"
+        assert L._paths_by_line(md) == oracle(md), md
+
+
 def test_heading_paths_agree_across_modes_inside_the_agreement_subset():
     """SPEC.md §5.4: the two segmenters draw the same boundaries only on the
     subset with a blank line at every boundary and no blank line inside a node.
@@ -1189,18 +1782,18 @@ def test_code_lines_recognises_the_fences_the_line_rule_can_see():
     cases = [
         ("a\n```\ncode\n```\nb\n", {2, 3, 4}),
         ("a\n~~~\ncode\n~~~\nb\n", {2, 3, 4}),
-        ("a\n   ```\ncode\n   ```\nb\n", {2, 3, 4}),   # three spaces still opens
-        ("a\n    ```\ncode\n    ```\nb\n", set()),      # four is indented code
-        ("a\n\t```\ncode\n\t```\nb\n", set()),          # a tab is not a space
+        ("a\n   ```\ncode\n   ```\nb\n", {2, 3, 4}),  # three spaces still opens
+        ("a\n    ```\ncode\n    ```\nb\n", set()),  # four is indented code
+        ("a\n\t```\ncode\n\t```\nb\n", set()),  # a tab is not a space
         ("````\n```\ninner\n```\n````\n", {1, 2, 3, 4, 5}),  # longer contains shorter
-        ("````\ncode\n```\nrest\n", {1, 2, 3, 4, 5}),   # shorter cannot close longer
-        ("```\ncode\n~~~\nrest\n", {1, 2, 3, 4, 5}),    # nor a different character
-        ("a\n```\ncode\n", {2, 3, 4}),                   # unclosed runs to EOF
-        ("```\ncode\n``` \nafter\n", {1, 2, 3}),         # trailing space still closes
-        ("```\ncode\n```x\nrest\n", {1, 2, 3, 4, 5}),    # trailing anything else does not
-        ("a\n```md `x`\nnope\n", set()),                 # backtick in a backtick info string
-        ("a\n~~~md `x`\ncode\n~~~\n", {2, 3, 4}),        # but not in a tilde one
-        ("> ```\n> code\n> ```\n", set()),               # §3.3's stated limit
+        ("````\ncode\n```\nrest\n", {1, 2, 3, 4, 5}),  # shorter cannot close longer
+        ("```\ncode\n~~~\nrest\n", {1, 2, 3, 4, 5}),  # nor a different character
+        ("a\n```\ncode\n", {2, 3, 4}),  # unclosed runs to EOF
+        ("```\ncode\n``` \nafter\n", {1, 2, 3}),  # trailing space still closes
+        ("```\ncode\n```x\nrest\n", {1, 2, 3, 4, 5}),  # trailing anything else does not
+        ("a\n```md `x`\nnope\n", set()),  # backtick in a backtick info string
+        ("a\n~~~md `x`\ncode\n~~~\n", {2, 3, 4}),  # but not in a tilde one
+        ("> ```\n> code\n> ```\n", set()),  # §3.3's stated limit
     ]
     for md, expected in cases:
         assert L.code_lines(md) == expected, repr(md)

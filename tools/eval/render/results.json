@@ -43,7 +43,7 @@
         },
         "rows": {
           "verdict": "SURVIVES",
-          "note": "clean; \u00a78 hash drifts on reflow (expected); 3 in-cell row marker(s) still on their row"
+          "note": "clean; \u00a78 hash drifts on reflow (expected); 9 in-cell row marker(s) still on accepted rows"
         }
       }
     },
@@ -69,7 +69,7 @@
         },
         "rows": {
           "verdict": "SURVIVES",
-          "note": "clean; \u00a78 hash drifts on reflow (expected); 3 in-cell row marker(s) still on their row"
+          "note": "clean; \u00a78 hash drifts on reflow (expected); 9 in-cell row marker(s) still on accepted rows"
         }
       }
     },
@@ -95,7 +95,7 @@
         },
         "rows": {
           "verdict": "SURVIVES",
-          "note": "clean, no drift; 3 in-cell row marker(s) still on their row"
+          "note": "clean, no drift; 9 in-cell row marker(s) still on accepted rows"
         }
       }
     },
@@ -121,7 +121,7 @@
         },
         "rows": {
           "verdict": "SURVIVES",
-          "note": "clean; \u00a78 hash drifts on reflow (expected); 3 in-cell row marker(s) still on their row"
+          "note": "clean; \u00a78 hash drifts on reflow (expected); 9 in-cell row marker(s) still on accepted rows"
         }
       }
     },
@@ -129,25 +129,25 @@
       "key": "pandoc-markdown",
       "label": "pandoc (markdown \u2192 markdown)",
       "axis": "roundtrip",
-      "verdict": "MANGLED",
-      "note": "marker(s) rewritten to a non-comment form (code span / escaped): l2, p2, q2 (differs on: blocks, hash)",
-      "remediation": "trailing inline markers are rewritten to a `<!-- ... -->`{=html} code span; keep markers on their own line (marker-only chunk) or use the `gfm` writer, which preserves them",
+      "verdict": "DROPPED",
+      "note": "marker(s) lost: c1, h1, l1, p1, q1, t1",
+      "remediation": "use the `gfm` writer, which preserves both block and row carriers",
       "fixtures": {
         "blocks": {
-          "verdict": "SURVIVES",
-          "note": "clean; \u00a78 hash drifts on reflow (expected)"
+          "verdict": "DROPPED",
+          "note": "marker(s) lost: c1, h1, l1, p1, q1, t1"
         },
         "blocks_trailing": {
-          "verdict": "MANGLED",
-          "note": "marker(s) rewritten to a non-comment form (code span / escaped): l2, p2, q2"
+          "verdict": "DROPPED",
+          "note": "marker(s) lost: c2, h2, t2"
         },
         "hash": {
-          "verdict": "SURVIVES",
-          "note": "clean; \u00a78 hash drifts on reflow (expected)"
+          "verdict": "DROPPED",
+          "note": "marker(s) lost: hh1"
         },
         "rows": {
-          "verdict": "ROW_ESCAPED",
-          "note": "marker(s) no longer on their table row's line: rw1, rw2"
+          "verdict": "DROPPED",
+          "note": "marker(s) lost: tblc, tblf, tbls"
         }
       }
     },
@@ -239,7 +239,7 @@
         },
         "rows": {
           "verdict": "LEAKED_VISIBLE",
-          "note": "marker(s) rendered as visible text: rw1, rw2, rw3, tbl1"
+          "note": "marker(s) rendered as visible text: rc1, rc2, rc3, rf1, rf2, rf3, rs1, rs2, rs3, tblc, tblf, tbls"
         }
       }
     },
@@ -377,7 +377,7 @@
       "axis": "roundtrip",
       "fixture": "rows",
       "verdict": "SURVIVES",
-      "note": "clean; \u00a78 hash drifts on reflow (expected); 3 in-cell row marker(s) still on their row"
+      "note": "clean; \u00a78 hash drifts on reflow (expected); 9 in-cell row marker(s) still on accepted rows"
     },
     {
       "tool": "mdformat",
@@ -405,7 +405,7 @@
       "axis": "roundtrip",
       "fixture": "rows",
       "verdict": "SURVIVES",
-      "note": "clean; \u00a78 hash drifts on reflow (expected); 3 in-cell row marker(s) still on their row"
+      "note": "clean; \u00a78 hash drifts on reflow (expected); 9 in-cell row marker(s) still on accepted rows"
     },
     {
       "tool": "remark",
@@ -433,7 +433,7 @@
       "axis": "roundtrip",
       "fixture": "rows",
       "verdict": "SURVIVES",
-      "note": "clean, no drift; 3 in-cell row marker(s) still on their row"
+      "note": "clean, no drift; 9 in-cell row marker(s) still on accepted rows"
     },
     {
       "tool": "pandoc-gfm",
@@ -461,35 +461,35 @@
       "axis": "roundtrip",
       "fixture": "rows",
       "verdict": "SURVIVES",
-      "note": "clean; \u00a78 hash drifts on reflow (expected); 3 in-cell row marker(s) still on their row"
+      "note": "clean; \u00a78 hash drifts on reflow (expected); 9 in-cell row marker(s) still on accepted rows"
     },
     {
       "tool": "pandoc-markdown",
       "axis": "roundtrip",
       "fixture": "blocks",
-      "verdict": "SURVIVES",
-      "note": "clean; \u00a78 hash drifts on reflow (expected)"
+      "verdict": "DROPPED",
+      "note": "marker(s) lost: c1, h1, l1, p1, q1, t1"
     },
     {
       "tool": "pandoc-markdown",
       "axis": "roundtrip",
       "fixture": "blocks_trailing",
-      "verdict": "MANGLED",
-      "note": "marker(s) rewritten to a non-comment form (code span / escaped): l2, p2, q2"
+      "verdict": "DROPPED",
+      "note": "marker(s) lost: c2, h2, t2"
     },
     {
       "tool": "pandoc-markdown",
       "axis": "roundtrip",
       "fixture": "hash",
-      "verdict": "SURVIVES",
-      "note": "clean; \u00a78 hash drifts on reflow (expected)"
+      "verdict": "DROPPED",
+      "note": "marker(s) lost: hh1"
     },
     {
       "tool": "pandoc-markdown",
       "axis": "roundtrip",
       "fixture": "rows",
-      "verdict": "ROW_ESCAPED",
-      "note": "marker(s) no longer on their table row's line: rw1, rw2"
+      "verdict": "DROPPED",
+      "note": "marker(s) lost: tblc, tblf, tbls"
     },
     {
       "tool": "remark-mdx",
@@ -580,7 +580,7 @@
       "axis": "render",
       "fixture": "rows",
       "verdict": "LEAKED_VISIBLE",
-      "note": "marker(s) rendered as visible text: rw1, rw2, rw3, tbl1"
+      "note": "marker(s) rendered as visible text: rc1, rc2, rc3, rf1, rf2, rf3, rs1, rs2, rs3, tblc, tblf, tbls"
     },
     {
       "tool": "marked",

@@ -56,11 +56,7 @@ curl https://api.example.com/v1/items
 
 ## Table
 
-A marker after the table identifies the whole table. Row-level identity is still
-deferred, though the carrier it waits on has been measured: a marker inside the last
-cell of a one-line row survives every mainstream formatter and stays invisible in every
-renderer that keeps HTML comments (see [compatibility](compat.md#table-row-carrier)),
-so what remains is spec text rather than an open question.
+A marker after the table identifies the whole table, and that is still the default.
 
 ```md
 | Plan | Limit |
@@ -68,6 +64,24 @@ so what remains is spec text rather than an open question.
 | Pro  | 100   |
 <!-- stay:plan-limit-table -->
 ```
+
+Since [version 1.6](spec.md#56-child-block-identity-table-rows-v16) a **body row may
+also carry its own stay**, on the same reserved `subhash` key and the same resolution
+ladder as a list item. The carrier is a marker inside the row's **last cell**, written
+flush against the cell's content, which is the one position a one-line row has: it
+survives every mainstream formatter and stays invisible in every renderer that keeps
+HTML comments (see [compatibility](compat.md#table-row-carrier)).
+
+```md
+| Plan | Limit |
+|------|------:|
+| Pro  | 100<!-- stay:plan-row-pro subhash=sha256:9f2c --> |
+<!-- stay:plan-limit-table hash=sha256:4b81 -->
+```
+
+Flush placement is what makes the row body a stable thing to hash: the cells are
+trimmed before hashing, so a formatter re-padding the column is not drift, and stamping
+a row leaves the containing table's own hash byte-identical.
 
 ## Blockquote
 
