@@ -12,8 +12,9 @@ This site states the problem, surveys the [prior art](prior-art.md), and gives t
 [specification](spec.md). Version 1 is settled: the marker grammar, attachment
 model, hashing, and recovery behaviour are fixed, and a reference
 [linter](linter.md) and an [evaluation](evaluation.md) back them with runnable code
-and measurements. Four conforming [implementations](implementations.md) for Python,
-JavaScript, and Rust back the spec, each gated by the same conformance corpus. Version 1.1 adds
+and measurements. Three cores in Python, JavaScript, and Rust, plus the
+`remark-stay` tree adapter, back the spec with shared
+[conformance tests](implementations.md#one-corpus-four-full-runners). Version 1.1 adds
 optional CommonMark-tree attachment, a backward-compatible refinement so a loose list
 or a blank-line-containing fence can carry a single stay. Version 1.2 excludes leading
 YAML frontmatter from segmentation, so editing `status:` is not a content edit.
@@ -22,21 +23,21 @@ rather than as a block of its own, version 1.4 names the two ways quote recovery
 can refuse an attachment, version 1.5 makes **text inside a fenced code block
 content rather than markup**, so a document can show a marker without acquiring one,
 and version 1.6 gives **a GFM table body row its own stay** on the same key and the
-same ladder as a list item.
+same ladder as a list item. Version 1.7 defines **where writers may insert a marker**:
+on its own line for a block, or at a list-item or row carrier that passes §3.4's
+lexical checks.
 
-!!! note "Status: version 1.6, settled"
+!!! note "Status: version 1.7, settled"
     The surface is small and stable. It is also young: real-world use and critique
-    will shape later versions. A dogfood run found row and bullet loss about 30x more
-    often than section loss when those items shared one block-level stay, which is
-    what version 1.3 answers for list items and version 1.6 answers for table rows.
-    **Rows waited on a measurement rather than on a design**: a marker inside the last
-    cell of a one-line row survives every mainstream formatter and stays invisible in
-    every renderer that keeps HTML comments, and only once that held did §5.6 get
-    written. Inline spans stay deferred. **Version 1.6 also adds one rule that binds
-    every reader**: a marker carrying `subhash` must never be reported as the stay of
-    the block containing it, which a row makes worth enforcing, since a row marker
-    sits mid-block and a whole table's rows could otherwise be handed to a consumer as
-    one block's stays. Issues and counter-arguments are welcome.
+    will shape later versions. **Write safety is a placement rule, not a guarantee
+    that arbitrary Markdown renders identically after stamping.** A child carrier
+    is refused when its container's source prefix or the marker itself fails the
+    [§3.4 checks](spec.md#34-a-marker-that-shares-a-line-with-content-v17); other
+    children and the container can still receive stays. Child segmentation remains
+    optional, and every reader must keep a `subhash` marker from identifying its
+    container. See [compatibility](compat.md#marker-insertion-and-rendering-v17)
+    for the measured limits. Inline spans stay deferred. Issues and
+    counter-arguments are welcome.
 
 ## The problem
 
@@ -139,8 +140,9 @@ The [specification](spec.md) fixes:
 
 Version 1.1 adds CommonMark-tree attachment, so a loose list or a blank-line-containing
 code fence can carry a single stay (an optional extra; the dependency-free blank-line
-path stays the default). Deferred to later versions, by design: list-item and
-table-row identity. The [FAQ](faq.md) covers the obvious objections (why not heading
+path stays the default). Versions 1.3 and 1.6 add optional list-item and table-row
+identity; version 1.7 constrains their marker placement. Inline-span identity remains
+deferred. The [FAQ](faq.md) covers the obvious objections (why not heading
 anchors, UUIDs, an external database, or HTML ids).
 
 ## Scope

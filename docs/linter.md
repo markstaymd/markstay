@@ -10,9 +10,10 @@ A [reference checker](https://github.com/markstaymd/markstay/tree/master/tools/l
 implements the rules below. Its default path is dependency-free (Python standard
 library only) and fully local: no network, no credentials. It is meant to run as a git
 pre-commit hook or as the post-edit step of an agent that edits markstay documents. The
-code ships with the site repo (`tools/linter/`, 59 self-tests in `test_lint.py`).
-The one optional extra is `--commonmark` mode ([version 1.1](spec.md#52-commonmark-tree-attachment-v11)),
-which needs `markdown-it-py`.
+code and its tests ship with the site repo (`tools/linter/`). The optional
+`markdown-it-py` dependency enables `--commonmark` mode
+([version 1.1](spec.md#52-commonmark-tree-attachment-v11)) and the agreement-subset
+advisory below, including when the selected segmentation mode is the default.
 
 ## What it checks
 
@@ -24,6 +25,16 @@ which needs `markdown-it-py`.
 | `ORPHAN_MARKER` | error | a marker with no preceding block to attach to |
 | `DUPLICATE_ID` | error | the same id used by two markers in one document |
 | `HASH_DRIFT` | warn | a marker's stored `hash=` no longer matches its block |
+| `OUTSIDE_SUBSET` | info | §5.1 and §5.2 segment this document differently; emitted when the optional CommonMark parser is installed |
+
+`OUTSIDE_SUBSET` implements the advisory in [§16](spec.md#16-conformance-summary).
+It identifies documents outside [§5.4's agreement subset](spec.md#54-the-agreement-subset-v12),
+where a blank-line write was more likely to change rendering in the measured
+corpus. It does not block a hook, and a document without this finding has no
+guarantee of unchanged rendering. It is separate from [§3.4's writer
+refusals](spec.md#34-a-marker-that-shares-a-line-with-content-v17): a child carrier
+can be refused even inside the agreement subset. The parser-free JavaScript and
+Rust cores and the adapters do not emit this diagnostic.
 
 ### Regeneration diff (before vs after an edit)
 

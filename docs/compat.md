@@ -1,14 +1,15 @@
 # Renderer / formatter compatibility
 
 markstay records a block's identity as a trailing HTML comment
-(`<!-- stay:id -->`). The [specification](spec.md#3-marker-syntax) asserts that comment
-is invisible in a rendered document and preserved in the raw source. That is true for
-GitHub specifically; for everyone else's toolchain it was an assumption, until it was
-measured.
+(`<!-- stay:id -->`). Renderers can hide, retain, escape, or reject that comment,
+depending on their configuration and the source around it. The tables below
+measure marker survival and visibility on a fixed set of fixtures; they do not
+guarantee identical rendering for arbitrary Markdown.
 
 This page is the measured answer: does a `stay:` marker survive the Markdown tools an
 adopter actually pushes their `.md` through, a formatter, a static-site renderer, an
-HTML sanitizer? Check your formatter against the green list before you stamp a repo.
+HTML sanitizer? Check the measured configuration and the insertion limits below
+before you stamp a repo.
 
 !!! question "The question"
     When my `.md` passes through a formatter (it reflows the doc) or a renderer (it
@@ -39,15 +40,14 @@ content hash drift on reflow is expected and is **not** a failure (it is the cor
 | `remark-mdx` (MDX round-trip) | ✅ survives | preserves the [§3.2](spec.md#3-marker-syntax) `{/* stay:id */}` form |
 | `pandoc` (native `markdown` writer) | ⚠️ degraded | a **trailing inline** marker is rewritten to a `` `<!-- ... -->`{=html} `` code span. **→** keep markers on their own line (a marker-only chunk, which `markstay stamp` already emits), or use the `gfm` writer. Both avoid it. |
 
-The headline: **every mainstream formatter preserves the marker clean.** The only
-degradation is pandoc's *native* `markdown` writer turning a marker that rides the end
+In these block fixtures, **every tested formatter preserves separate-line markers**.
+The measured degradation is pandoc's *native* `markdown` writer turning a marker that rides the end
 of a paragraph or list item into an inline code span; it does not happen with the
 `gfm` writer, and not at all when the marker sits on its own line.
 
 ## Render-emit (md → HTML), the visibility axis
 
-Here the marker should be invisible in the render (the good default for a comment) and
-must never leak as visible text.
+This arm checks whether each fixture's marker is hidden or leaks as visible text.
 
 | Renderer | Verdict | Notes |
 |----------|---------|-------|
@@ -106,6 +106,48 @@ source-slice hash would drift on a `prettier` run that changed nothing. The row 
 §5.6 is therefore the row's cells trimmed, reversibly escaped, and joined, which also
 keeps cell boundaries from colliding.
 
+## Marker insertion and rendering (v1.7)
+
+Preserving an existing comment through a formatter is different from inserting a
+new one. A marker written inside an unclosed HTML construct, after a backslash,
+or against certain emphasis delimiters can change what the document displays.
+[§3.4](spec.md#34-a-marker-that-shares-a-line-with-content-v17) constrains insertion:
+
+- New block markers go on their own line. Existing same-line block markers remain
+  readable and can have their digest or duplicate id refreshed in place.
+- List-item and row carriers are refused when the container's raw source prefix
+  contains `<` or a backslash, or `{` in MDX. Existing plain markers are masked;
+  other comments and markers carrying extra evidence remain part of the check.
+- A row's flush carrier also refuses a prefix ending in `*`, `_`, or `~` after
+  masking. New same-line markers carry only an id and optional digest fields.
+
+The prefix is read from the document as the write began, across the whole
+container up to the carrier. A character in a table header or an earlier list
+item therefore can refuse a later carrier. These are lexical presence checks:
+even an otherwise harmless `<` in a code span refuses the position. A refused
+child receives no new stay; other children and the container remain eligible.
+The Python writer reports refused carriers through the CLI and
+`StampResult.refused_carriers`.
+
+This rule **does not guarantee unchanged rendering for arbitrary Markdown**.
+The reference measurement covers 2417 npm documentation files. It finds 3186
+refused positions out of 40508 under tree segmentation (7.87%), and 2716 of
+30799 under blank-line segmentation (8.82%). The rule refuses all 39 measured
+capture and delimiter cases. These measurements are described in
+[§3.4](spec.md#34-a-marker-that-shares-a-line-with-content-v17).
+
+With the optional parser installed, Python's [linter](linter.md) emits
+`OUTSIDE_SUBSET` for documents where blank-line and CommonMark-tree segmentation
+disagree. This is an informational risk signal; being inside the agreement
+subset is not a rendering guarantee. Successful writes may normalize line
+endings to LF. A whole-operation refusal returns the original input unchanged.
+
+Only Python implements child carriers. The JavaScript and Rust cores write
+block markers on separate lines; `remark-stay` and `rehype-stay` do not write
+marker comments; `plate-stay` writes separate-line block markers and rejects
+list-item and table wrappers. Their exact scopes are listed under
+[implementations](implementations.md#write-safety-in-version-17).
+
 ## Anchor after a sanitizer (`rehype-stay`'s `id=`)
 
 [`rehype-stay`](implementations.md) emits an HTML `id=` per stay so a
@@ -121,15 +163,15 @@ No sanitizer in the set strips the anchor outright.
 
 ## What this means for an adopter
 
-- **Formatters are safe.** Run `prettier`, `mdformat`, or `remark` over a stayed repo
-  freely. If you use `pandoc`, prefer its `gfm` writer or keep markers on their own
-  line.
-- **Renders are invisible by default,** including on GitHub and on a MkDocs site. The
-  one configuration to avoid is `markdown-it` with HTML disabled.
+- **The tested formatters preserve these fixtures.** If you use `pandoc`, prefer
+  its `gfm` writer for child markers; separate-line block markers also avoid the
+  measured native-writer degradation.
+- **The tested HTML-enabled renderers hide these fixture markers**, including
+  GitHub and MkDocs. `markdown-it` with HTML disabled exposes them as text.
 - **MDX needs the §3.2 form.** That is what the profile is for.
-- Every degraded cell above maps to an answer the spec already gives in its
-  [failure-mode table](spec.md#13-failure-modes-and-how-the-spec-answers-them) (the §3.2 profile, or a consumer that
-  detects a missing expected marker). None of them need a change to the standard.
+- **Check insertion separately from survival.** §3.4 refuses known unsafe
+  placements, while the [failure-mode table](spec.md#13-failure-modes-and-how-the-spec-answers-them)
+  covers toolchain configuration and consumers detecting a missing marker.
 
 Tools left out of this first pass (Hugo/Goldmark, Jekyll/kramdown, Eleventy, and a
 live cross-renderer CI gate) are listed in

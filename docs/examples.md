@@ -1,8 +1,10 @@
 # Examples
 
-These show the v1 syntax across the common block types and a few realistic agent
-workflows. The marker is always a trailing comment on the line after the block. In
-rendered Markdown it is invisible; the source carries it.
+These show the marker syntax across common block types and agent workflows.
+Writers place block markers on the line after the block. Optional child markers
+share a line with list-item or row content, subject to
+[§3.4's placement checks](spec.md#34-a-marker-that-shares-a-line-with-content-v17).
+See [compatibility](compat.md) for measured visibility and rendering limits.
 
 ## Paragraph
 
@@ -68,9 +70,9 @@ A marker after the table identifies the whole table, and that is still the defau
 Since [version 1.6](spec.md#56-child-block-identity-table-rows-v16) a **body row may
 also carry its own stay**, on the same reserved `subhash` key and the same resolution
 ladder as a list item. The carrier is a marker inside the row's **last cell**, written
-flush against the cell's content, which is the one position a one-line row has: it
-survives every mainstream formatter and stays invisible in every renderer that keeps
-HTML comments (see [compatibility](compat.md#table-row-carrier)).
+flush against the cell's content. The measured GFM-preserving formatters keep the
+fixture marker on its row; pandoc's native Markdown writer does not (see
+[compatibility](compat.md#table-row-carrier)).
 
 ```md
 | Plan | Limit |
@@ -82,6 +84,12 @@ HTML comments (see [compatibility](compat.md#table-row-carrier)).
 Flush placement is what makes the row body a stable thing to hash: the cells are
 trimmed before hashing, so a formatter re-padding the column is not drift, and stamping
 a row leaves the containing table's own hash byte-identical.
+
+Writers refuse a new row marker when the container's source prefix contains `<`
+or a backslash outside plain markers, or when the flush position ends in `*`,
+`_`, or `~`. MDX also refuses `{`. A refused row keeps its content and gets no
+new stay; the table can still receive a block stay. New child markers carry only
+their id and digest, with recovery evidence stored separately.
 
 ## Blockquote
 

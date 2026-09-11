@@ -68,11 +68,17 @@ carry under the dependency-free baseline, a heading, a paragraph, a single-parag
 blockquote, or a closed code fence, and **rejects** anything else with a clear error
 rather than guessing:
 
-- **List items.** Plate wraps each list *item* as its own `<block>`, but a markstay
-  marker identifies the [whole list](spec.md), not an item (list-item identity is a
-  deferred extension). Per-item ids have nowhere to attach, so the bridge refuses them.
-- **Tables, multi-paragraph or loose blocks, fences with internal blank lines.** Below
-  the baseline's block granularity; deferred, not silently mismapped.
+- **List items.** Plate wraps each list *item* as its own `<block>`. The bridge
+  does not implement the optional [child identity](spec.md#55-child-block-identity-list-items-v13)
+  in §§5.5-5.6, so per-item ids have no mapping here.
+- **Tables, multi-paragraph or loose blocks, fences with internal blank lines.**
+  Outside the bridge's validated subset; refused without conversion.
+
+`fromPlate` writes each marker on a separate line after the block, and the editor
+API's `serializeStay` delegates to it. Neither reaches the list-item or table-row
+carrier covered by [§3.4](spec.md#34-a-marker-that-shares-a-line-with-content-v17).
+On import, `toPlate` and `deserializeStay` refuse input carrying a `subhash`
+marker, because the bridge cannot preserve child identity through conversion.
 
 Refusing what it cannot map cleanly is the point: a converter that quietly produces a
 wrong id is worse than one that tells you it cannot.
@@ -136,8 +142,7 @@ recovery here is zero.
 ## Honest scope
 
 - The headline covers the **8 bridged blocks**. The document's list and table are
-  reported as skipped, not hidden, they are below the baseline's block granularity, the
-  same boundary the [public dogfood study](dogfood.md) documents.
+  reported as skipped because this adapter does not support their conversion.
 - Recovery is best-effort and degrades as a rewrite drifts further from the original
   (the [attachment study](evaluation.md) measures the full curve). In normal use you
   would also give the model the [section 11 preservation instruction](spec.md) so the

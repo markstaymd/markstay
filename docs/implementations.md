@@ -1,11 +1,10 @@
 # Implementations
 
-markstay has four independent implementations across three languages. They are not
-ports of one codebase: each is written to the [specification](spec.md) and gated by
-a single shared, language-neutral **conformance corpus**, so "the implementations
-agree" is a tested fact rather than an assertion. The corpus pins the two promises
-that have to be exact, the §8 content hash and the §9 recovery scoring, down to the
-bit.
+markstay has three cores across Python, JavaScript, and Rust, plus a remark tree
+adapter that reuses the JavaScript core. A shared, language-neutral **conformance
+corpus** checks the [specification](spec.md), including the §8 content hash and
+§9 recovery scoring. The 0.11.0 package family implements specification v1.7;
+optional capabilities and each runner's scope are listed below.
 
 | Language | Package | Install | Source |
 |---|---|---|---|
@@ -13,6 +12,10 @@ bit.
 | JavaScript | [`markstay`](https://www.npmjs.com/package/markstay) (npm) | `npm install markstay` | [markstaymd/markstay-core](https://github.com/markstaymd/markstay-core) |
 | JavaScript (remark) | [`remark-stay`](https://www.npmjs.com/package/remark-stay) (npm) | `npm install remark-stay` | [markstaymd/remark-stay](https://github.com/markstaymd/remark-stay) |
 | Rust | [`markstay`](https://crates.io/crates/markstay) (crates.io) | `cargo add markstay` | [markstaymd/markstay-rs](https://github.com/markstaymd/markstay-rs) |
+
+The same package family includes [`rehype-stay`](https://www.npmjs.com/package/rehype-stay),
+which emits HTML ids from block stays, and
+[`plate-stay`](https://www.npmjs.com/package/plate-stay), the [Plate bridge](plate.md).
 
 ## What each one is
 
@@ -42,29 +45,62 @@ CLI and `child_blocks=True` in the API, and that is not a gap:
 [§16](spec.md#16-conformance-summary) makes segmenting and resolving them a tool's
 choice.
 
-What §16 does *not* make optional is three rules, and **every implementation here
-carries all three**. Two bind a writer: a marker with a `subhash` never receives a
-container hash, and never makes its block count as stamped. That is what lets you hand a
-child-stamped document to a tool that cannot see child blocks and get it back undamaged.
+What §16 does *not* make optional is three compatibility rules. Two bind a writer:
+a marker with a `subhash` never receives a container hash, and never makes its block
+count as stamped. The three core writers apply both without requiring child segmentation.
 The third arrived with version 1.6 and binds every **reader**: such a marker must never
 be reported as the stay of the block containing it. Ignoring it is fine; attributing it
 to the container is not, because that hands a consumer a real id bound to the wrong
 block with nothing in the output saying so. Rows are why it is now an error rather than
 an omission: a row marker sits mid-block, so a whole table's rows could otherwise be
-reported as one block's stays. All three are pinned by shared conformance vectors, so
-agreement on them is tested rather than asserted.
+reported as one block's stays. Core conformance vectors pin these rules; adapter
+tests check the relevant reader behavior. `plate-stay` refuses child-marked input
+because its bridge cannot carry the child's identity through conversion.
 
-## One corpus, four runners
+## Write safety in version 1.7
 
-Every implementation runs the same conformance vectors, so a change in any one that
-breaks cross-implementation agreement fails its own test suite. Table-row identity ships
-as an **optional profile** beside the core vectors: a runner either verifies it or
-declares that it declines it, and declining is asserted rather than silent, so the
-profile cannot go missing without a suite failing. That shared corpus
-is what lets a tool depend on *markstay the spec* rather than on one library's
-quirks. The CLI linters (Python, JS, and Rust) exit non-zero on any error-level
-finding, so they drop straight into a pre-commit hook or an AI agent's post-edit
-check.
+[§3.4](spec.md#34-a-marker-that-shares-a-line-with-content-v17) requires block
+markers to be inserted on their own line. Its same-line carrier checks apply when
+a writer implements list-item or table-row identity:
+
+| Package | Marker-writing scope |
+|---------|----------------------|
+| Python `markstay` | Applies §3.4 to list-item and row carriers with `child_blocks=True`; the CLI reports each refused carrier. |
+| JavaScript and Rust `markstay` | Write block markers on separate lines; do not implement child carriers. |
+| `remark-stay` | Reads stays and records annotations in `file.data.stay`; never writes marker comments. |
+| `rehype-stay` | Sets `hProperties.id` for HTML emission; never writes marker comments. |
+| `plate-stay` | `fromPlate` writes block markers on separate lines; `serializeStay` delegates to it. List-item and table wrappers are refused. |
+
+Only Python reaches these child-carrier checks. Existing
+same-line block markers remain readable, and the core writers may refresh their
+hashes or replace duplicate ids in place. These rules do not guarantee unchanged
+rendering for arbitrary Markdown; see [compatibility](compat.md#marker-insertion-and-rendering-v17).
+
+With `markdown-it-py` installed, the Python linters also emit the optional
+`OUTSIDE_SUBSET` advisory when §5.1 and §5.2 disagree on a document's segmentation.
+It is informational, does not block a commit, and its absence is not a rendering
+guarantee. The JavaScript and Rust cores and the adapters do not emit this advisory.
+
+## One corpus, four full runners
+
+The canonical and packaged Python runners each verify **420 core vectors and 31
+optional `rows` vectors**. JavaScript and Rust each verify **420 core vectors**
+and explicitly assert that they decline the 31-vector `rows` profile. These four
+full runners fail on an unknown profile or missing expected vectors.
+
+`remark-stay` has a separate category-routed parity harness over `parse`, `lint`,
+`diff`, `anchors`, and `resolve`, plus the tree-specific tier. It inventories core
+categories, but does not load or assert a decline for the optional `rows` profile.
+It is not one of the four full runners. The other two adapters have their own
+integration suites.
+
+The row profile checks §3.4's placement decisions. Rendering comparisons require
+parsers and run in a separate evaluation; they are not language-neutral corpus
+assertions. The parser-dependent `OUTSIDE_SUBSET` advisory is likewise excluded
+from core finding comparisons and tested in Python's own suites.
+
+The CLI linters (Python, JavaScript, and Rust) exit non-zero on any error-level
+finding, so they fit a pre-commit hook or an agent's post-edit check.
 
 To wire markstay into a repo as a commit hook rather than call it from code, see
 [Get started](get-started.md). For the design rationale behind the spec these

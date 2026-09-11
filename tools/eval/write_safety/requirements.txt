@@ -1,0 +1,7 @@
+# The renderer this harness measures against. Pinned because the numbers move with
+# it: under 4.2.0 (CommonMark 0.31.2) the endings sweep finds 17 unsafe endings;
+# under the pre-0.31 comment rule (3.0.0) it finds 15, because a marker appended to
+# `x<!--` leaves a doubled `--` that the older rule does not accept as a comment at
+# all, so neither `x<!--` nor `x<!-- c --!>` captures it there. The predicate refuses
+# both under either renderer. Every published count here came from 4.2.0.
+markdown-it-py==4.2.0

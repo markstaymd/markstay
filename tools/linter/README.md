@@ -10,6 +10,12 @@ The default path is dependency-free (Python 3.10+ stdlib only) and fully local: 
 API credentials, no network. CommonMark mode (`--commonmark`, below) is the one
 optional extra and needs `markdown-it-py`.
 
+With the optional parser installed, lint also emits the informational
+`OUTSIDE_SUBSET` advisory (§5.4) when blank-line and CommonMark segmentation
+select different blocks. It does not affect the exit status and is absent
+without that dependency. `--commonmark` selects tree segmentation for the lint;
+the advisory describes the document's agreement between profiles either way.
+
 ## Usage
 
 ```bash

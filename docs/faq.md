@@ -31,8 +31,8 @@ markstay is meant to be a source-level convention with no infrastructure.
 
 Raw HTML anchors render into the output DOM, can be stripped by sanitisers more
 aggressively than comments, and sit awkwardly next to block-level content. HTML
-comments are invisible in rendered Markdown, are preserved as source text by most tools
-even when they are dropped from the rendered output, and read to a language model as
+comments are invisible when the renderer accepts them as HTML, are preserved as source
+text by the [tested formatters](compat.md), and read to a language model as
 metadata rather than content. In the [evaluation](evaluation.md) the comment form tied
 or marginally beat every alternative for LLM survival.
 
@@ -66,8 +66,10 @@ syntax.
 
 ## Won't a comment after every block clutter my source?
 
-It adds one line per identified block in the raw `.md`. It is invisible in rendered
-output, so readers never see it. Coverage is also a choice: you can mark only the
+It adds one line per identified block in the raw `.md`. The
+[tested HTML-enabled renderers](compat.md#render-emit-md-html-the-visibility-axis)
+hide these block markers; HTML-disabled configurations can expose them as text.
+Coverage is also a choice: you can mark only the
 blocks something needs to reference (authored landmarks) rather than every block. Dense
 automatic coverage is for tooling that wants to address everything; a human author can
 use a handful of human-readable ids.

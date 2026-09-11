@@ -21,8 +21,8 @@ cargo install markstay       # crates.io, a single static binary
 
 ## Add a stay to a block
 
-A stay is recorded as a trailing HTML comment, invisible in rendered Markdown and
-preserved in the source ([measured across the common formatters and
+A stay is recorded as a trailing HTML comment, hidden when the renderer accepts
+HTML comments and preserved in the source ([measured across the common formatters and
 renderers](compat.md), so you can check your toolchain before you stamp):
 
 ```md
@@ -36,6 +36,21 @@ Write markers by hand, or mint them with the CLI:
 ```bash
 markstay stamp FILE -w      # mint a stay for each unmarked block
 ```
+
+Writers put new block markers on separate lines. In Python, `--child-blocks` also
+addresses supported list items and table rows, subject to
+[§3.4's placement checks](spec.md#34-a-marker-that-shares-a-line-with-content-v17):
+
+```bash
+pip install 'markstay[commonmark]'
+markstay stamp FILE --commonmark --child-blocks -w
+```
+
+A refused child gets no new stay; the CLI reports its line and continues with
+other writable children and the container. JavaScript and Rust do not implement
+child stamping. A successful stamp can normalize line endings to LF and does
+not promise unchanged rendering for arbitrary Markdown. Check the
+[compatibility limits](compat.md#marker-insertion-and-rendering-v17) for your input.
 
 ### Which blocks should carry a stay?
 
@@ -115,7 +130,7 @@ Wire it into the hook manager your repo already runs.
     # .pre-commit-config.yaml
     repos:
       - repo: https://github.com/markstaymd/markstay-py
-        rev: v0.10.0
+        rev: v0.11.0
         hooks:
           - id: markstay
     ```

@@ -57,6 +57,15 @@ def approx(a, b) -> bool:
     return a == b
 
 
+def corpus_findings(findings, *, with_line):
+    """Exclude only §5.4's optional parser advisory from core equality."""
+    return [
+        finding_dict(f, with_line=with_line)
+        for f in findings
+        if not (f.code == "OUTSIDE_SUBSET" and f.level == "info")
+    ]
+
+
 # --- per-category verifiers: (vector) -> (ok, detail) ---------------------
 
 def v_hash(v) -> tuple[bool, str]:
@@ -78,13 +87,13 @@ def v_parse(v) -> tuple[bool, str]:
 
 def v_lint(v) -> tuple[bool, str]:
     _, findings = L.lint_document(v["doc"])
-    got = [finding_dict(f, with_line=True) for f in L.sort_findings(findings)]
+    got = corpus_findings(L.sort_findings(findings), with_line=True)
     return approx(got, v["findings"]), f"got={got}"
 
 
 def v_diff(v) -> tuple[bool, str]:
     findings = L.lint_diff(v["before"], v["after"])
-    got = [finding_dict(f, with_line=False) for f in L.sort_findings(findings)]
+    got = corpus_findings(L.sort_findings(findings), with_line=False)
     return approx(got, v["findings"]), f"got={got}"
 
 
@@ -221,8 +230,8 @@ def v_check(v) -> tuple[bool, str]:
                      for path, baseline in result.pairings],
         "reports": [
             {"label": label,
-             "findings": [finding_dict(f, with_line=True)
-                          for f in MW.sort_findings(findings)]}
+             "findings": corpus_findings(MW.sort_findings(findings),
+                                         with_line=True)}
             for label, findings in result.reports
         ],
         "notes": result.notes,
@@ -299,7 +308,7 @@ PROFILE_CATEGORIES = {"rows": "rows"}
 # Rust runners have pinned these since the profile landed; this is the canonical
 # runner holding the same guarantee its own README claims.
 CORE_VECTORS = 420
-PROFILE_VECTORS = {"rows": 23}
+PROFILE_VECTORS = {"rows": 31}
 
 
 def main(argv=None) -> int:
