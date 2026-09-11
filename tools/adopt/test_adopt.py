@@ -352,6 +352,63 @@ def test_hook_show_drift_env_lists_the_drift():
         shutil.rmtree(repo, ignore_errors=True)
 
 
+# The info-level findings follow the same rule: NEW_ID and the §5.4 OUTSIDE_SUBSET
+# advisory never block, so the hook prints nothing for them unless asked, exactly
+# as the packaged `check-staged` does. These assert on stderr, not the exit status:
+# a noisy hook still exits 0, which is how the advisory went unnoticed.
+
+def _hook_python_parses_commonmark():
+    """The advisory needs markdown-it-py in the interpreter the hook runs under,
+    which its shebang resolves as `python3` on PATH."""
+    py = shutil.which("python3")
+    return py is not None and subprocess.run(
+        [py, "-c", "import markdown_it"], capture_output=True).returncode == 0
+
+
+def test_hook_new_stay_commit_is_silent():
+    repo = _fresh_repo()
+    try:
+        _install(repo)
+        _write(repo, "a.md", "Alpha block.\n<!-- stay:a1 -->\n")
+        _git(repo, "add", "a.md")
+        assert _git(repo, "commit", "-m", "init").returncode == 0
+        _write(repo, "a.md", "Alpha block.\n<!-- stay:a1 -->\n\nBeta block.\n<!-- stay:b2 -->\n")
+        _git(repo, "add", "a.md")
+        r = _git(repo, "commit", "-m", "stamp beta")
+        assert r.returncode == 0
+        assert r.stderr == "", r.stderr
+        # the finding is still there for anyone who asks
+        _write(repo, "a.md", "Alpha block.\n<!-- stay:a1 -->\n\nBeta block.\n<!-- stay:b2 -->\n"
+                             "\nGamma block.\n<!-- stay:c3 -->\n")
+        _git(repo, "add", "a.md")
+        r = _git_env(repo, {"MARKSTAY_SHOW_DRIFT": "1"}, "commit", "-m", "stamp gamma")
+        assert r.returncode == 0
+        assert "NEW_ID" in r.stderr, r.stderr
+    finally:
+        shutil.rmtree(repo, ignore_errors=True)
+
+
+def test_hook_subset_advisory_is_silent_on_a_document_with_no_markers():
+    if not _hook_python_parses_commonmark():
+        return  # the advisory cannot fire here, so silence would prove nothing
+    repo = _fresh_repo()
+    try:
+        _install(repo)
+        # A heading directly over its body: one run, two CommonMark nodes (§5.4).
+        _write(repo, "notes.md", "# Notes\nBody under the heading.\n")
+        _git(repo, "add", "notes.md")
+        r = _git(repo, "commit", "-m", "notes")
+        assert r.returncode == 0
+        assert r.stderr == "", r.stderr
+        _write(repo, "notes.md", "# Notes\nBody under the heading, revised.\n")
+        _git(repo, "add", "notes.md")
+        r = _git_env(repo, {"MARKSTAY_SHOW_DRIFT": "1"}, "commit", "-m", "revise")
+        assert r.returncode == 0
+        assert "OUTSIDE_SUBSET" in r.stderr, r.stderr
+    finally:
+        shutil.rmtree(repo, ignore_errors=True)
+
+
 # --- install into a repo whose hooks git actually runs -------------------------
 
 def test_install_honours_core_hookspath():

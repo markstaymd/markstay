@@ -37,10 +37,15 @@
 # MARKSTAY_CHECK_COLLECTIONS=1 to also block when a stamped table or list silently
 # loses a row/bullet (COLLECTION_SHRANK; off by default).
 #
-# Hash drift (a marker's hash no longer matching its in-place-edited block) is a
-# non-blocking warning and is hidden from the hook output by default: a commit
-# whose only findings are in-place edits prints nothing (it does not block, so
-# there is nothing to act on). Set MARKSTAY_SHOW_DRIFT=1 to list drift findings.
+# A file is reported only when it has something to act on: an error, or a warning
+# other than hash drift. Hash drift (a marker's hash no longer matching its
+# in-place-edited block), NEW_ID (a stay was added) and the §5.4 OUTSIDE_SUBSET
+# advisory never block and ask nothing of the committer, so they are hidden by
+# default and a commit carrying only those prints nothing. The advisory matters
+# most here: the vendored linter emits it whenever markdown-it-py is importable,
+# markers or not, so without this rule a file with no markers would not pass
+# silently. Set MARKSTAY_SHOW_DRIFT=1 to list them, the same switch as the
+# packaged `markstay check-staged --show-drift`.
 # Bypass the whole check once with `git commit --no-verify`.
 
 import os
@@ -222,8 +227,8 @@ def main() -> int:
     # kwarg is only passed when enabled, so an older vendored linter still works.
     check_collections = os.environ.get("MARKSTAY_CHECK_COLLECTIONS", "").lower() in (
         "1", "true", "yes", "on")
-    # Hash drift is non-blocking and non-actionable in this channel, so it is
-    # hidden by default; MARKSTAY_SHOW_DRIFT=1 lists it.
+    # Non-blocking findings with nothing to act on (drift, a new stay, the subset
+    # advisory) are hidden by default; MARKSTAY_SHOW_DRIFT=1 lists them.
     show_drift = os.environ.get("MARKSTAY_SHOW_DRIFT", "").lower() in (
         "1", "true", "yes", "on")
     raw_entries = staged_entries()
@@ -250,9 +255,14 @@ def main() -> int:
 
     reports = []
     for label, findings in result["reports"]:
-        # Skip a file whose only findings are hidden drift, so a commit that
-        # merely edited stamped blocks in place prints nothing.
-        if show_drift or any(fd.code != "HASH_DRIFT" for fd in findings):
+        # Speak only when there is something to act on, the rule the packaged
+        # check-staged applies in all three languages: an error, or a warning
+        # other than drift. Drift and the info-level NEW_ID / OUTSIDE_SUBSET
+        # never block, so a file carrying only those prints nothing.
+        actionable = any(fd.level == "error"
+                         or (fd.level == "warn" and fd.code != "HASH_DRIFT")
+                         for fd in findings)
+        if show_drift or actionable:
             reports.append(L.render_text(label, findings, show_drift=show_drift))
     notes = result["notes"]
 
