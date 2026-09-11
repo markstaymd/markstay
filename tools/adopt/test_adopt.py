@@ -21,22 +21,21 @@ sys.path.insert(0, HERE)
 
 import markstay_preserve as P  # noqa: E402
 
-# The shared conformance corpus. This file has two homes: the umbrella (where the
-# corpus sits beside it) and the published tools/ tree (where it does not). The
-# umbrella is identified by SPEC.md, which the published copy never carries, so
-# the skip below can only fire in the published tree. Keying the skip on the
-# corpus file itself would have made deleting that file turn this test green.
+# The shared conformance corpus sits beside this directory in both the umbrella
+# and the published tools/ tree. SPEC.md identifies either complete layout;
+# a standalone adoption copy can omit both. Keying the skip on the corpus file
+# itself would make deleting that file turn the test green.
 _PARENT = os.path.dirname(HERE)
-_IN_UMBRELLA = os.path.exists(os.path.join(_PARENT, "SPEC.md"))
+_HAS_SPEC = os.path.exists(os.path.join(_PARENT, "SPEC.md"))
 _CORPUS = os.path.join(_PARENT, "conformance", "spec", "preserve.json")
 _CHECK_CORPUS = os.path.join(_PARENT, "conformance", "spec", "check.json")
 
 
 def _corpus_vectors():
-    if not _IN_UMBRELLA:
+    if not _HAS_SPEC:
         return None
     assert os.path.exists(_CORPUS), (
-        f"running in the umbrella but {_CORPUS} is missing; the vendored instruction "
+        f"running beside SPEC.md but {_CORPUS} is missing; the vendored instruction "
         "is unguarded"
     )
     with open(_CORPUS, encoding="utf-8") as fh:
@@ -53,7 +52,7 @@ def test_vendored_copy_matches_the_shared_corpus():
     exists to catch."""
     vectors = _corpus_vectors()
     if vectors is None:
-        return  # published tools/ copy: no corpus ships beside it
+        return  # standalone adoption copy, without the reference tree
     checked = 0
     for v in vectors:
         if v["fn"] == "instruction":
@@ -103,10 +102,10 @@ def test_vendored_hook_matches_the_shared_check_corpus():
     """The standalone hook owns a fourth baseline resolver. Drive the same
     commit-shaped vectors through it so package parity cannot leave adopters on a
     silently different algorithm."""
-    if not _IN_UMBRELLA:
-        return  # published tools/ copy: no corpus ships beside it
+    if not _HAS_SPEC:
+        return  # standalone adoption copy, without the reference tree
     assert os.path.exists(_CHECK_CORPUS), (
-        f"running in the umbrella but {_CHECK_CORPUS} is missing; the hook's "
+        f"running beside SPEC.md but {_CHECK_CORPUS} is missing; the hook's "
         "baseline resolver is unguarded"
     )
 
@@ -136,6 +135,10 @@ def test_vendored_hook_matches_the_shared_check_corpus():
                         {"level": finding.level, "code": finding.code,
                          "id": finding.id, "line": finding.line}
                         for finding in L.sort_findings(findings)
+                        # §5.4's parser advisory is optional, like in the core
+                        # runners. Keep every other finding in the comparison.
+                        if not (finding.code == "OUTSIDE_SUBSET"
+                                and finding.level == "info")
                     ],
                 }
                 for label, findings in result["reports"]
