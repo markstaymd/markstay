@@ -308,7 +308,7 @@ PROFILE_CATEGORIES = {"rows": "rows"}
 # Rust runners have pinned these since the profile landed; this is the canonical
 # runner holding the same guarantee its own README claims.
 CORE_VECTORS = 420
-PROFILE_VECTORS = {"rows": 31}
+PROFILE_VECTORS = {"rows": 32}
 
 
 def main(argv=None) -> int:

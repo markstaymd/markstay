@@ -23,19 +23,19 @@ rather than as a block of its own, version 1.4 names the two ways quote recovery
 can refuse an attachment, version 1.5 makes **text inside a fenced code block
 content rather than markup**, so a document can show a marker without acquiring one,
 and version 1.6 gives **a GFM table body row its own stay** on the same key and the
-same ladder as a list item. Version 1.7 defines **where writers may insert a marker**:
+same ladder as a list item. Version 1.8 defines **where writers may insert a marker**:
 on its own line for a block, or at a list-item or row carrier that passes §3.4's
 lexical checks.
 
-!!! note "Status: version 1.7, settled"
+!!! note "Status: version 1.8, settled"
     The surface is small and stable. It is also young: real-world use and critique
     will shape later versions. **Write safety is a placement rule, not a guarantee
     that arbitrary Markdown renders identically after stamping.** A child carrier
     is refused when its container's source prefix or the marker itself fails the
-    [§3.4 checks](spec.md#34-a-marker-that-shares-a-line-with-content-v17); other
+    [§3.4 checks](spec.md#34-a-marker-that-shares-a-line-with-content-v18); other
     children and the container can still receive stays. Child segmentation remains
     optional, and every reader must keep a `subhash` marker from identifying its
-    container. See [compatibility](compat.md#marker-insertion-and-rendering-v17)
+    container. See [compatibility](compat.md#marker-insertion-and-rendering-v18)
     for the measured limits. Inline spans stay deferred. Issues and
     counter-arguments are welcome.
 
@@ -141,7 +141,7 @@ The [specification](spec.md) fixes:
 Version 1.1 adds CommonMark-tree attachment, so a loose list or a blank-line-containing
 code fence can carry a single stay (an optional extra; the dependency-free blank-line
 path stays the default). Versions 1.3 and 1.6 add optional list-item and table-row
-identity; version 1.7 constrains their marker placement. Inline-span identity remains
+identity; version 1.8 constrains their marker placement. Inline-span identity remains
 deferred. The [FAQ](faq.md) covers the obvious objections (why not heading
 anchors, UUIDs, an external database, or HTML ids).
 

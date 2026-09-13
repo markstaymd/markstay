@@ -3,7 +3,7 @@
 markstay has three cores across Python, JavaScript, and Rust, plus a remark tree
 adapter that reuses the JavaScript core. A shared, language-neutral **conformance
 corpus** checks the [specification](spec.md), including the §8 content hash and
-§9 recovery scoring. The 0.11.0 package family implements specification v1.7;
+§9 recovery scoring. The 0.12.0 package family implements specification v1.8;
 optional capabilities and each runner's scope are listed below.
 
 | Language | Package | Install | Source |
@@ -57,9 +57,9 @@ reported as one block's stays. Core conformance vectors pin these rules; adapter
 tests check the relevant reader behavior. `plate-stay` refuses child-marked input
 because its bridge cannot carry the child's identity through conversion.
 
-## Write safety in version 1.7
+## Write safety in version 1.8
 
-[§3.4](spec.md#34-a-marker-that-shares-a-line-with-content-v17) requires block
+[§3.4](spec.md#34-a-marker-that-shares-a-line-with-content-v18) requires block
 markers to be inserted on their own line. Its same-line carrier checks apply when
 a writer implements list-item or table-row identity:
 
@@ -74,7 +74,7 @@ a writer implements list-item or table-row identity:
 Only Python reaches these child-carrier checks. Existing
 same-line block markers remain readable, and the core writers may refresh their
 hashes or replace duplicate ids in place. These rules do not guarantee unchanged
-rendering for arbitrary Markdown; see [compatibility](compat.md#marker-insertion-and-rendering-v17).
+rendering for arbitrary Markdown; see [compatibility](compat.md#marker-insertion-and-rendering-v18).
 
 With `markdown-it-py` installed, the Python linters also emit the optional
 `OUTSIDE_SUBSET` advisory when §5.1 and §5.2 disagree on a document's segmentation.
@@ -83,9 +83,9 @@ guarantee. The JavaScript and Rust cores and the adapters do not emit this advis
 
 ## One corpus, four full runners
 
-The canonical and packaged Python runners each verify **420 core vectors and 31
+The canonical and packaged Python runners each verify **420 core vectors and 32
 optional `rows` vectors**. JavaScript and Rust each verify **420 core vectors**
-and explicitly assert that they decline the 31-vector `rows` profile. These four
+and explicitly assert that they decline the 32-vector `rows` profile. These four
 full runners fail on an unknown profile or missing expected vectors.
 
 `remark-stay` has a separate category-routed parity harness over `parse`, `lint`,

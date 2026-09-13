@@ -203,6 +203,45 @@ PLAIN_MARKER = re.compile(rf"<!--{_BODY}-->\Z|\{{/\*{_BODY}\*/\}}\Z")
 TRAILING_DELIMITER = re.compile(r"[*_~]\Z")
 
 
+def code_span_refinement(text, marker="", syntax="html", kind="list"):
+    """SHIPPED in v1.8. Kept as the name the measurement was published under.
+
+    This was the proposal: the presence rule, minus what a closed code span has
+    already neutralised, at §5.5 child carriers only. It is now what §3.4 says,
+    so it delegates to `plain_text_state()` rather than keeping a second copy.
+    Two copies of one rule are two rules the day they drift, which is what
+    `test_oracle.py` exists to forbid, and the copy this function used to hold
+    drifted exactly that way: it masked with a scan that paired backticks across
+    lines, so it permitted `- a \\`\\n- b <!-- \\` c`, which the shipped rule
+    refuses. Those two items are separate blocks; a cross-line scan pairs their
+    backticks with each other and masks the `<!--` between them, and a renderer
+    does not. (`- a \\`\\n  b \\` <!-- \\` c` is the *other* counterexample, the
+    one that killed the intermediate per-line scan that did not stop at an
+    unbalanced line. The cross-line copy refuses it, so it does not show this
+    drift.)
+
+    **Rows keep the presence rule.** GFM splits cells before inline parsing, so a
+    lexical backtick scan pairs across a `|` where a renderer does not: that is
+    `carrier_sweep.SHAPES["R4 row, backticks paired across GFM cells"]`, and
+    scoping the clause to §5.5 is what keeps it answered.
+
+    Re-derived over the pinned corpus (`corpus.sha256`, 2417 documents) at the
+    shipped rule, not at the proposal the decision was priced on:
+
+    | Profile | Positions | v1.7 presence | v1.8 | Recovered |
+    |---|---|---|---|---|
+    | tree       | 40508 | 3186 (7.87%) | 2168 (5.35%) | 1018 (32.0%) |
+    | blank-line | 30799 | 2716 (8.82%) | 1906 (6.19%) |  810 (29.8%) |
+
+    Nothing is newly refused under either profile, every recovered position is a
+    list child, and rows are unmoved at 688 of 2762. The 68.1% and 31.4% this
+    docstring used to quote were measured before the scan was scoped to a line
+    and then stopped at the first line it cannot balance; both narrowings were
+    safety fixes, and the consumer figure fell to 36.1% with them.
+    """
+    return not plain_text_state(text, marker, syntax, flush=(kind == "row"))
+
+
 def plain_marker(marker):
     """Does this marker carry only its id and digest, in §4's grammar?
 
@@ -241,14 +280,85 @@ def outside_markers(text, syntax="html"):
     return "".join(out)
 
 
+LINE_BREAK = re.compile(r"\r\n|\r|\n")
+
+
+def lines_with_offsets(text):
+    """``(1-based number, line, offset)`` for each line, offsets into ``text``."""
+    at = 0
+    for number, match in enumerate(LINE_BREAK.finditer(text), start=1):
+        yield number, text[at:match.start()], at
+        at = match.end()
+    yield text.count("\n") + text.count("\r") - text.count("\r\n") + 1, text[at:], at
+
+
+def inline_code_spans(text, code=None):
+    r"""Closed INLINE code spans, §3.4 v1.8's reading. Mirrors `markstay.stamp`.
+
+    Two scopings, and both are the safety property rather than tidiness:
+
+    * **per line**, because a carrier text is the *container's* prefix and for a
+      list it spans earlier items, which are separate blocks: two backticks in
+      different blocks pair for a lexical scan and not for a renderer;
+    * **stopping at the first line whose runs do not pair evenly**, because
+      CommonMark pairs runs sequentially across a paragraph, so one leftover run
+      takes the next line's first run as its closer and shifts every pairing
+      after it. `- a \`\n  b \` <!-- \` c` is the carrier that proved it.
+
+    ``code`` is §3.3's fenced-code line set, which still matters for a tilde
+    fence: a backtick fence's delimiter is a lone run and the balance rule ends
+    the scan before its body.
+    """
+    spans = []
+    for number, line, offset in lines_with_offsets(text):
+        if code and number in code:
+            continue
+        runs = [(m.start() + offset, m.end() + offset)
+                for m in BACKTICKS.finditer(line)]
+        found = []
+        i = 0
+        while i < len(runs):
+            width = runs[i][1] - runs[i][0]
+            j = i + 1
+            while j < len(runs) and runs[j][1] - runs[j][0] != width:
+                j += 1
+            if j == len(runs):
+                return spans
+            found.append((runs[i][1], runs[j][0]))
+            i = j + 1
+        spans.extend(found)
+    return spans
+
+
+def inert_inline(text):
+    """``text`` with closed inline code-span CONTENT masked to spaces."""
+    out = list(text)
+    for a, b in inline_code_spans(text, M.code_lines(text)):
+        for k in range(a, b):
+            out[k] = " "
+    return "".join(out)
+
+
 def plain_text_state(text, marker="", syntax="html", flush=False):
     """SPEC.md §3.4: may this marker be appended to this carrier text?
 
     False when the carrier text carries a character that can begin a capture, when the
     marker carries anything but its id and digest, and, at a **flush** carrier only,
     when the text ends in an emphasis delimiter the insertion would reclassify.
+
+    v1.8 adds one scoped exception at a §5.5 child carrier (``flush`` false): the
+    content of closed inline code spans is masked before the capture scan, because
+    such a span binds before raw inline HTML. Rows keep the v1.7 presence rule,
+    because GFM splits cells before inline parsing and a lexical backtick scan
+    pairs across a `|` where a renderer does not.
+
+    This is the DERIVATION, an independent copy of the rule the writer implements.
+    `test_oracle.py` asserts the two answer alike on every vector, so a change here
+    is owed to `markstay.stamp` and a change there is owed here, in the same commit.
     """
     scanned = outside_markers(text, syntax)
+    if not flush:
+        scanned = inert_inline(scanned)
     if any(ch in scanned for ch in CAPTURING[syntax]):
         return False
     if flush and TRAILING_DELIMITER.search(scanned):
@@ -256,9 +366,15 @@ def plain_text_state(text, marker="", syntax="html", flush=False):
     return plain_marker(marker)
 
 
-def conservative(text, marker="", syntax="html"):
-    """The refusal, phrased as the sweep phrases it."""
-    return not plain_text_state(text, marker, syntax)
+def conservative(text, marker="", syntax="html", flush=False):
+    """The refusal, phrased as the sweep phrases it.
+
+    ``flush`` is forwarded. An earlier version defaulted it away, which dropped the
+    TRAILING_DELIMITER guard for every row this function judged and permitted two
+    row carriers on the npm corpus that the writer refuses, each of which introduces
+    an `<em>` when stamped.
+    """
+    return not plain_text_state(text, marker, syntax, flush)
 
 
 ROW = re.compile(r"^\s*\|.*\|\s*$")

@@ -344,7 +344,10 @@ def predicate_check(unsafe_endings):
     print(f"  unsafe endings it permits (must be none): {accepted}")
     refused = sorted(e for e in ENDINGS
                      if e not in unsafe_endings and not plain_text_state(e, flush=True))
-    print(f"  safe endings it refuses (the width it was priced for): {refused}")
+    print(f"  safe endings it refuses AT A ROW (the width it was priced for): "
+          f"{refused}")
+    child = sorted(e for e in refused if plain_text_state(e))
+    print(f"  ...of which v1.8 permits at a §5.5 child carrier: {child}")
     return accepted
 
 

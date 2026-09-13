@@ -101,12 +101,45 @@ def test_it_refuses_on_presence_and_not_on_meaning():
     This is the whole design: the round 4 predicate decided what each `<` meant and
     got eleven documents wrong doing it. Anything here that starts returning True is
     someone reintroducing that decision.
+
+    v1.8 carved out ONE case, below, and the line between them is what this test is
+    for. The clause never asks what a `<` is; it asks whether a code span opened and
+    closed around it, which is a lexical question CommonMark answers by run length.
+    Every case here still has a `<` whose meaning would have to be decided.
     """
-    for text in ("`<style scoped>` in a code span", "a < b", "x<", "see <!-- shown`",
+    for text in ("a < b", "x<", "see <!-- shown`",
                  "x<a href=\"y>z\"", "x<plaintext>y</plaintext>"):
         assert not plain_text_state(text), text
+
+
+def test_v18_masks_a_closed_code_span_at_a_child_carrier_only():
+    """The one carve-out, and the two places it stops.
+
+    A row keeps the presence rule, because GFM splits cells before inline parsing
+    and a lexical scan pairs backticks across a `|` where a renderer does not. An
+    unclosed run masks nothing, because it opens no span that closes here.
+    """
+    assert plain_text_state("`<style scoped>` in a code span")
+    assert not plain_text_state("`<style scoped>` in a code span", flush=True)
+    assert not plain_text_state("`<style scoped> unclosed")
     # ...and the withdrawn draft is the thing that let some of these through.
     assert lexical_draft("a < b") is False  # the draft called this one safe
+
+
+def test_the_scan_does_not_pair_backticks_across_a_line_it_cannot_balance():
+    """Pins the regression `51656e2` fixed, found by a dead review arm's probe
+    direction rather than by the corpus (both corpora returned zero attributable
+    changes for the commit this replaced).
+
+    `ba297ac` paired backticks per line. CommonMark pairs runs sequentially across
+    a paragraph, so a leftover run on an earlier line takes the next line's first
+    run as its closer and shifts every pairing after it: this list item's stray
+    backtick pairs with the comment's, masking the writer-refusing `<` behind a
+    span that never closes in the rendered document. Reverting only the "stop at
+    the first unbalanced line" behavior (keeping the rest of the v1.8 clause)
+    still passes every other case in this module, which is what let it ship once.
+    """
+    assert not plain_text_state("- a `\n  b ` <!-- ` c")
 
 
 def test_a_flush_carrier_refuses_a_trailing_emphasis_delimiter():

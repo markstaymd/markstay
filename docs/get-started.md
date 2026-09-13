@@ -39,7 +39,7 @@ markstay stamp FILE -w      # mint a stay for each unmarked block
 
 Writers put new block markers on separate lines. In Python, `--child-blocks` also
 addresses supported list items and table rows, subject to
-[§3.4's placement checks](spec.md#34-a-marker-that-shares-a-line-with-content-v17):
+[§3.4's placement checks](spec.md#34-a-marker-that-shares-a-line-with-content-v18):
 
 ```bash
 pip install 'markstay[commonmark]'
@@ -50,7 +50,7 @@ A refused child gets no new stay; the CLI reports its line and continues with
 other writable children and the container. JavaScript and Rust do not implement
 child stamping. A successful stamp can normalize line endings to LF and does
 not promise unchanged rendering for arbitrary Markdown. Check the
-[compatibility limits](compat.md#marker-insertion-and-rendering-v17) for your input.
+[compatibility limits](compat.md#marker-insertion-and-rendering-v18) for your input.
 
 ### Which blocks should carry a stay?
 
@@ -130,7 +130,7 @@ Wire it into the hook manager your repo already runs.
     # .pre-commit-config.yaml
     repos:
       - repo: https://github.com/markstaymd/markstay-py
-        rev: v0.11.0
+        rev: v0.12.0
         hooks:
           - id: markstay
     ```

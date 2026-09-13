@@ -106,35 +106,44 @@ source-slice hash would drift on a `prettier` run that changed nothing. The row 
 §5.6 is therefore the row's cells trimmed, reversibly escaped, and joined, which also
 keeps cell boundaries from colliding.
 
-## Marker insertion and rendering (v1.7)
+## Marker insertion and rendering (v1.8)
 
 Preserving an existing comment through a formatter is different from inserting a
 new one. A marker written inside an unclosed HTML construct, after a backslash,
 or against certain emphasis delimiters can change what the document displays.
-[§3.4](spec.md#34-a-marker-that-shares-a-line-with-content-v17) constrains insertion:
+[§3.4](spec.md#34-a-marker-that-shares-a-line-with-content-v18) constrains insertion:
 
 - New block markers go on their own line. Existing same-line block markers remain
   readable and can have their digest or duplicate id refreshed in place.
 - List-item and row carriers are refused when the container's raw source prefix
   contains `<` or a backslash, or `{` in MDX. Existing plain markers are masked;
   other comments and markers carrying extra evidence remain part of the check.
+- At a list-item carrier only, the content of a **closed** inline code span is
+  masked as well (v1.8), so `` `<repo>` `` in an earlier item no longer refuses a
+  later one. The scan reads one line at a time and **stops at the first line whose
+  backtick runs do not pair evenly**, so a stray backtick earlier in the container
+  still refuses every carrier after it. An unclosed run masks nothing, and a row
+  carrier keeps the full rule, because GFM splits cells before inline parsing.
 - A row's flush carrier also refuses a prefix ending in `*`, `_`, or `~` after
   masking. New same-line markers carry only an id and optional digest fields.
 
 The prefix is read from the document as the write began, across the whole
 container up to the carrier. A character in a table header or an earlier list
 item therefore can refuse a later carrier. These are lexical presence checks:
-even an otherwise harmless `<` in a code span refuses the position. A refused
-child receives no new stay; other children and the container remain eligible.
+an otherwise harmless `<` in `a < b` refuses the position, and so does one in an
+unclosed code span, or in any code span at a row carrier. A refused child
+receives no new stay; other children and the container remain eligible.
 The Python writer reports refused carriers through the CLI and
 `StampResult.refused_carriers`.
 
 This rule **does not guarantee unchanged rendering for arbitrary Markdown**.
-The reference measurement covers 2417 npm documentation files. It finds 3186
-refused positions out of 40508 under tree segmentation (7.87%), and 2716 of
-30799 under blank-line segmentation (8.82%). The rule refuses all 39 measured
-capture and delimiter cases. These measurements are described in
-[§3.4](spec.md#34-a-marker-that-shares-a-line-with-content-v17).
+The reference measurement covers 2417 npm documentation files. It finds 2168
+refused positions out of 40508 under tree segmentation (5.35%), and 1906 of
+30799 under blank-line segmentation (6.19%). Before v1.8's code-span mask the
+same corpus refused 3186 (7.87%) and 2716 (8.82%); the 1018 and 810 recovered
+positions are all list children, and rows are unmoved at 688 of 2762. The rule
+refuses all 39 measured capture and delimiter cases. These measurements are
+described in [§3.4](spec.md#34-a-marker-that-shares-a-line-with-content-v18).
 
 With the optional parser installed, Python's [linter](linter.md) emits
 `OUTSIDE_SUBSET` for documents where blank-line and CommonMark-tree segmentation
@@ -146,7 +155,7 @@ Only Python implements child carriers. The JavaScript and Rust cores write
 block markers on separate lines; `remark-stay` and `rehype-stay` do not write
 marker comments; `plate-stay` writes separate-line block markers and rejects
 list-item and table wrappers. Their exact scopes are listed under
-[implementations](implementations.md#write-safety-in-version-17).
+[implementations](implementations.md#write-safety-in-version-18).
 
 ## Anchor after a sanitizer (`rehype-stay`'s `id=`)
 

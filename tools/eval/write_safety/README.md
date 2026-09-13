@@ -119,6 +119,14 @@ correctly needs tag and attribute state, per-element raw-text termination, PI an
 closers, inline precedence, backslash escapes and GFM cell splitting, which is an HTML
 tokenizer.
 
+**v1.8's code-span mask does not reopen the first of those, and the sweep is what says
+so rather than an argument.** That draft asked whether a code span *bound first*; the
+mask asks only whether backtick runs pair by length within a line, and refuses on the
+presence of a `<` that no closed run brackets. `R4 code span loses to an earlier HTML
+tag opener` is still refused under both segmenters, because its `<` sits outside every
+span the scan finds, and so is `R4 row, backticks paired across GFM cells`, which is
+what scoping the mask to §5.5 keeps answered. All 39 remain refused.
+
 Two of them are the marker's own bytes rather than its carrier text, which is why §3.4
 permits only an id-and-digest marker at a carrier and sends evidence to §4's side index.
 Two more are context in the **container** rather than in the child, which is why the
@@ -132,15 +140,20 @@ is why the rule carries a one-byte clause for flush positions. That clause came 
 four documents a review arm sent, so `flush_table()` derives it properly: 59 cell bodies
 in the flush position, zero misses.
 
-The cost of not deciding, on the corpus: **3186 refusals in 40508** carrier positions
-under the tree profile (7.87%) and 2716 in 30799 under the blank-line profile (8.82%),
-of which 688 are rows out of 2762. The alternatives were priced first: `<` alone costs
-4.8% and answers 31 of the 39, and adding every backtick costs 61% and answers no more
-than this rule does. Exempting a `<` followed by whitespace recovers **128** positions of
-3186 while still answering all 39, which is not worth a clause three implementations have
-to agree on. The 139 this paragraph used to quote came from a measurement that
-dropped the flush guard at the same time and then blamed the resulting missed capture on
-the exemption; with the guard kept, the exemption refuses 3058 and answers all 39.
+The cost of not deciding, on the corpus: **2168 refusals in 40508** carrier positions
+under the tree profile (5.35%) and 1906 in 30799 under the blank-line profile (6.19%),
+of which 688 are rows out of 2762. Before v1.8's code-span mask the same corpus refused
+3186 (7.87%) and 2716 (8.82%); the recovered 1018 and 810 positions are exclusively §5.5
+list children, since the mask reaches neither a row nor an unclosed span, and rows are
+unmoved at 688. The alternatives were priced first against that older figure: `<` alone
+costs 4.8% and answers 31 of the 39, and adding every backtick costs 61% and answers no
+more than this rule does. Exempting a `<` followed by whitespace recovers **128**
+positions of 3186 while still answering all 39, which is not worth a clause three
+implementations have to agree on, and it does not reach the shape v1.8 does: a tracker's
+`<` is followed by a letter. The 139 this paragraph used to quote came from a measurement
+that dropped the flush guard at the same time and then blamed the resulting missed
+capture on the exemption; with the guard kept, the exemption refuses 3058 and answers
+all 39.
 
 ```sh
 PYTHONPATH=../../impl/py/src:. ../../impl/py/.venv/bin/python carrier_sweep.py

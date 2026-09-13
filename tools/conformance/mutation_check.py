@@ -972,7 +972,8 @@ def _write_module():
 
 
 def plain_text_state_variant(text, marker="", syntax="html", flush=False, *,
-                             capturing="all", mask="markers", flush_clause=True):
+                             capturing="all", mask="markers", flush_clause=True,
+                             code_span_mask="list-only"):
     """§3.4's predicate with each of its decisions exposed as a parameter."""
     W = _write_module()
 
@@ -994,6 +995,15 @@ def plain_text_state_variant(text, marker="", syntax="html", flush=False, *,
         scanned = "".join(out)
     else:
         scanned = W._outside_markers(text, syntax)
+
+    # v1.8: masking closed inline code spans is scoped to a non-flush (§5.5
+    # list) carrier. `code_span_mask="always"` is the reading that applies it
+    # to a flush (§5.6 row) carrier too, which is exactly what the row half of
+    # the profile exists to refuse: GFM splits cells before inline parsing, so
+    # a scan that pairs backticks across a `|` masks something a renderer does
+    # not.
+    if code_span_mask == "always" or (code_span_mask == "list-only" and not flush):
+        scanned = W._inert_code_spans(scanned)
 
     characters = "<" if capturing == "angle-only" else W.CARRIER_CAPTURING[syntax]
     if any(character in scanned for character in characters):
@@ -1032,6 +1042,9 @@ CARRIER_MUTATIONS = [
      {"state": {"flush_clause": False}}),
     ("scope the carrier text to the child rather than to its container",
      {"prefix": {"scope": "child"}}),
+    ("apply v1.8's closed-code-span mask to a flush (row) carrier too, instead "
+     "of scoping it to §5.5 list children",
+     {"state": {"code_span_mask": "always"}}),
 ]
 
 

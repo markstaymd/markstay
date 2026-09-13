@@ -40,7 +40,7 @@ Core count today: **420** (180 `spec/` + 240 `gen/`, 22 files).
 ## Optional profiles
 
 A corpus file MAY declare a top-level `"profile"`. `rows` is the only one:
-SPEC.md §5.6 table-row identity, 31 vectors.
+SPEC.md §5.6 table-row identity, 32 vectors.
 
 §16 keeps §5.5 and §5.6 child segmentation **optional**, so declining a profile
 is conforming. Running fewer than every core vector is not. **The four FULL
@@ -54,16 +54,16 @@ runner, and the note on each says which:
   adding a category to the corpus without touching the runners would pass as
   silence, which is the exact failure this project exists to catch.
 - `ADVERTISED_PROFILES` , what this runner implements. Both Python references
-  advertise `rows` and report `451/451 (420 core, 31 rows)`. JavaScript and Rust
+  advertise `rows` and report `452/452 (420 core, 32 rows)`. JavaScript and Rust
   decline it and report `420/420 core`.
 - `CORE_VECTORS` , the core count, asserted so a whole file dropping out of
   collection is caught by something other than a smaller number nobody read.
 - `PROFILE_VECTORS` , the same guarantee for each ADVERTISED profile, so a runner
-  that implements `rows` cannot quietly run 30 of its 31. The declared set must
+  that implements `rows` cannot quietly run 31 of its 32. The declared set must
   equal `ADVERTISED_PROFILES`: reading it with a `.get()` and skipping a missing
   entry would reinstate exactly the hole the count closes. **Only the two Python
   runners carry it**, because only they advertise a profile; JavaScript and Rust
-  pin the declined count directly instead, asserting `declined == ["rows:31"]`.
+  pin the declined count directly instead, asserting `declined == ["rows:32"]`.
 
 A declining runner still **vendors** the profile's vectors. A runner that cannot
 see a profile cannot prove it declined one.

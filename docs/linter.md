@@ -32,7 +32,7 @@ It identifies documents outside [§5.4's agreement subset](spec.md#54-the-agreem
 where a blank-line write was more likely to change rendering in the measured
 corpus. It does not block a hook, and a document without this finding has no
 guarantee of unchanged rendering. It is separate from [§3.4's writer
-refusals](spec.md#34-a-marker-that-shares-a-line-with-content-v17): a child carrier
+refusals](spec.md#34-a-marker-that-shares-a-line-with-content-v18): a child carrier
 can be refused even inside the agreement subset. The parser-free JavaScript and
 Rust cores and the adapters do not emit this diagnostic.
 

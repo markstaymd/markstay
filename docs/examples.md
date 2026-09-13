@@ -3,7 +3,7 @@
 These show the marker syntax across common block types and agent workflows.
 Writers place block markers on the line after the block. Optional child markers
 share a line with list-item or row content, subject to
-[§3.4's placement checks](spec.md#34-a-marker-that-shares-a-line-with-content-v17).
+[§3.4's placement checks](spec.md#34-a-marker-that-shares-a-line-with-content-v18).
 See [compatibility](compat.md) for measured visibility and rendering limits.
 
 ## Paragraph

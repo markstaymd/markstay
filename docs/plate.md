@@ -76,7 +76,7 @@ rather than guessing:
 
 `fromPlate` writes each marker on a separate line after the block, and the editor
 API's `serializeStay` delegates to it. Neither reaches the list-item or table-row
-carrier covered by [§3.4](spec.md#34-a-marker-that-shares-a-line-with-content-v17).
+carrier covered by [§3.4](spec.md#34-a-marker-that-shares-a-line-with-content-v18).
 On import, `toPlate` and `deserializeStay` refuse input carrying a `subhash`
 marker, because the bridge cannot preserve child identity through conversion.
 

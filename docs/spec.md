@@ -1,5 +1,5 @@
-# markstay specification, version 1.7
-<!-- stay:umd0IOWq hash=sha256:39a3a328d099 -->
+# markstay specification, version 1.8
+<!-- stay:umd0IOWq hash=sha256:744ea8581fe4 -->
 
 Status: **normative, stable.** This is the markstay standard, not a proposal.
 Version 1 pins the marker grammar, attachment model, hashing, and recovery
@@ -21,11 +21,15 @@ shares a line with content (§3.4): a writer refuses a carrier whose text carrie
 character that can begin a capture, judged by presence rather than by what the character
 turns out to mean, and read outside the plain markers already there. It also says plainly what a write does and does not promise, that it
 preserves bytes and not rendering, rather than leaving a reader to infer the stronger
-one. The reference linter (`linter/`), the resolver used by the attachment eval
-(`eval/attachment/`), and the Python writer implement version 1.7. The JavaScript
+one. **Version 1.8 narrows one refusal in that rule**: a `<` that a closed inline
+code span opens and closes around, inside the carrier text, is masked before the
+scan at §5.5's child carrier, because a code span's own backtick runs settle that
+question by length alone and never by what the `<` would open. §5.6's row carrier
+is unaffected and keeps the full presence rule. The reference linter (`linter/`), the resolver used by the attachment eval
+(`eval/attachment/`), and the Python writer implement version 1.8. The JavaScript
 and Rust cores implement the mandatory rules and decline optional child identity. Where this document and the reference code disagree, this document is
 authoritative and the code is a bug.
-<!-- stay:DraQ5ZPq hash=sha256:c4ea01cd4c5c -->
+<!-- stay:DraQ5ZPq hash=sha256:eb710ba7bff6 -->
 
 **Version 1.3 adds §5.5 and §9.2**, which let a **direct list item carry its own
 stay**, addressed inside its list rather than as a block of its own. It is an
@@ -316,8 +320,8 @@ about:
 Nothing about the marker grammar (§4), identity (§7), or recovery (§9) changes.
 <!-- stay:zvT5cQlG hash=sha256:cb077ed5aa0b -->
 
-### 3.4 A marker that shares a line with content (v1.7)
-<!-- stay:sjurg3Ha hash=sha256:0b6a2c912455 -->
+### 3.4 A marker that shares a line with content (v1.8)
+<!-- stay:sjurg3Ha hash=sha256:0eaeed44005c -->
 
 Almost everywhere, a conforming writer puts a marker **on a line of its own**, and there
 the bytes beside it cannot change what it means. Two rules in this specification make it
@@ -392,6 +396,44 @@ those refusals is a marker in the prefix and nothing else. It costs nothing on a
 that carries no markers, which is why the figures further down are unchanged by it.
 <!-- stay:U7LnsICn hash=sha256:6c5e46704aa5 -->
 
+**A closed inline code span is masked the same way, and only at §5.5's child carrier
+(v1.8).** A `<` that a run of backticks opens and closes around, inside the carrier
+text, is masked before the scan looks for a capturing character, position for
+position like a plain marker. This is still a presence question and not a meaning
+question: the clause asks whether backtick runs pair and close, which CommonMark
+settles by run length alone, and never asks what the `<` between them would open. An
+**unclosed** run masks nothing, because it opens no span that closes inside the
+carrier text. §5.6's row carrier keeps the full rule and is not masked: GFM splits a
+row's cells before any inline scan runs, so pairing backticks across the `|` between
+two cells would mask something no renderer treats as one span.
+<!-- stay:LXJuOg4K hash=sha256:a6c13424987f -->
+
+Finding a closed span is a **line-at-a-time** scan, and the boundary is exact rather
+than approximate. Within one line, each run of backticks is closed by the next run of
+the same length, in order; a line whose runs do not pair evenly ends the scan for the
+rest of the carrier text, though spans already found on earlier lines still stand. A
+line §3.3 has already put inside a fence is excluded from the scan, the same way it is
+excluded from the marker search. Scoping to a line matters because the carrier text can
+span several list items, which are separate blocks: two backticks in different items
+pair for a scan that does not stop at a line, and not for a renderer. Stopping at the
+first unbalanced line matters for the opposite reason: CommonMark pairs runs
+sequentially across a whole paragraph, so a leftover run on one line would otherwise
+take the next line's first run as its closer and shift every pairing after it
+```md
+- a `
+  b ` <!-- ` c
+```
+<!-- stay:kWvTeGXe hash=sha256:2df994ff639d -->
+
+is permitted by a scan that keeps going past the unbalanced first line. Line one's lone
+backtick finds no partner there, so the scan moves to line two and pairs its two
+backticks with each other, masking the `<!--` between them as span content. CommonMark
+pairs across the line break instead: line one's backtick closes against line two's
+**first** backtick, not its second, which leaves the `<!--` outside any span and live.
+A scan that stops at the first line whose runs do not pair evenly never gets past line
+one's unmatched run to make the wrong pairing.
+<!-- stay:w2NSmBaf hash=sha256:c2cea3389a49 -->
+
 At a **flush** carrier, where the marker is written hard against the text rather than
 after a separator, the carrier text is also not in plain-text state when its last byte is
 `*`, `_` or `~`. That byte is read after the same masking, so a marker already occupying
@@ -458,13 +500,21 @@ will occupy. Not the child's own span, and not the child's hashed body:
 <!-- stay:5cbYlXwo hash=sha256:5355d6e375b6 -->
 
 **This rule refuses on the presence of a character, never on what it means, and that is
-the design rather than an approximation.** A `<` inside a code span opens nothing; a `<`
-in `a < b` opens nothing; this rule refuses both. The alternative was written and
+the design rather than an approximation.** A `<` in `a < b` opens nothing and is refused
+anyway. A `<` inside an **unclosed** code span, or inside any code span at §5.6's row
+carrier, opens nothing either and is refused the same way; only a `<` inside a code span
+that **closes**, at §5.5's non-flush carrier, is masked (v1.8, above), and even there the
+clause asks whether backtick runs pair by length rather than what the `<` would open.
+That exception is measured rather than reasoned from CommonMark's own precedence rules,
+which is why it stays one narrow shape rather than a second predicate: the oracle sweep
+and the mutation check below are what stand behind it, not a proof that it can never
+hide a live construct. The alternative was written and
 withdrawn: a predicate that decided, for each character, whether it opened a live
 construct. Fifteen documents across four review rounds broke it, twelve of them by being
 permitted outright and three by sitting outside a scope it could see, and they were
 not variations on one mistake. CommonMark gives code spans, HTML tags and autolinks equal
-precedence and resolves by first opener, so masking a code span can hide a live comment;
+precedence and resolves by first opener, so masking on an assumption about what closes
+first can hide a live comment;
 a backslash-escaped backtick opens no span; a `>` inside a quoted attribute does not
 close a tag; `?>` and `]]>` are closers a marker's own evidence can supply; ending a
 raw-text element is element-specific three separate ways; a marker's `quote` value can
@@ -475,19 +525,29 @@ tag and attribute state, per-element raw-text termination, processing-instructio
 CDATA closers, inline precedence by first opener, backslash escapes, and GFM cell
 splitting. That is an HTML tokenizer, which §14 declines and which a parser-free
 implementation in three languages cannot agree on byte for byte.
-<!-- stay:wVFqcTvW hash=sha256:9367d2bc6d3e -->
+<!-- stay:wVFqcTvW hash=sha256:88c00f95f50e -->
 
 **The cost is refusals, and it is measured.** Across 2417 documents of npm package
-documentation, the rule refuses **3186 of 40508** carrier positions a writer would use
-under the tree profile (7.87%) and **2716 of 30799** under the blank-line profile
-(8.82%). Rows are hit hardest, 688 of 2762, because a row's carrier text is its whole
-container and a table describing HTML or types carries a `<` in some cell. Read that as
-one item or row in twelve becoming **readable but not stampable**, which §5.5 already
-names as a state an item can be in. The error direction is what the number buys: this
+documentation, the rule as specified here refuses **2168 of 40508** carrier positions a
+writer would use under the tree profile (5.35%) and **1906 of 30799** under the
+blank-line profile (6.19%). Before v1.8's code-span mask, the same corpus refused 3186
+(7.87%) and 2716 (8.82%); the recovered 1018 and 810 positions are exclusively §5.5 list
+children, since the mask never reaches a row or an unclosed span, and none of them was
+newly refused by anything else. Stamping every recovered position and rendering the
+result against the unmasked baseline, on this corpus and on a second, unpublishable
+corpus of 140 documents measured the same way, changes **zero** documents under either
+profile: the recovered positions are readable exactly as before, not merely permitted.
+**Rows are unaffected and still hit hardest**, 688 of
+2762 under either profile, because §5.6's carrier keeps the full presence rule and a
+row's carrier text is its whole container, so a table describing HTML or types still
+carries a `<` in some cell. Read the current figure as roughly one item or row in
+nineteen under the tree profile, or one in sixteen under blank-line, becoming
+**readable but not stampable**, which §5.5 already names as a state an item can be in.
+The error direction is what the number buys: this
 rule fails towards refusing a position that was safe, where the withdrawn one failed
 towards damaging a document, and a refusal is visible and countable where the damage was
 not.
-<!-- stay:HkbSeZcZ hash=sha256:d76027162d58 -->
+<!-- stay:HkbSeZcZ hash=sha256:dd03deb7ef91 -->
 
 **Refusing.** A writer that hits this MUST mint **nothing** for that child block, exactly
 as §16 requires a tool to emit no child blocks rather than guess a boundary. Refusing one
@@ -1819,17 +1879,25 @@ documents.
 - Inline-span identity.
 - Recognising **indented** code blocks or **inline** code spans as content the way
  §3.3 recognises a fenced block. Both need context a dependency-free tool does not
- have, and §3.3 states why each is left out.
+ have, and §3.3 states why each is left out. §3.4's v1.8 code-span mask does not
+ recognise a span as content either: a marker inside one is still a marker, still
+ removed before hashing under §8 like any other marker, and still subject to the
+ duplicate-id and drift rules elsewhere in this specification. The mask only changes
+ whether a **closed** span's
+ content can capture a marker being **inserted** beside it, at one carrier position,
+ and it asks nothing about what is inside the span.
 - Preserving a document's **rendering** across a write. A write preserves bytes; §3.4
  says where the two differ, and closing the gap would need the two recognitions above
  plus a model of whitespace-preserving elements and MDX expressions.
 - Deciding what a character in a document **means** without a parser. §3.4 refuses a
- carrier on the presence of `<` rather than on whether that `<` opens anything, because
- the alternative is an HTML tokenizer in three languages that agree byte for byte.
+ carrier on the presence of `<` rather than on whether that `<` opens anything, with one
+ exception this specification measures rather than reasons about (v1.8's code-span
+ mask), because the general alternative is an HTML tokenizer in three languages that
+ agree byte for byte.
 - Provenance tracking and knowledge-graph construction.
 - A backend, accounts, a hosted registry, or any global / cross-repo stay
  namespace.
-<!-- stay:Itv36Vd3 hash=sha256:1a273961b604 -->
+<!-- stay:Itv36Vd3 hash=sha256:45c101a70353 -->
 
 (Loose-list and blank-line-fence single-stay attachment was a v1 non-goal; it is
 resolved by CommonMark-tree attachment in v1.1, §5.2. List-item identity was a v1
@@ -1952,6 +2020,7 @@ NOT stamp, hash, or attach a marker to it.
 
 | Version | What it changed |
 |---------|-----------------|
+| **1.8** | Masks a closed inline code span before §3.4's scan, at §5.5's non-flush carrier only: a `<` that a run of backticks opens and closes around, inside the carrier text, no longer refuses a marker being inserted there. The clause is a presence question, not a meaning one, since it asks whether backtick runs pair by length and never what the `<` would open, and it is found by a line-at-a-time scan that stops at the first line whose runs do not pair evenly, because CommonMark pairs runs sequentially across a whole paragraph and a leftover run would otherwise take the next line's opener as its closer and shift every pairing after it. An unclosed run masks nothing, and a line §3.3 has already put inside a fence is excluded from the scan. §5.6's row carrier is unaffected and keeps the full presence rule, because GFM splits a row's cells before any inline scan runs. Recovers 1018 of 3186 refused positions under the tree profile (32.0%) and 810 of 2716 under the blank-line profile (29.8%), on the same 2417-document corpus §3.4 measures, with zero rendering changes attributable to any recovered position across two corpora. Every recovered position is a §5.5 list child; rows and unclosed spans are refused exactly as under v1.7. Binds writers only; readers, the grammar, identity, hashing and recovery are unchanged, same as v1.7. |
 | **1.7** | Covers the two positions where this specification makes a marker share a line with content (§3.4): §5.5's child carrier and §5.6's row carrier. A writer refuses such a marker when the carrier text carries `<`, a backslash or `{` in the MDX profile, or when the marker carries anything beyond its id and digest; it then mints nothing for that child block. Those characters are looked for outside the carrier text's own **plain** markers, in either host form and outside code (§3.3), so a stay this specification already wrote does not refuse the next carrier behind it and child identity is not single-shot per container; a marker carrying evidence is not masked, because an earlier backtick can pair with one inside its quoted value and expose what follows. §5.4 gains the matching rule for its own comparison, where a marker-only line is transparent rather than blank, and §5.6 gains one for its provisional relocation, which a writer may not keep when §3.4 refuses every row it was for. Inline recovery evidence at a carrier goes to §4's side index, because a `quote` value can close a link title or split a GFM cell. **The rule refuses on presence and never on meaning**: a `<` inside a code span opens nothing and is refused anyway, because the predicate that decided which `<` was live was written, measured wrong on fifteen documents across four review rounds, twelve of them permitted
 outright and three outside the scope it was reading, and withdrawn. Deciding correctly needs tag and attribute state, per-element raw-text termination, processing-instruction and CDATA closers, inline precedence by first opener, backslash escapes and GFM cell splitting, which §14 now declines by name. The carrier text is a raw-source prefix of the **container** block, because a raw-text element opened in a table header captures a carrier in a later row. A writer also stops inserting a marker on any block's last line under §5's permission, while still refreshing one already there, and readers still bind one. A flush carrier additionally refuses a carrier text ending in `*`, `_` or `~`, which is not a capture but a reclassification of the delimiter run the insertion lands against. Costs 3186 refusals in 40508 carrier positions across 2417 real documents (7.87%), rows hardest at 688 of 2762. Also states what a write promises and does not: the marker spans it touches, the whitespace they need and LF line endings, but not the document's rendering, and §14 gains the matching non-goal. Binds writers only; readers, the grammar, identity, hashing and recovery are unchanged. |
 | **1.6** | Adds child-block identity for GFM table body rows (§5.6), on the same reserved `subhash` key and the same §9.2 ladder as list items: a different carrier and a different body rule, not a second identity model. The carrier is a marker inside the row's last cell, written flush against the cell's content, or against the cell's opening delimiter when the cell has none, so stamping a row leaves its table's hash byte-identical; the row body is the row's cells trimmed, reversibly escaped, and joined, so cell padding is not drift and cell boundaries cannot collide. Row recognition is one parser-free line scan shared by both segmenters, so unlike a child-stamped list a row-stamped table can sit inside §5.4's agreement subset. Lifts the remaining half of the §5.1 deferral and the §14 non-goal; inline spans stay deferred. Adds one rule binding every reader (§16): a marker carrying `subhash` MUST NOT be reported as the stay of the block that contains it. Reconciles §4 with §3.3 and the host comment syntaxes: normalized LF is valid inside quoted marker values, while `-->` in an HTML body and `*/` in an MDX body are forbidden and never hidden by quotes. |
@@ -1961,7 +2030,7 @@ outright and three outside the scope it was reading, and withdrawn. Deciding cor
 | **1.2** | Excludes leading YAML frontmatter from segmentation under both segmenters (§5, §5.3), and restates the two segmenters' agreement condition as the agreement subset (§5.4), which v1.1 stated too narrowly. Normative change to §5; grammar, identity, hashing, and recovery unchanged. A marker already stamped onto frontmatter usually becomes an orphan error. |
 | **1.1** | Adds CommonMark-tree attachment (§5.2) as an optional segmenter, so a loose list, a blank-line fence, or a blockquote with an internal blank line can carry a single stay. Adds no requirement to a baseline tool and changes no marker's meaning; its statement of when the two segmenters agree was corrected in 1.2. |
 | **1.0** | The marker grammar (§3, §4), the identity model (§2, §7), blank-line attachment (§5), hash normalization (§8), quote recovery and the commit rule (§9), the detached state (§10), and the AI editing contract (§11). |
-<!-- stay:wpHe8SeN hash=sha256:e14ca8038da2 -->
+<!-- stay:wpHe8SeN hash=sha256:a0c52d9af743 -->
 
 markstay does **not** offer a compatibility guarantee across versions at this
 stage. Where a version corrects a defect, it corrects it rather than carrying the
