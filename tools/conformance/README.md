@@ -35,7 +35,7 @@ filter applies to lint, diff, and commit-check reports.
 - **`tree/`** , §5.2-only vectors consumed solely by the remark adapter. The
   string runners would fail them by design, so they are not part of the core.
 
-Core count today: **420** (180 `spec/` + 240 `gen/`, 22 files).
+Core count today: **430** (190 `spec/` + 240 `gen/`, 22 files).
 
 ## Optional profiles
 
@@ -54,8 +54,8 @@ runner, and the note on each says which:
   adding a category to the corpus without touching the runners would pass as
   silence, which is the exact failure this project exists to catch.
 - `ADVERTISED_PROFILES` , what this runner implements. Both Python references
-  advertise `rows` and report `452/452 (420 core, 32 rows)`. JavaScript and Rust
-  decline it and report `420/420 core`.
+  advertise `rows` and report `462/462 (430 core, 32 rows)`. JavaScript and Rust
+  decline it and report `430/430 core`.
 - `CORE_VECTORS` , the core count, asserted so a whole file dropping out of
   collection is caught by something other than a smaller number nobody read.
 - `PROFILE_VECTORS` , the same guarantee for each ADVERTISED profile, so a runner

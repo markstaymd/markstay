@@ -25,9 +25,11 @@ content rather than markup**, so a document can show a marker without acquiring 
 and version 1.6 gives **a GFM table body row its own stay** on the same key and the
 same ladder as a list item. Version 1.8 defines **where writers may insert a marker**:
 on its own line for a block, or at a list-item or row carrier that passes §3.4's
-lexical checks.
+lexical checks. Version 1.9 makes **a lost child stay an error**: an item's or a row's
+id that sat on exactly one marker before an edit and on none after it is reported as
+a dropped id, under its own code so it is never named as its container's stay.
 
-!!! note "Status: version 1.8, settled"
+!!! note "Status: version 1.9, settled"
     The surface is small and stable. It is also young: real-world use and critique
     will shape later versions. **Write safety is a placement rule, not a guarantee
     that arbitrary Markdown renders identically after stamping.** A child carrier

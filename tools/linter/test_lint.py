@@ -768,6 +768,93 @@ def test_child_boundaries_agree_inside_restricted_profile_and_fail_closed_outsid
     ] == ["Alpha\n- Nested", "Beta"]
 
 
+def _tracker_item_doc():
+    """The shape the drop check missed in real use: a multi-line checkbox item whose
+    child stay rides on its last line, with a stamped heading above the list."""
+    item_a = (
+        "- [ ] **Split the parser from the renderer.** The renderer re-reads every\n"
+        "      source file on each run.\n"
+        "      **Gate**: the renderer receives only parsed blocks."
+    )
+    item_b = "- [x] **Record the baseline.** Done 2026-09-14."
+    return (
+        "## Action\n<!-- stay:head hash=sha256:0000 -->\n\n"
+        f"{item_a} <!-- stay:itemA subhash=sha256:1111aaaa2222 -->\n\n"
+        f"{item_b} <!-- stay:itemB subhash=sha256:3333bbbb4444 -->\n"
+    )
+
+
+def _strip_marker(md, mid):
+    import re
+
+    out = re.sub(rf" ?<!-- stay:{mid} [^>]*-->", "", md)
+    assert out != md
+    return out
+
+
+def test_child_stay_stripped_from_a_surviving_item_is_a_blocking_drop():
+    """A hand edit that drops only an item's marker leaves the item and every hash
+    intact, so nothing but the id set can see it. It must block in both segmenter
+    modes and with or without child identity, since the hooks run the default."""
+    before = _tracker_item_doc()
+    after = _strip_marker(before, "itemA")
+    for mode in ("blank-line", "commonmark"):
+        for child_blocks in (False, True):
+            findings = L.lint_diff(before, after, mode=mode, child_blocks=child_blocks)
+            dropped = [f for f in findings if f.code == "DROPPED_CHILD_ID"]
+            assert [f.id for f in dropped] == ["itemA"], (mode, child_blocks, findings)
+            assert L.has_errors(findings)
+            # §16: never reported as a stay of the container block.
+            assert not [f for f in findings if f.code == "DROPPED_ID"]
+
+
+def test_child_stay_text_edit_stays_a_non_blocking_drift():
+    """Rewording an item that keeps its marker is drift, never a drop."""
+    before = _tracker_item_doc()
+    after = before.replace("Done 2026-09-14.", "Done 2026-09-15, re-checked.")
+    for child_blocks in (False, True):
+        findings = L.lint_diff(before, after, child_blocks=child_blocks)
+        assert not L.has_errors(findings), findings
+
+
+def test_child_stay_deleted_with_its_item_blocks_like_a_deleted_section():
+    """Matches a section deleted with its heading stay: the linter cannot tell a
+    deliberate removal from an accidental one, so it reports and the editor
+    confirms. Under child identity CHILD_DROPPED already names the id, and the id
+    is reported once rather than under both codes."""
+    before = _tracker_item_doc()
+    after = before.split("- [x] **Record")[0].rstrip() + "\n"
+    assert "itemB" not in after
+    plain = L.lint_diff(before, after)
+    assert [(f.code, f.id) for f in plain if f.level == "error"] == [
+        ("DROPPED_CHILD_ID", "itemB")
+    ]
+    child = L.lint_diff(before, after, child_blocks=True, mode="commonmark")
+    errors = [(f.code, f.id) for f in child if f.level == "error"]
+    assert [e for e in errors if e[1] == "itemB"] == [("CHILD_DROPPED", "itemB")]
+
+
+def test_child_stay_relocated_or_duplicated_is_not_a_drop():
+    before = _tracker_item_doc()
+    marker_a = " <!-- stay:itemA subhash=sha256:1111aaaa2222 -->"
+    relocated = before.replace(marker_a, "").replace(
+        "Done 2026-09-14.", "Done 2026-09-14." + marker_a
+    )
+    assert "DROPPED_CHILD_ID" not in codes(L.lint_diff(before, relocated))
+    duplicated = before.replace("Done 2026-09-14.", "Done 2026-09-14." + marker_a)
+    assert "DROPPED_CHILD_ID" not in codes(L.lint_diff(before, duplicated))
+    _, doc_findings = L.lint_document(duplicated)
+    assert "DUPLICATE_ID" in codes(doc_findings)
+
+
+def test_dropped_list_container_stay_is_a_block_drop():
+    before = _tracker_item_doc() + "<!-- stay:list hash=sha256:0000 -->\n"
+    after = _strip_marker(before, "list")
+    assert [f.id for f in L.lint_diff(before, after) if f.code == "DROPPED_ID"] == [
+        "list"
+    ]
+
+
 def test_child_drop_blocks_but_markerless_reword_recovers():
     before = _child_doc()
     dropped = (

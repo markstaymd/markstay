@@ -1,5 +1,5 @@
-# markstay specification, version 1.8
-<!-- stay:umd0IOWq hash=sha256:744ea8581fe4 -->
+# markstay specification, version 1.9
+<!-- stay:umd0IOWq hash=sha256:31d4a773e417 -->
 
 Status: **normative, stable.** This is the markstay standard, not a proposal.
 Version 1 pins the marker grammar, attachment model, hashing, and recovery
@@ -25,11 +25,15 @@ one. **Version 1.8 narrows one refusal in that rule**: a `<` that a closed inlin
 code span opens and closes around, inside the carrier text, is masked before the
 scan at §5.5's child carrier, because a code span's own backtick runs settle that
 question by length alone and never by what the `<` would open. §5.6's row carrier
-is unaffected and keeps the full presence rule. The reference linter (`linter/`), the resolver used by the attachment eval
-(`eval/attachment/`), and the Python writer implement version 1.8. The JavaScript
+is unaffected and keeps the full presence rule. **Version 1.9 closes a gap in the
+linter requirement** (§16): a child stay that leaves a document is a dropped id like
+any other, reported apart from a dropped block stay so the reader rule still holds.
+Until then a hand edit could strip an item's marker and every conforming linter
+reported the document clean. The reference linter (`linter/`), the resolver used by the attachment eval
+(`eval/attachment/`), and the Python writer implement version 1.9. The JavaScript
 and Rust cores implement the mandatory rules and decline optional child identity. Where this document and the reference code disagree, this document is
 authoritative and the code is a bug.
-<!-- stay:DraQ5ZPq hash=sha256:eb710ba7bff6 -->
+<!-- stay:DraQ5ZPq hash=sha256:f8e4fbe68e67 -->
 
 **Version 1.3 adds §5.5 and §9.2**, which let a **direct list item carry its own
 stay**, addressed inside its list rather than as a block of its own. It is an
@@ -1954,12 +1958,23 @@ A conforming linter MUST, for a single document, report: malformed markers (no i
 §4), orphan markers (§5), duplicate ids (§7), and hash drift (§8). For a
 before/after pair it MUST report dropped, duplicated, and relocated ids (§11). It
 MUST exit non-zero on any error-level finding so it can gate a commit hook or an
-agent's post-edit step. A linter that implements §5.2, and so already carries the parser
+agent's post-edit step. **A dropped id includes a child stay (v1.9)**: an id that the
+baseline carries on exactly one marker, where that marker carries the exact `subhash`
+key, and that no marker of any kind carries after the edit. The linter MUST report it
+as an error and MUST report it apart from a dropped block stay, because the reader rule
+below forbids naming it as the stay of the block that contains it. The test is a key
+comparison over the two documents' markers and needs no §5.5 or §5.6 segmentation, so
+it binds a linter that declines child identity too. It is an error whether or not the
+item went with its marker, the same as a section deleted with its heading's stay: the
+linter cannot tell a deliberate removal from a lost marker, and the editor confirms
+the removal rather than the linter guessing it. A child marker that moved to another
+item, or whose id a block marker now carries, is not dropped; whether it still
+addresses the right item is §9.2's question. A linter that implements §5.2, and so already carries the parser
 the question needs, SHOULD report a document outside §5.4's agreement subset, because a
 §5.1 write is measurably more likely to change what such a document shows. That is a
 one-directional signal and a linter should present it as one: being inside the subset is
 a better bet, not a guarantee (§3.4). The reference linter in `linter/` is such a tool.
-<!-- stay:xr9pdYQe hash=sha256:0a84f813824c -->
+<!-- stay:xr9pdYQe hash=sha256:935c7d4e9deb -->
 
 A conforming resolver MUST apply the §9.1 ladder and MUST resolve to detached
 rather than reattach when no tier yields a confident result. It SHOULD distinguish
@@ -2020,6 +2035,7 @@ NOT stamp, hash, or attach a marker to it.
 
 | Version | What it changed |
 |---------|-----------------|
+| **1.9** | Closes a gap in §16's linter requirement. A child stay (§5.5, §5.6) that leaves a document is a dropped id: carried by exactly one marker in the baseline, that marker carrying the exact `subhash` key, and by no marker after the edit. It is an error, reported apart from a dropped block stay so that §16's reader rule still holds, and it is an error when the item went with it, matching a section deleted with its stay. The check compares keys and ids only, so it binds every linter whether or not it implements child identity. Version 1.6's reader rule had been implemented by filtering child markers out of the id index every diff read, and nothing replaced them, so a hand edit that stripped one item's marker was reported clean by every conforming linter. Readers, writers, the grammar, identity, hashing and recovery are unchanged. |
 | **1.8** | Masks a closed inline code span before §3.4's scan, at §5.5's non-flush carrier only: a `<` that a run of backticks opens and closes around, inside the carrier text, no longer refuses a marker being inserted there. The clause is a presence question, not a meaning one, since it asks whether backtick runs pair by length and never what the `<` would open, and it is found by a line-at-a-time scan that stops at the first line whose runs do not pair evenly, because CommonMark pairs runs sequentially across a whole paragraph and a leftover run would otherwise take the next line's opener as its closer and shift every pairing after it. An unclosed run masks nothing, and a line §3.3 has already put inside a fence is excluded from the scan. §5.6's row carrier is unaffected and keeps the full presence rule, because GFM splits a row's cells before any inline scan runs. Recovers 1018 of 3186 refused positions under the tree profile (32.0%) and 810 of 2716 under the blank-line profile (29.8%), on the same 2417-document corpus §3.4 measures, with zero rendering changes attributable to any recovered position across two corpora. Every recovered position is a §5.5 list child; rows and unclosed spans are refused exactly as under v1.7. Binds writers only; readers, the grammar, identity, hashing and recovery are unchanged, same as v1.7. |
 | **1.7** | Covers the two positions where this specification makes a marker share a line with content (§3.4): §5.5's child carrier and §5.6's row carrier. A writer refuses such a marker when the carrier text carries `<`, a backslash or `{` in the MDX profile, or when the marker carries anything beyond its id and digest; it then mints nothing for that child block. Those characters are looked for outside the carrier text's own **plain** markers, in either host form and outside code (§3.3), so a stay this specification already wrote does not refuse the next carrier behind it and child identity is not single-shot per container; a marker carrying evidence is not masked, because an earlier backtick can pair with one inside its quoted value and expose what follows. §5.4 gains the matching rule for its own comparison, where a marker-only line is transparent rather than blank, and §5.6 gains one for its provisional relocation, which a writer may not keep when §3.4 refuses every row it was for. Inline recovery evidence at a carrier goes to §4's side index, because a `quote` value can close a link title or split a GFM cell. **The rule refuses on presence and never on meaning**: a `<` inside a code span opens nothing and is refused anyway, because the predicate that decided which `<` was live was written, measured wrong on fifteen documents across four review rounds, twelve of them permitted
 outright and three outside the scope it was reading, and withdrawn. Deciding correctly needs tag and attribute state, per-element raw-text termination, processing-instruction and CDATA closers, inline precedence by first opener, backslash escapes and GFM cell splitting, which §14 now declines by name. The carrier text is a raw-source prefix of the **container** block, because a raw-text element opened in a table header captures a carrier in a later row. A writer also stops inserting a marker on any block's last line under §5's permission, while still refreshing one already there, and readers still bind one. A flush carrier additionally refuses a carrier text ending in `*`, `_` or `~`, which is not a capture but a reclassification of the delimiter run the insertion lands against. Costs 3186 refusals in 40508 carrier positions across 2417 real documents (7.87%), rows hardest at 688 of 2762. Also states what a write promises and does not: the marker spans it touches, the whitespace they need and LF line endings, but not the document's rendering, and §14 gains the matching non-goal. Binds writers only; readers, the grammar, identity, hashing and recovery are unchanged. |
@@ -2030,7 +2046,7 @@ outright and three outside the scope it was reading, and withdrawn. Deciding cor
 | **1.2** | Excludes leading YAML frontmatter from segmentation under both segmenters (§5, §5.3), and restates the two segmenters' agreement condition as the agreement subset (§5.4), which v1.1 stated too narrowly. Normative change to §5; grammar, identity, hashing, and recovery unchanged. A marker already stamped onto frontmatter usually becomes an orphan error. |
 | **1.1** | Adds CommonMark-tree attachment (§5.2) as an optional segmenter, so a loose list, a blank-line fence, or a blockquote with an internal blank line can carry a single stay. Adds no requirement to a baseline tool and changes no marker's meaning; its statement of when the two segmenters agree was corrected in 1.2. |
 | **1.0** | The marker grammar (§3, §4), the identity model (§2, §7), blank-line attachment (§5), hash normalization (§8), quote recovery and the commit rule (§9), the detached state (§10), and the AI editing contract (§11). |
-<!-- stay:wpHe8SeN hash=sha256:a0c52d9af743 -->
+<!-- stay:wpHe8SeN hash=sha256:da1d9729f941 -->
 
 markstay does **not** offer a compatibility guarantee across versions at this
 stage. Where a version corrects a defect, it corrects it rather than carrying the

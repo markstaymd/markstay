@@ -60,11 +60,12 @@ Regeneration diff (`--before OLD.md NEW.md`):
 | Code | Level | Meaning |
 |------|-------|---------|
 | `DROPPED_ID` | error | id in the baseline, gone after the edit (the AI-rewrite failure mode) |
+| `DROPPED_CHILD_ID` | error | a child (`subhash`) id in the baseline that no marker carries after the edit, reported apart from `DROPPED_ID` so it is never named as its container's stay (SPEC.md §16, v1.9). Needs no `--child-blocks`: an item's marker stripped from a surviving item is the case it exists for, and an item deleted with its marker blocks the way a deleted section does |
 | `DUPLICATED_ID` | error | id appears more than once after the edit (copy without re-mint, or a regeneration collision) |
 | `RELOCATED_ID` | error | an id now sits on content that previously carried a *different* id (markers swapped/relocated) |
 | `HASH_DRIFT` | warn | id present in both, content edited in place (hidden from text output by default, see [Hash drift](#hash-drift)) |
 | `NEW_ID` | info | id present only after the edit |
-| `CHILD_DROPPED` | error | an opt-in child id cannot be recovered from its parent, exact child hash, or sibling-scoped quote evidence |
+| `CHILD_DROPPED` | error | an opt-in child id cannot be recovered from its parent, exact child hash, or sibling-scoped quote evidence. When it fires, `DROPPED_CHILD_ID` is not repeated for the same id |
 
 ## Child blocks
 

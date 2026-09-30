@@ -294,7 +294,7 @@ VERIFIERS = {
 # implements. A profile a runner has never HEARD of is a failure rather than a
 # skip, so adding a category to the corpus without touching the runners cannot
 # pass as silence. §16 keeps §5.5 and §5.6 segmentation optional, so declining
-# `rows` is conforming; running 419 of 420 core vectors is not.
+# `rows` is conforming; running 429 of 430 core vectors is not.
 KNOWN_PROFILES = {"rows"}
 ADVERTISED_PROFILES = {"rows"}  # the Python reference implements §5.6
 
@@ -307,7 +307,7 @@ PROFILE_CATEGORIES = {"rows": "rows"}
 # the numerator, so `419/419 (419 core)` passes and reads like success. The JS and
 # Rust runners have pinned these since the profile landed; this is the canonical
 # runner holding the same guarantee its own README claims.
-CORE_VECTORS = 420
+CORE_VECTORS = 430
 PROFILE_VECTORS = {"rows": 32}
 
 
@@ -349,6 +349,12 @@ def main(argv=None) -> int:
             core_total += len(data["vectors"])
         else:
             profile_total[profile] = profile_total.get(profile, 0) + len(data["vectors"])
+        # A repeated name inflates the asserted count with a vector that tests
+        # nothing new, so the count would hide a real one going missing.
+        names = [v.get("name", "?") for v in data["vectors"]]
+        for dup in sorted({n for n in names if names.count(n) > 1}):
+            print(f"  FAIL inventory: {tier}/{path.name} names {dup!r} more than once")
+            failed += 1
         for v in data["vectors"]:
             total += 1
             name = v.get("name", "?")

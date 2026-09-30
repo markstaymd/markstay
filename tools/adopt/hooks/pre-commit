@@ -123,10 +123,24 @@ def check_entries(entries, L, scope=None, mode="blank-line", check_collections=F
         except Exception:
             return set()
 
+    def carried_by(text):
+        # Every id any marker carries, child markers included, so a child stay
+        # moved to another staged file is still in the commit (SPEC.md §16,
+        # v1.9). Only the move check reads this; pairing stays on block ids. An
+        # older vendored linter without the helper falls back to block ids.
+        helper = getattr(L, "_stay_marker_ids", None)
+        if helper is None:
+            return ids_of(text)
+        try:
+            return {mid for mid, _ in helper(L.parse_document(text, mode=mode))}
+        except Exception:
+            return set()
+
     staged_text = {dst: after or "" for _, _, dst, _, after in changed}
     staged_ids = {path: ids_of(text) for path, text in staged_text.items()}
+    staged_carried = {path: carried_by(text) for path, text in staged_text.items()}
     committed_ids = set()
-    for ids in staged_ids.values():
+    for ids in staged_carried.values():
         committed_ids |= ids
 
     deleted_ids = {src: ids_of(before) for _, src, _, before, _ in deleted}
@@ -169,9 +183,11 @@ def check_entries(entries, L, scope=None, mode="blank-line", check_collections=F
 
         kept = []
         for finding in findings:
-            if finding.code == "DROPPED_ID" and finding.id in committed_ids:
-                elsewhere = sorted(path for path, ids in staged_ids.items()
-                                   if path != dst and finding.id in ids)
+            # A move needs another staged file carrying the id: this file's own
+            # markers never excuse a drop reported against it.
+            elsewhere = sorted(path for path, ids in staged_carried.items()
+                               if path != dst and finding.id in ids)
+            if finding.code in ("DROPPED_ID", "DROPPED_CHILD_ID") and elsewhere:
                 result["notes"].append(
                     f"{finding.id}: moved out of {origin or dst} into "
                     f"{', '.join(elsewhere)} (still in this commit, not blocking)")
