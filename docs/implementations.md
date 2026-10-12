@@ -3,7 +3,7 @@
 markstay has three cores across Python, JavaScript, and Rust, plus a remark tree
 adapter that reuses the JavaScript core. A shared, language-neutral **conformance
 corpus** checks the [specification](spec.md), including the §8 content hash and
-§9 recovery scoring. The 0.13.0 package family implements specification v1.9;
+§9 recovery scoring. The 0.14.0 package family implements specification v1.10;
 optional capabilities and each runner's scope are listed below.
 
 | Language | Package | Install | Source |
@@ -83,8 +83,8 @@ guarantee. The JavaScript and Rust cores and the adapters do not emit this advis
 
 ## One corpus, four full runners
 
-The canonical and packaged Python runners each verify **430 core vectors and 32
-optional `rows` vectors**. JavaScript and Rust each verify **430 core vectors**
+The canonical and packaged Python runners each verify **469 core vectors and 32
+optional `rows` vectors**. JavaScript and Rust each verify **469 core vectors**
 and explicitly assert that they decline the 32-vector `rows` profile. These four
 full runners fail on an unknown profile or missing expected vectors.
 

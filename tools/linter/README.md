@@ -60,6 +60,7 @@ Regeneration diff (`--before OLD.md NEW.md`):
 | Code | Level | Meaning |
 |------|-------|---------|
 | `DROPPED_ID` | error | id in the baseline, gone after the edit (the AI-rewrite failure mode) |
+| `ADOPTED_ID` | warn | a block stay rewritten in place as its list item's child stay (`subhash`), where `DROPPED_ID` would otherwise fire (SPEC.md §16, v1.10). Kept, and printed rather than passed in silence: the test is lexical, so check the marker sits on the item it names |
 | `DROPPED_CHILD_ID` | error | a child (`subhash`) id in the baseline that no marker carries after the edit, reported apart from `DROPPED_ID` so it is never named as its container's stay (SPEC.md §16, v1.9). Needs no `--child-blocks`: an item's marker stripped from a surviving item is the case it exists for, and an item deleted with its marker blocks the way a deleted section does |
 | `DUPLICATED_ID` | error | id appears more than once after the edit (copy without re-mint, or a regeneration collision) |
 | `RELOCATED_ID` | error | an id now sits on content that previously carried a *different* id (markers swapped/relocated) |

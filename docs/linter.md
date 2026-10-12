@@ -42,6 +42,7 @@ Rust cores and the adapters do not emit this diagnostic.
 |------|-------|---------|
 | `DROPPED_ID` | error | id in the baseline, gone after the edit (the AI-rewrite failure mode) |
 | `DROPPED_CHILD_ID` | error | a list item's or table row's own id: carried in the baseline by exactly one marker bearing the exact `subhash` key, and by no marker after the edit. Reported apart from `DROPPED_ID` so it is never named as its container's stay ([§16](spec.md#16-conformance-summary), v1.9) |
+| `ADOPTED_ID` | warn | a block stay rewritten in place as a child stay: one marker without `subhash` in the baseline, the same id on one marker with it after the edit, at the same place in a list item's line, with the block's marker-stripped source unchanged and its body shared by no other block. §16 lists the shapes the test refuses, which stay drops. The id is kept, not dropped ([§16](spec.md#16-conformance-summary), v1.10) |
 | `DUPLICATED_ID` | error | id appears more than once after the edit (copy without re-mint, or a regeneration collision) |
 | `RELOCATED_ID` | error | an id now sits on content that previously carried a *different* id |
 | `HASH_DRIFT` | warn | id present in both, content edited in place |

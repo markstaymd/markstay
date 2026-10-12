@@ -130,7 +130,7 @@ Wire it into the hook manager your repo already runs.
     # .pre-commit-config.yaml
     repos:
       - repo: https://github.com/markstaymd/markstay-py
-        rev: v0.13.0
+        rev: v0.14.0
         hooks:
           - id: markstay
     ```

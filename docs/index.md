@@ -28,8 +28,10 @@ on its own line for a block, or at a list-item or row carrier that passes §3.4'
 lexical checks. Version 1.9 makes **a lost child stay an error**: an item's or a row's
 id that sat on exactly one marker before an edit and on none after it is reported as
 a dropped id, under its own code so it is never named as its container's stay.
+Version 1.10 **keeps a block stay a tool rewrites in place as a list item's own**:
+the id survives and is reported as a warning, `ADOPTED_ID`, rather than as a drop.
 
-!!! note "Status: version 1.9, settled"
+!!! note "Status: version 1.10, settled"
     The surface is small and stable. It is also young: real-world use and critique
     will shape later versions. **Write safety is a placement rule, not a guarantee
     that arbitrary Markdown renders identically after stamping.** A child carrier

@@ -855,6 +855,96 @@ def test_dropped_list_container_stay_is_a_block_drop():
     ]
 
 
+def _bare_item_doc():
+    """A tracker list with a hand-written stay on an item's continuation line.
+    The nested sub-list puts it outside the blank-line child profile, so only
+    the lexical in-place rule, not child segmentation, can keep the id."""
+    return (
+        "## Action\n<!-- stay:head -->\n\n"
+        "- [ ] **Book the venue:** confirm the deposit\n"
+        "  **Waits**: none <!-- stay:itemA -->\n"
+        "- [ ] **Send invites:** after the venue\n"
+        "  - draft the list\n"
+        "  **Waits**: item:itemA\n"
+    )
+
+
+_ADOPTED = "<!-- stay:itemA subhash=sha256:1111aaaa2222 -->"
+
+
+def test_bare_stay_adopted_in_place_as_its_items_child_stay_is_kept():
+    """SPEC.md §16 (v1.10): rewriting the marker in place is an adoption, not a
+    drop, reported as a warning, in both segmenter modes and with or without child
+    identity, since the hooks run the default."""
+    before = _bare_item_doc()
+    after = before.replace("<!-- stay:itemA -->", _ADOPTED)
+    for mode in ("blank-line", "commonmark"):
+        for child_blocks in (False, True):
+            findings = L.lint_diff(before, after, mode=mode, child_blocks=child_blocks)
+            assert not L.has_errors(findings), (mode, child_blocks, findings)
+            # Kept, but never silently: the lexical test is an approximation.
+            adopted = [(f.level, f.id) for f in findings if f.code == "ADOPTED_ID"]
+            assert adopted == [("warn", "itemA")], (mode, child_blocks, findings)
+
+
+def test_bare_stay_not_adopted_in_place_is_still_a_drop():
+    before = _bare_item_doc()
+    plain = "<!-- stay:itemA -->"
+    cases = {
+        "removed": before.replace(" " + plain, ""),
+        # Only the marker moves: every other byte stays, so the offset alone fails it.
+        "other item": before.replace(plain, "").replace(
+            "after the venue", "after the venue" + _ADOPTED
+        ),
+        "list edited too": before.replace(plain, _ADOPTED).replace(
+            "draft the list", "draft the guest list"
+        ),
+    }
+    for name, after in cases.items():
+        for mode in ("blank-line", "commonmark"):
+            dropped = [
+                f.id for f in L.lint_diff(before, after, mode=mode) if f.code == "DROPPED_ID"
+            ]
+            assert dropped == ["itemA"], (name, mode)
+
+
+def test_bare_stay_on_a_loose_lists_continuation_splits_by_segmenter():
+    """Outside §5.4's agreement subset the rule reads each segmenter's block, as
+    attachment does: blank-line segmentation puts the continuation paragraph in a
+    block of its own with no list-item first line, so it fails closed; §5.2 sees
+    one list block and keeps the id. Not a corpus vector, because the shared diff
+    vectors run blank-line only and the tree adapter would read it the other way."""
+    before = "- alpha\n\n  continuation <!-- stay:i1 -->\n"
+    after = before.replace("<!-- stay:i1 -->", "<!-- stay:i1 subhash=sha256:1122 -->")
+    blank = L.lint_diff(before, after, mode="blank-line")
+    assert [f.id for f in blank if f.code == "DROPPED_ID"] == ["i1"]
+    tree = L.lint_diff(before, after, mode="commonmark")
+    assert not L.has_errors(tree)
+    assert [f.id for f in tree if f.code == "ADOPTED_ID"] == ["i1"]
+
+
+def test_block_stay_rewritten_in_place_outside_an_item_is_a_drop():
+    """A child marker that addresses no item leaves its block without a stay."""
+    adopted = "<!-- stay:b1 subhash=sha256:1122 -->"
+    pairs = [
+        ("- alpha\n- beta\n<!-- stay:b1 -->\n", adopted, "own line"),
+        ("Body text. <!-- stay:b1 -->\n", adopted, "paragraph"),
+        ("- alpha\n> quoted <!-- stay:b1 -->\n", adopted, "blockquote"),
+        # Unchanged once the whole marker is removed, yet it straddles two items.
+        (
+            "- alpha <!-- stay:b1 -->\n- beta\n",
+            '<!-- stay:b1 subhash=sha256:1122 quote="\n- gamma" -->',
+            "across lines",
+        ),
+    ]
+    for before, marker, name in pairs:
+        after = before.replace("<!-- stay:b1 -->", marker)
+        for mode in ("blank-line", "commonmark"):
+            assert [
+                f.id for f in L.lint_diff(before, after, mode=mode) if f.code == "DROPPED_ID"
+            ] == ["b1"], (name, mode)
+
+
 def test_child_drop_blocks_but_markerless_reword_recovers():
     before = _child_doc()
     dropped = (
