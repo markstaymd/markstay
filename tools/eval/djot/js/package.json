@@ -1,0 +1,11 @@
+{
+  "name": "markstay-eval-djot",
+  "private": true,
+  "type": "module",
+  "description": "Pins djot.js for the Djot carrier evidence (eval/djot). Driven by ../run.py over stdin/stdout.",
+  "dependencies": {
+    "@djot/djot": "0.3.2",
+    "@markup-carve/carve": "0.1.9",
+    "djot-main": "github:jgm/djot.js#3b3a9f57657742ee1d685fc3f12485a0d186b32c"
+  }
+}

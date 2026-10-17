@@ -1,0 +1,370 @@
+[
+ {
+  "name": "01_para",
+  "about": "A stay on a plain paragraph.",
+  "want": {
+   "para0001": {
+    "kind": "para",
+    "text": "A plain"
+   }
+  }
+ },
+ {
+  "name": "02_heading",
+  "about": "Key-value stay on a heading with a body; does it land on the heading or its section, and does the auto-id survive?",
+  "want": {
+   "head0001": {
+    "kind": "heading",
+    "text": "Install"
+   }
+  }
+ },
+ {
+  "name": "03_heading_hashid",
+  "about": "The rejected carrier: the stay as Djot's own #id on a heading.",
+  "want": {
+   "head0002": {
+    "kind": "heading",
+    "text": "Install"
+   }
+  }
+ },
+ {
+  "name": "04_heading_explicit_id",
+  "about": "A stay beside an author's own explicit heading id.",
+  "want": {
+   "head0003": {
+    "kind": "heading",
+    "text": "Install"
+   }
+  }
+ },
+ {
+  "name": "05_blank_gap",
+  "about": "A blank line between the specifier and its block.",
+  "want": {
+   "gap00001": {
+    "kind": "para",
+    "text": "A paragraph after"
+   }
+  }
+ },
+ {
+  "name": "06_trailing_lazy",
+  "about": "Markdown habit: the marker on the line after its paragraph, no blank line.",
+  "want": {
+   "trail001": {
+    "kind": "para",
+    "text": "First"
+   }
+  }
+ },
+ {
+  "name": "07_trailing_own_line",
+  "about": "Markdown habit: the marker after its paragraph, on its own between blank lines.",
+  "want": {
+   "trail002": {
+    "kind": "para",
+    "text": "First"
+   }
+  }
+ },
+ {
+  "name": "08_trailing_eof",
+  "about": "Markdown habit at the end of the document: nothing follows.",
+  "want": {
+   "eof00001": {
+    "kind": "para",
+    "text": "Only"
+   }
+  }
+ },
+ {
+  "name": "09_list_before",
+  "about": "A stay before a list.",
+  "want": {
+   "list0001": {
+    "kind": "list",
+    "text": "one"
+   }
+  }
+ },
+ {
+  "name": "10_item_first_line",
+  "about": "A specifier on a list item's marker line.",
+  "want": {
+   "item0001": {
+    "kind": "item",
+    "text": "one"
+   }
+  }
+ },
+ {
+  "name": "11_item_second_para",
+  "about": "A specifier before an item's second paragraph.",
+  "want": {
+   "item0002": {
+    "kind": "para",
+    "text": "second"
+   }
+  }
+ },
+ {
+  "name": "12_item_trailing",
+  "about": "Markdown habit inside a list: the marker after an item's text.",
+  "want": {
+   "item0003": {
+    "kind": "item",
+    "text": "one"
+   }
+  }
+ },
+ {
+  "name": "13_table_before",
+  "about": "A stay before a table.",
+  "want": {
+   "tabl0001": {
+    "kind": "table",
+    "text": "a"
+   }
+  }
+ },
+ {
+  "name": "14_row_trailing",
+  "about": "The Markdown row carrier: a specifier after the row's last pipe.",
+  "want": {
+   "row00001": {
+    "kind": "row",
+    "text": "1"
+   }
+  }
+ },
+ {
+  "name": "15_cell_inline",
+  "about": "An inline attribute inside the last cell.",
+  "want": {
+   "cell0001": {
+    "kind": "row",
+    "text": "1"
+   }
+  }
+ },
+ {
+  "name": "16_fence_inside",
+  "about": "A stay-shaped line inside a code block is content.",
+  "want": {
+   "fenc0001": {
+    "kind": "content",
+    "text": ""
+   }
+  }
+ },
+ {
+  "name": "17_fence_before",
+  "about": "A stay before a code block.",
+  "want": {
+   "fenc0002": {
+    "kind": "code",
+    "text": "code"
+   }
+  }
+ },
+ {
+  "name": "18_fence_closed_by_quote",
+  "about": "A fence inside a blockquote, left open, closed by the quote ending; the stay after it is real.",
+  "want": {
+   "fenc0003": {
+    "kind": "para",
+    "text": "After"
+   }
+  }
+ },
+ {
+  "name": "19_fence_in_list",
+  "about": "A stay-shaped line in a code block inside a list item is content.",
+  "want": {
+   "fenc0004": {
+    "kind": "content",
+    "text": ""
+   }
+  }
+ },
+ {
+  "name": "20_fence_indented_four",
+  "about": "A fence indented four spaces at top level (Markdown would call it indented code).",
+  "want": {
+   "fenc0005": {
+    "kind": "content",
+    "text": ""
+   }
+  }
+ },
+ {
+  "name": "21_quote_before",
+  "about": "A stay before a blockquote.",
+  "want": {
+   "quot0001": {
+    "kind": "quote",
+    "text": "quoted"
+   }
+  }
+ },
+ {
+  "name": "22_quote_inner",
+  "about": "A specifier inside a blockquote.",
+  "want": {
+   "quot0002": {
+    "kind": "para",
+    "text": "quoted"
+   }
+  }
+ },
+ {
+  "name": "23_div_before",
+  "about": "A stay before a div.",
+  "want": {
+   "div00001": {
+    "kind": "div",
+    "text": "inside"
+   }
+  }
+ },
+ {
+  "name": "24_div_inner",
+  "about": "A specifier inside a div.",
+  "want": {
+   "div00002": {
+    "kind": "para",
+    "text": "inside"
+   }
+  }
+ },
+ {
+  "name": "25_footnote_inner",
+  "about": "A specifier inside a footnote body.",
+  "want": {
+   "foot0001": {
+    "kind": "para",
+    "text": "Note"
+   }
+  }
+ },
+ {
+  "name": "26_inline_attr",
+  "about": "An inline attribute is never a block stay.",
+  "want": {
+   "inln0001": {
+    "kind": "inline",
+    "text": "text"
+   }
+  }
+ },
+ {
+  "name": "27_multiline_spec",
+  "about": "A specifier spanning two lines.",
+  "want": {
+   "mult0001": {
+    "kind": "para",
+    "text": "Para"
+   }
+  }
+ },
+ {
+  "name": "28_quoted_specials",
+  "about": "A quoted value holding } % and an escaped quote.",
+  "want": {
+   "qspc0001": {
+    "kind": "para",
+    "text": "Para"
+   }
+  }
+ },
+ {
+  "name": "29_stacked_two_stays",
+  "about": "Two specifiers with two stays before one block.",
+  "want": {
+   "stak0001": {
+    "kind": "para",
+    "text": "Para"
+   },
+   "stak0002": {
+    "kind": "para",
+    "text": "Para"
+   }
+  }
+ },
+ {
+  "name": "30_split_keys",
+  "about": "stay and stay-hash in two stacked specifiers.",
+  "want": {
+   "splt0001": {
+    "kind": "para",
+    "text": "Para"
+   }
+  }
+ },
+ {
+  "name": "31_merged_with_class",
+  "about": "A stay sharing a specifier with an author's class.",
+  "want": {
+   "mrge0001": {
+    "kind": "para",
+    "text": "Para"
+   }
+  }
+ },
+ {
+  "name": "32_duplicate_key",
+  "about": "The same key twice in one specifier.",
+  "want": {
+   "dupA0001": {
+    "kind": "para",
+    "text": "Para"
+   },
+   "dupB0001": {
+    "kind": "para",
+    "text": "Para"
+   }
+  }
+ },
+ {
+  "name": "33_unquoted_slash",
+  "about": "An unquoted value with a character the bare-value rule excludes.",
+  "want": {
+   "slsh0001": {
+    "kind": "para",
+    "text": "Para"
+   }
+  }
+ },
+ {
+  "name": "34_comment_carrier",
+  "about": "The rejected carrier: a Djot comment.",
+  "want": {
+   "comm0001": {
+    "kind": "para",
+    "text": "Para"
+   }
+  }
+ },
+ {
+  "name": "35_html_comment",
+  "about": "markstay's Markdown carrier in a Djot file is literal text, not a marker.",
+  "want": {
+   "html0001": {
+    "kind": "none",
+    "text": ""
+   }
+  }
+ },
+ {
+  "name": "36_thematic_break",
+  "about": "A stay before a thematic break.",
+  "want": {
+   "brk00001": {
+    "kind": "break",
+    "text": ""
+   }
+  }
+ }
+]

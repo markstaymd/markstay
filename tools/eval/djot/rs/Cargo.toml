@@ -1,0 +1,11 @@
+[package]
+name = "jotdown-dump"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Dumps jotdown events with byte ranges as JSON lines for eval/djot/run.py"
+
+[dependencies]
+jotdown = "=0.10.0"
+
+[workspace]

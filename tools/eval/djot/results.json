@@ -1,0 +1,4515 @@
+{
+ "versions": {
+  "djotjs": "0.3.2",
+  "djotjs-main": "3b3a9f576577",
+  "carve": "0.1.9",
+  "jotdown": "0.10.0",
+  "pandoc": "3.12"
+ },
+ "fixtures": [
+  {
+   "name": "01_para",
+   "about": "A stay on a plain paragraph.",
+   "source": "{stay=para0001}\nA plain paragraph.\n",
+   "stays": {
+    "para0001": {
+     "want": {
+      "kind": "para",
+      "text": "A plain"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "A plain paragraph.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "A plain paragraph.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "A plain paragraph.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "A plain paragraph.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "A plain paragraph.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "A plain paragraph.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "A plain paragraph.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "A plain paragraph.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "A plain paragraph.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "html_ids": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "roundtrip_source": {
+    "djotjs": "{stay=\"para0001\"}\nA plain paragraph.\n",
+    "djotjs-main": "{stay=\"para0001\"}\nA plain paragraph.\n",
+    "carve": "{stay=para0001}\nA plain paragraph.\n",
+    "pandoc": "{stay=\"para0001\"}\nA plain paragraph.\n"
+   }
+  },
+  {
+   "name": "02_heading",
+   "about": "Key-value stay on a heading with a body; does it land on the heading or its section, and does the auto-id survive?",
+   "source": "{stay=head0001}\n# Install\n\nBody text.\n",
+   "stays": {
+    "head0001": {
+     "want": {
+      "kind": "heading",
+      "text": "Install"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "heading",
+         "text": "Install",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "heading",
+         "text": "Install",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "section",
+         "text": "InstallBody text.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "elsewhere:section"
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "section",
+         "text": "InstallBody text.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "elsewhere:section"
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "heading",
+         "text": "Install",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "heading",
+         "text": "Install",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "heading",
+         "text": "Install",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "heading",
+         "text": "Install",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "section",
+         "text": "InstallBody text.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "html_ids": {
+    "djotjs": [
+     "Install"
+    ],
+    "djotjs-main": [
+     "Install"
+    ],
+    "carve": [],
+    "pandoc": [
+     "Install"
+    ]
+   },
+   "roundtrip_source": {
+    "djotjs": "{stay=\"head0001\"}\n# Install\n\nBody text.\n",
+    "djotjs-main": "{stay=\"head0001\"}\n# Install\n\nBody text.\n",
+    "carve": "{stay=head0001}\n# Install\n\nBody text.\n",
+    "pandoc": "{stay=\"head0001\"}\n# Install\n\nBody text.\n"
+   }
+  },
+  {
+   "name": "03_heading_hashid",
+   "about": "The rejected carrier: the stay as Djot's own #id on a heading.",
+   "source": "{#head0002}\n# Install\n\nBody text.\n",
+   "stays": {
+    "head0002": {
+     "want": {
+      "kind": "heading",
+      "text": "Install"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "section",
+         "text": "InstallBody text.",
+         "via": "#",
+         "keys": {}
+        }
+       ],
+       "verdict": "elsewhere:section"
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "section",
+         "text": "InstallBody text.",
+         "via": "#",
+         "keys": {}
+        }
+       ],
+       "verdict": "elsewhere:section"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "section",
+         "text": "InstallBody text.",
+         "via": "#",
+         "keys": {}
+        }
+       ],
+       "verdict": "elsewhere:section"
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "section",
+         "text": "InstallBody text.",
+         "via": "#",
+         "keys": {}
+        }
+       ],
+       "verdict": "elsewhere:section"
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "heading",
+         "text": "Install",
+         "via": "#",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "section",
+         "text": "InstallBody text.",
+         "via": "#",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "section",
+         "text": "InstallBody text.",
+         "via": "#",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "heading",
+         "text": "Install",
+         "via": "#",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "section",
+         "text": "InstallBody text.",
+         "via": "#",
+         "keys": {}
+        }
+       ],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "html_ids": {
+    "djotjs": [
+     "head0002"
+    ],
+    "djotjs-main": [
+     "head0002"
+    ],
+    "carve": [
+     "head0002"
+    ],
+    "pandoc": [
+     "head0002"
+    ]
+   },
+   "roundtrip_source": {
+    "djotjs": "{#head0002}\n# Install\n\nBody text.\n",
+    "djotjs-main": "{#head0002}\n# Install\n\nBody text.\n",
+    "carve": "{#head0002}\n# Install\n\nBody text.\n",
+    "pandoc": "{#head0002}\n# Install\n\nBody text.\n"
+   }
+  },
+  {
+   "name": "04_heading_explicit_id",
+   "about": "A stay beside an author's own explicit heading id.",
+   "source": "{#install stay=head0003}\n# Install\n\nBody text.\n",
+   "stays": {
+    "head0003": {
+     "want": {
+      "kind": "heading",
+      "text": "Install"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "section",
+         "text": "InstallBody text.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "elsewhere:section"
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "section",
+         "text": "InstallBody text.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "elsewhere:section"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "section",
+         "text": "InstallBody text.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "elsewhere:section"
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "section",
+         "text": "InstallBody text.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "elsewhere:section"
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "heading",
+         "text": "Install",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "section",
+         "text": "InstallBody text.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "section",
+         "text": "InstallBody text.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "heading",
+         "text": "Install",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "section",
+         "text": "InstallBody text.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "html_ids": {
+    "djotjs": [
+     "install"
+    ],
+    "djotjs-main": [
+     "install"
+    ],
+    "carve": [
+     "install"
+    ],
+    "pandoc": [
+     "install"
+    ]
+   },
+   "roundtrip_source": {
+    "djotjs": "{#install stay=\"head0003\"}\n# Install\n\nBody text.\n",
+    "djotjs-main": "{#install stay=\"head0003\"}\n# Install\n\nBody text.\n",
+    "carve": "{#install stay=head0003}\n# Install\n\nBody text.\n",
+    "pandoc": "{#install stay=\"head0003\"}\n# Install\n\nBody text.\n"
+   }
+  },
+  {
+   "name": "05_blank_gap",
+   "about": "A blank line between the specifier and its block.",
+   "source": "{stay=gap00001}\n\nA paragraph after a blank line.\n",
+   "stays": {
+    "gap00001": {
+     "want": {
+      "kind": "para",
+      "text": "A paragraph after"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "A paragraph after a blan",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "djotjs-main": {
+       "got": [],
+       "verdict": "lost"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "dangling",
+         "text": "",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "dangling"
+      },
+      "pandoc": {
+       "got": [],
+       "verdict": "lost"
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "A paragraph after a blan",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "A paragraph after a blan",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [],
+       "same": true
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "A paragraph after a blan",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "pandoc": {
+       "got": [],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "html_ids": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "roundtrip_source": {
+    "djotjs": "{stay=\"gap00001\"}\nA paragraph after a blank line.\n",
+    "djotjs-main": "A paragraph after a blank line.\n",
+    "carve": "{stay=gap00001}\nA paragraph after a blank line.\n",
+    "pandoc": "A paragraph after a blank line.\n"
+   }
+  },
+  {
+   "name": "06_trailing_lazy",
+   "about": "Markdown habit: the marker on the line after its paragraph, no blank line.",
+   "source": "First paragraph.\n{stay=trail001}\n\nSecond paragraph.\n",
+   "stays": {
+    "trail001": {
+     "want": {
+      "kind": "para",
+      "text": "First"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "inline",
+         "text": "",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "elsewhere:inline"
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "inline",
+         "text": "",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "elsewhere:inline"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "dangling",
+         "text": "",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "dangling"
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "inline",
+         "text": "",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "elsewhere:inline"
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Second paragraph.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "elsewhere:para"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "inline",
+         "text": "",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "inline",
+         "text": "",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Second paragraph.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "pandoc": {
+       "got": [],
+       "same": false
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "html_ids": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "roundtrip_source": {
+    "djotjs": "First paragraph.\n{stay=\"trail001\"}\n\nSecond paragraph.\n",
+    "djotjs-main": "First paragraph.\n{stay=\"trail001\"}\n\nSecond paragraph.\n",
+    "carve": "First paragraph.\n\n{stay=trail001}\nSecond paragraph.\n",
+    "pandoc": "First paragraph. {stay=\"trail001\"}\n\nSecond paragraph.\n"
+   }
+  },
+  {
+   "name": "07_trailing_own_line",
+   "about": "Markdown habit: the marker after its paragraph, on its own between blank lines.",
+   "source": "First paragraph.\n\n{stay=trail002}\n\nSecond paragraph.\n",
+   "stays": {
+    "trail002": {
+     "want": {
+      "kind": "para",
+      "text": "First"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Second paragraph.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "elsewhere:para"
+      },
+      "djotjs-main": {
+       "got": [],
+       "verdict": "lost"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "dangling",
+         "text": "",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "dangling"
+      },
+      "pandoc": {
+       "got": [],
+       "verdict": "lost"
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Second paragraph.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "elsewhere:para"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Second paragraph.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [],
+       "same": true
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Second paragraph.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "pandoc": {
+       "got": [],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "html_ids": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "roundtrip_source": {
+    "djotjs": "First paragraph.\n\n{stay=\"trail002\"}\nSecond paragraph.\n",
+    "djotjs-main": "First paragraph.\n\nSecond paragraph.\n",
+    "carve": "First paragraph.\n\n{stay=trail002}\nSecond paragraph.\n",
+    "pandoc": "First paragraph.\n\nSecond paragraph.\n"
+   }
+  },
+  {
+   "name": "08_trailing_eof",
+   "about": "Markdown habit at the end of the document: nothing follows.",
+   "source": "Only paragraph.\n\n{stay=eof00001}\n",
+   "stays": {
+    "eof00001": {
+     "want": {
+      "kind": "para",
+      "text": "Only"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [],
+       "verdict": "lost"
+      },
+      "djotjs-main": {
+       "got": [],
+       "verdict": "lost"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "dangling",
+         "text": "",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "dangling"
+      },
+      "pandoc": {
+       "got": [],
+       "verdict": "lost"
+      },
+      "carve": {
+       "got": [],
+       "verdict": "lost"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [],
+       "same": true
+      },
+      "carve": {
+       "got": [],
+       "same": true
+      },
+      "pandoc": {
+       "got": [],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "html_ids": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "roundtrip_source": {
+    "djotjs": "Only paragraph.\n",
+    "djotjs-main": "Only paragraph.\n",
+    "carve": "Only paragraph.\n",
+    "pandoc": "Only paragraph.\n"
+   }
+  },
+  {
+   "name": "09_list_before",
+   "about": "A stay before a list.",
+   "source": "{stay=list0001}\n- one\n- two\n",
+   "stays": {
+    "list0001": {
+     "want": {
+      "kind": "list",
+      "text": "one"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "list",
+         "text": "onetwo",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "list",
+         "text": "onetwo",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "list",
+         "text": "onetwo",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "list",
+         "text": "onetwo",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "list",
+         "text": "onetwo",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "list",
+         "text": "onetwo",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "list",
+         "text": "onetwo",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "list",
+         "text": "onetwo",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "list",
+         "text": "onetwo",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "html_ids": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "roundtrip_source": {
+    "djotjs": "{stay=\"list0001\"}\n- one\n- two\n",
+    "djotjs-main": "{stay=\"list0001\"}\n- one\n- two\n",
+    "carve": "{stay=list0001}\n- one\n- two\n",
+    "pandoc": "{stay=\"list0001\"}\n- one\n- two\n"
+   }
+  },
+  {
+   "name": "10_item_first_line",
+   "about": "A specifier on a list item's marker line.",
+   "source": "- {stay=item0001}\n  one\n- two\n",
+   "stays": {
+    "item0001": {
+     "want": {
+      "kind": "item",
+      "text": "one"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "one",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "elsewhere:para"
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "one",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "elsewhere:para"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "one",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "elsewhere:para"
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "one",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "elsewhere:para"
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "one",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "elsewhere:para"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "one",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "one",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "one",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "one",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "html_ids": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "roundtrip_source": {
+    "djotjs": "- {stay=\"item0001\"}\n  one\n- two\n",
+    "djotjs-main": "- {stay=\"item0001\"}\n  one\n- two\n",
+    "carve": "- {stay=item0001}\n  one\n- two\n",
+    "pandoc": "- {stay=\"item0001\"}\n  one\n\n- two\n"
+   }
+  },
+  {
+   "name": "11_item_second_para",
+   "about": "A specifier before an item's second paragraph.",
+   "source": "- one\n\n  {stay=item0002}\n  second para\n- two\n",
+   "stays": {
+    "item0002": {
+     "want": {
+      "kind": "para",
+      "text": "second"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "second para",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "second para",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "second para",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "second para",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "second para",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "second para",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "second para",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "second para",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "second para",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "html_ids": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "roundtrip_source": {
+    "djotjs": "- one\n\n  {stay=\"item0002\"}\n  second para\n\n- two\n",
+    "djotjs-main": "- one\n\n  {stay=\"item0002\"}\n  second para\n\n- two\n",
+    "carve": "- one\n\n  {stay=item0002}\n  second para\n\n- two\n",
+    "pandoc": "- one\n\n  {stay=\"item0002\"}\n  second para\n\n- two\n"
+   }
+  },
+  {
+   "name": "12_item_trailing",
+   "about": "Markdown habit inside a list: the marker after an item's text.",
+   "source": "- one\n  {stay=item0003}\n- two\n",
+   "stays": {
+    "item0003": {
+     "want": {
+      "kind": "item",
+      "text": "one"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "inline",
+         "text": "",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "elsewhere:inline"
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "inline",
+         "text": "",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "elsewhere:inline"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "dangling",
+         "text": "",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "dangling"
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "inline",
+         "text": "",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "elsewhere:inline"
+      },
+      "carve": {
+       "got": [],
+       "verdict": "lost"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "inline",
+         "text": "",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "inline",
+         "text": "",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "carve": {
+       "got": [],
+       "same": true
+      },
+      "pandoc": {
+       "got": [],
+       "same": false
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "html_ids": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "roundtrip_source": {
+    "djotjs": "- one\n  {stay=\"item0003\"}\n- two\n",
+    "djotjs-main": "- one\n  {stay=\"item0003\"}\n- two\n",
+    "carve": "- one\n- two\n",
+    "pandoc": "- one {stay=\"item0003\"}\n- two\n"
+   }
+  },
+  {
+   "name": "13_table_before",
+   "about": "A stay before a table.",
+   "source": "{stay=tabl0001}\n| a | b |\n| 1 | 2 |\n",
+   "stays": {
+    "tabl0001": {
+     "want": {
+      "kind": "table",
+      "text": "a"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "table",
+         "text": "ab12",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "table",
+         "text": "ab12",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "table",
+         "text": "ab12",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "table",
+         "text": "ab12",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "table",
+         "text": "ab12",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "table",
+         "text": "ab12",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "table",
+         "text": "ab12",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "table",
+         "text": "ab12",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "table",
+         "text": "ab12",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "html_ids": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "roundtrip_source": {
+    "djotjs": "{stay=\"tabl0001\"}\n|a|b|\n|1|2|\n",
+    "djotjs-main": "{stay=\"tabl0001\"}\n|a|b|\n|1|2|\n",
+    "carve": "{stay=tabl0001}\n| a | b |\n| 1 | 2 |\n",
+    "pandoc": "{stay=\"tabl0001\"}\n|   |   |\n|-|-|\n| a | b |\n| 1 | 2 |\n"
+   }
+  },
+  {
+   "name": "14_row_trailing",
+   "about": "The Markdown row carrier: a specifier after the row's last pipe.",
+   "source": "| a | b |\n| 1 | 2 | {stay=row00001}\n",
+   "stays": {
+    "row00001": {
+     "want": {
+      "kind": "row",
+      "text": "1"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [],
+       "verdict": "lost"
+      },
+      "djotjs-main": {
+       "got": [],
+       "verdict": "lost"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "dangling",
+         "text": "",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "dangling"
+      },
+      "pandoc": {
+       "got": [],
+       "verdict": "lost"
+      },
+      "carve": {
+       "got": [],
+       "verdict": "lost"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [],
+       "same": true
+      },
+      "carve": {
+       "got": [],
+       "same": true
+      },
+      "pandoc": {
+       "got": [],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [
+     "row00001"
+    ],
+    "pandoc": []
+   },
+   "html_ids": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "roundtrip_source": {
+    "djotjs": "|a|b|\n\n| 1 | 2 | \n",
+    "djotjs-main": "|a|b|\n\n\\| 1 \\| 2 \\| \n",
+    "carve": "| a | b |\n\n| 1 | 2 | {stay=row00001}\n",
+    "pandoc": "|   |   |\n|-|-|\n| a | b |\n\n\\| 1 \\| 2 \\|\n"
+   }
+  },
+  {
+   "name": "15_cell_inline",
+   "about": "An inline attribute inside the last cell.",
+   "source": "| a | b |\n| 1 | 2{stay=cell0001} |\n",
+   "stays": {
+    "cell0001": {
+     "want": {
+      "kind": "row",
+      "text": "1"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "inline",
+         "text": "2",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "elsewhere:inline"
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "inline",
+         "text": "2",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "elsewhere:inline"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "inline",
+         "text": "2",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "elsewhere:inline"
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "inline",
+         "text": "2",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "elsewhere:inline"
+      },
+      "carve": {
+       "got": [],
+       "verdict": "lost"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "inline",
+         "text": "2",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "inline",
+         "text": "2",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "carve": {
+       "got": [],
+       "same": true
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "inline",
+         "text": "2",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [
+     "cell0001"
+    ],
+    "pandoc": []
+   },
+   "html_ids": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "roundtrip_source": {
+    "djotjs": "|a|b|\n|1|2{stay=\"cell0001\"}|\n",
+    "djotjs-main": "|a|b|\n|1|2{stay=\"cell0001\"}|\n",
+    "carve": "| a | b |\n| 1 | 2{stay=cell0001} |\n",
+    "pandoc": "|   |                    |\n|-|------------------|\n| a | b                  |\n| 1 | 2{stay=\"cell0001\"} |\n"
+   }
+  },
+  {
+   "name": "16_fence_inside",
+   "about": "A stay-shaped line inside a code block is content.",
+   "source": "```\n{stay=fenc0001}\ncode\n```\n",
+   "stays": {
+    "fenc0001": {
+     "want": {
+      "kind": "content",
+      "text": ""
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [],
+       "verdict": "as-intended"
+      },
+      "djotjs-main": {
+       "got": [],
+       "verdict": "as-intended"
+      },
+      "jotdown": {
+       "got": [],
+       "verdict": "as-intended"
+      },
+      "pandoc": {
+       "got": [],
+       "verdict": "as-intended"
+      },
+      "carve": {
+       "got": [],
+       "verdict": "as-intended"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [],
+       "same": true
+      },
+      "carve": {
+       "got": [],
+       "same": true
+      },
+      "pandoc": {
+       "got": [],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [
+     "fenc0001"
+    ],
+    "djotjs-main": [
+     "fenc0001"
+    ],
+    "carve": [
+     "fenc0001"
+    ],
+    "pandoc": [
+     "fenc0001"
+    ]
+   },
+   "html_ids": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "roundtrip_source": {
+    "djotjs": "```\n{stay=fenc0001}\ncode\n```\n",
+    "djotjs-main": "```\n{stay=fenc0001}\ncode\n```\n",
+    "carve": "```\n{stay=fenc0001}\ncode\n```\n",
+    "pandoc": "```\n{stay=fenc0001}\ncode\n```\n"
+   }
+  },
+  {
+   "name": "17_fence_before",
+   "about": "A stay before a code block.",
+   "source": "{stay=fenc0002}\n```\ncode\n```\n",
+   "stays": {
+    "fenc0002": {
+     "want": {
+      "kind": "code",
+      "text": "code"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "code",
+         "text": "code",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "code",
+         "text": "code",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "code",
+         "text": "code",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "code",
+         "text": "code",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "code",
+         "text": "code",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "code",
+         "text": "code",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "code",
+         "text": "code",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "code",
+         "text": "code",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "code",
+         "text": "code",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "html_ids": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "roundtrip_source": {
+    "djotjs": "{stay=\"fenc0002\"}\n```\ncode\n```\n",
+    "djotjs-main": "{stay=\"fenc0002\"}\n```\ncode\n```\n",
+    "carve": "{stay=fenc0002}\n```\ncode\n```\n",
+    "pandoc": "{stay=\"fenc0002\"}\n```\ncode\n```\n"
+   }
+  },
+  {
+   "name": "18_fence_closed_by_quote",
+   "about": "A fence inside a blockquote, left open, closed by the quote ending; the stay after it is real.",
+   "source": "> ```\n> code\n\n{stay=fenc0003}\nAfter.\n",
+   "stays": {
+    "fenc0003": {
+     "want": {
+      "kind": "para",
+      "text": "After"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "After.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "After.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "After.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "After.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "After.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "After.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "After.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "After.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "After.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "html_ids": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "roundtrip_source": {
+    "djotjs": "> ```\n> code\n> ```\n\n{stay=\"fenc0003\"}\nAfter.\n",
+    "djotjs-main": "> ```\n> code\n> ```\n\n{stay=\"fenc0003\"}\nAfter.\n",
+    "carve": "> ```\n> code\n> ```\n\n{stay=fenc0003}\nAfter.\n",
+    "pandoc": "> ```\n> code\n> ```\n\n{stay=\"fenc0003\"}\nAfter.\n"
+   }
+  },
+  {
+   "name": "19_fence_in_list",
+   "about": "A stay-shaped line in a code block inside a list item is content.",
+   "source": "- item\n\n  ```\n  {stay=fenc0004}\n  ```\n",
+   "stays": {
+    "fenc0004": {
+     "want": {
+      "kind": "content",
+      "text": ""
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [],
+       "verdict": "as-intended"
+      },
+      "djotjs-main": {
+       "got": [],
+       "verdict": "as-intended"
+      },
+      "jotdown": {
+       "got": [],
+       "verdict": "as-intended"
+      },
+      "pandoc": {
+       "got": [],
+       "verdict": "as-intended"
+      },
+      "carve": {
+       "got": [],
+       "verdict": "as-intended"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [],
+       "same": true
+      },
+      "carve": {
+       "got": [],
+       "same": true
+      },
+      "pandoc": {
+       "got": [],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [
+     "fenc0004"
+    ],
+    "djotjs-main": [
+     "fenc0004"
+    ],
+    "carve": [
+     "fenc0004"
+    ],
+    "pandoc": [
+     "fenc0004"
+    ]
+   },
+   "html_ids": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "roundtrip_source": {
+    "djotjs": "- item\n\n  ```\n  {stay=fenc0004}\n  ```\n",
+    "djotjs-main": "- item\n\n  ```\n  {stay=fenc0004}\n  ```\n",
+    "carve": "- item\n  ```\n  {stay=fenc0004}\n  ```\n",
+    "pandoc": "- item\n\n  ```\n  {stay=fenc0004}\n  ```\n"
+   }
+  },
+  {
+   "name": "20_fence_indented_four",
+   "about": "A fence indented four spaces at top level (Markdown would call it indented code).",
+   "source": "    ```\n    {stay=fenc0005}\n    ```\n\nAfter.\n",
+   "stays": {
+    "fenc0005": {
+     "want": {
+      "kind": "content",
+      "text": ""
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [],
+       "verdict": "as-intended"
+      },
+      "djotjs-main": {
+       "got": [],
+       "verdict": "as-intended"
+      },
+      "jotdown": {
+       "got": [],
+       "verdict": "as-intended"
+      },
+      "pandoc": {
+       "got": [],
+       "verdict": "as-intended"
+      },
+      "carve": {
+       "got": [],
+       "verdict": "as-intended"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [],
+       "same": true
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": false
+      },
+      "pandoc": {
+       "got": [],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [
+     "fenc0005"
+    ],
+    "djotjs-main": [
+     "fenc0005"
+    ],
+    "carve": [
+     "fenc0005"
+    ],
+    "pandoc": [
+     "fenc0005"
+    ]
+   },
+   "html_ids": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "roundtrip_source": {
+    "djotjs": "```\n{stay=fenc0005}\n```\n\nAfter.\n",
+    "djotjs-main": "```\n{stay=fenc0005}\n```\n\nAfter.\n",
+    "carve": "`\n{stay=fenc0005}\n`\n\nAfter.\n",
+    "pandoc": "```\n{stay=fenc0005}\n```\n\nAfter.\n"
+   }
+  },
+  {
+   "name": "21_quote_before",
+   "about": "A stay before a blockquote.",
+   "source": "{stay=quot0001}\n> quoted text\n",
+   "stays": {
+    "quot0001": {
+     "want": {
+      "kind": "quote",
+      "text": "quoted"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "quote",
+         "text": "quoted text",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "quote",
+         "text": "quoted text",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "quote",
+         "text": "quoted text",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "quote",
+         "text": "quoted text",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "quote",
+         "text": "quoted text",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "quote",
+         "text": "quoted text",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "quote",
+         "text": "quoted text",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "quote",
+         "text": "quoted text",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "quote",
+         "text": "quoted text",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "html_ids": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "roundtrip_source": {
+    "djotjs": "{stay=\"quot0001\"}\n> quoted text\n",
+    "djotjs-main": "{stay=\"quot0001\"}\n> quoted text\n",
+    "carve": "{stay=quot0001}\n> quoted text\n",
+    "pandoc": "{stay=\"quot0001\"}\n> quoted text\n"
+   }
+  },
+  {
+   "name": "22_quote_inner",
+   "about": "A specifier inside a blockquote.",
+   "source": "> {stay=quot0002}\n> quoted text\n",
+   "stays": {
+    "quot0002": {
+     "want": {
+      "kind": "para",
+      "text": "quoted"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "quoted text",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "quoted text",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "quoted text",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "quoted text",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "quoted text",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "quoted text",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "quoted text",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "quoted text",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "quoted text",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "html_ids": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "roundtrip_source": {
+    "djotjs": "> {stay=\"quot0002\"}\n> quoted text\n",
+    "djotjs-main": "> {stay=\"quot0002\"}\n> quoted text\n",
+    "carve": "> {stay=quot0002}\n> quoted text\n",
+    "pandoc": "> {stay=\"quot0002\"}\n> quoted text\n"
+   }
+  },
+  {
+   "name": "23_div_before",
+   "about": "A stay before a div.",
+   "source": "{stay=div00001}\n::: note\ninside\n:::\n",
+   "stays": {
+    "div00001": {
+     "want": {
+      "kind": "div",
+      "text": "inside"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "div",
+         "text": "inside",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "div",
+         "text": "inside",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "div",
+         "text": "inside",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "div",
+         "text": "inside",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "div",
+         "text": "inside",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "div",
+         "text": "inside",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "div",
+         "text": "inside",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "div",
+         "text": "inside",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "div",
+         "text": "inside",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "html_ids": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "roundtrip_source": {
+    "djotjs": "{stay=\"div00001\" .note}\n:::\ninside\n:::\n",
+    "djotjs-main": "{stay=\"div00001\" .note}\n:::\ninside\n:::\n",
+    "carve": "{stay=div00001}\n::: note\ninside\n:::\n",
+    "pandoc": "{.note stay=\"div00001\"}\n:::\ninside\n\n:::\n"
+   }
+  },
+  {
+   "name": "24_div_inner",
+   "about": "A specifier inside a div.",
+   "source": "::: note\n{stay=div00002}\ninside\n:::\n",
+   "stays": {
+    "div00002": {
+     "want": {
+      "kind": "para",
+      "text": "inside"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "inside",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "inside",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "inside",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "inside",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "inside",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "inside",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "inside",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "inside",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "inside",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "html_ids": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "roundtrip_source": {
+    "djotjs": "{.note}\n:::\n{stay=\"div00002\"}\ninside\n:::\n",
+    "djotjs-main": "{.note}\n:::\n{stay=\"div00002\"}\ninside\n:::\n",
+    "carve": "::: note\n{stay=div00002}\ninside\n:::\n",
+    "pandoc": "{.note}\n:::\n{stay=\"div00002\"}\ninside\n\n:::\n"
+   }
+  },
+  {
+   "name": "25_footnote_inner",
+   "about": "A specifier inside a footnote body.",
+   "source": "Text[^n].\n\n[^n]:\n    {stay=foot0001}\n    Note text.\n",
+   "stays": {
+    "foot0001": {
+     "want": {
+      "kind": "para",
+      "text": "Note"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Note text.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Note text.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Note text.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Note text.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "carve": {
+       "got": [],
+       "verdict": "lost"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Note text.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Note text.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "carve": {
+       "got": [],
+       "same": true
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Note text.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [
+     "foot0001"
+    ],
+    "pandoc": []
+   },
+   "html_ids": {
+    "djotjs": [
+     "fnref1",
+     "fn1"
+    ],
+    "djotjs-main": [
+     "fnref1",
+     "fn1"
+    ],
+    "carve": [],
+    "pandoc": [
+     "fnref1",
+     "footnotes",
+     "fn1"
+    ]
+   },
+   "roundtrip_source": {
+    "djotjs": "Text[^n].\n\n[^n]: {stay=\"foot0001\"}\n  Note text.\n",
+    "djotjs-main": "Text[^n].\n\n[^n]: {stay=\"foot0001\"}\n  Note text.\n",
+    "carve": "Text[^n].\n\n[^n]:\n\\{stay=foot0001}\nNote text.\n",
+    "pandoc": "Text[^1].\n\n[^1]: {stay=\"foot0001\"}\n    Note text.\n"
+   }
+  },
+  {
+   "name": "26_inline_attr",
+   "about": "An inline attribute is never a block stay.",
+   "source": "Some _text_{stay=inln0001} here.\n",
+   "stays": {
+    "inln0001": {
+     "want": {
+      "kind": "inline",
+      "text": "text"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "inline",
+         "text": "text",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "inline",
+         "text": "text",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "inline",
+         "text": "text",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "inline",
+         "text": "text",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "inline",
+         "text": "text",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "inline",
+         "text": "text",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "inline",
+         "text": "text",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "inline",
+         "text": "text",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "inline",
+         "text": "text",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "html_ids": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "roundtrip_source": {
+    "djotjs": "Some _text_{stay=\"inln0001\"} here.\n",
+    "djotjs-main": "Some _text_{stay=\"inln0001\"} here.\n",
+    "carve": "Some _text_{stay=inln0001} here.\n",
+    "pandoc": "Some _text_{stay=\"inln0001\"} here.\n"
+   }
+  },
+  {
+   "name": "27_multiline_spec",
+   "about": "A specifier spanning two lines.",
+   "source": "{stay=mult0001\n  stay-hash=sha256:abcd}\nPara.\n",
+   "stays": {
+    "mult0001": {
+     "want": {
+      "kind": "para",
+      "text": "Para"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {
+          "stay-hash": "sha256:abcd"
+         }
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {
+          "stay-hash": "sha256:abcd"
+         }
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "dangling",
+         "text": "",
+         "via": "stay",
+         "keys": {
+          "stay-hash": "sha256:abcd"
+         }
+        }
+       ],
+       "verdict": "dangling"
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {
+          "stay-hash": "sha256:abcd"
+         }
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {
+          "stay-hash": "sha256:abcd"
+         }
+        }
+       ],
+       "verdict": "as-intended"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {
+          "stay-hash": "sha256:abcd"
+         }
+        }
+       ],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {
+          "stay-hash": "sha256:abcd"
+         }
+        }
+       ],
+       "same": true
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {
+          "stay-hash": "sha256:abcd"
+         }
+        }
+       ],
+       "same": true
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {
+          "stay-hash": "sha256:abcd"
+         }
+        }
+       ],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "html_ids": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "roundtrip_source": {
+    "djotjs": "{stay=\"mult0001\" stay-hash=\"sha256:abcd\"}\nPara.\n",
+    "djotjs-main": "{stay=\"mult0001\" stay-hash=\"sha256:abcd\"}\nPara.\n",
+    "carve": "{stay=mult0001 stay-hash=sha256:abcd}\nPara.\n",
+    "pandoc": "{stay=\"mult0001\" stay-hash=\"sha256\\:abcd\"}\nPara.\n"
+   }
+  },
+  {
+   "name": "28_quoted_specials",
+   "about": "A quoted value holding } % and an escaped quote.",
+   "source": "{stay=qspc0001 stay-quote=\"a } b % c \\\" d\"}\nPara.\n",
+   "stays": {
+    "qspc0001": {
+     "want": {
+      "kind": "para",
+      "text": "Para"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {
+          "stay-quote": "a } b % c \" d"
+         }
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {
+          "stay-quote": "a } b % c \" d"
+         }
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {
+          "stay-quote": "a } b % c \" d"
+         }
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {
+          "stay-quote": "a } b % c \" d"
+         }
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {
+          "stay-quote": "a } b % c \" d"
+         }
+        }
+       ],
+       "verdict": "as-intended"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {
+          "stay-quote": "a } b % c \" d"
+         }
+        }
+       ],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {
+          "stay-quote": "a } b % c \" d"
+         }
+        }
+       ],
+       "same": true
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {
+          "stay-quote": "a } b % c \" d"
+         }
+        }
+       ],
+       "same": true
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {
+          "stay-quote": "a } b % c \" d"
+         }
+        }
+       ],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "html_ids": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "roundtrip_source": {
+    "djotjs": "{stay=\"qspc0001\" stay-quote=\"a \\} b % c \\\" d\"}\nPara.\n",
+    "djotjs-main": "{stay=\"qspc0001\" stay-quote=\"a \\} b % c \\\" d\"}\nPara.\n",
+    "carve": "{stay=qspc0001 stay-quote=\"a } b % c \\\" d\"}\nPara.\n",
+    "pandoc": "{stay=\"qspc0001\" stay-quote=\"a \\} b % c \\\" d\"}\nPara.\n"
+   }
+  },
+  {
+   "name": "29_stacked_two_stays",
+   "about": "Two specifiers with two stays before one block.",
+   "source": "{stay=stak0001}\n{stay=stak0002}\nPara.\n",
+   "stays": {
+    "stak0001": {
+     "want": {
+      "kind": "para",
+      "text": "Para"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [],
+       "verdict": "lost"
+      },
+      "djotjs-main": {
+       "got": [],
+       "verdict": "lost"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "pandoc": {
+       "got": [],
+       "verdict": "lost"
+      },
+      "carve": {
+       "got": [],
+       "verdict": "lost"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [],
+       "same": true
+      },
+      "carve": {
+       "got": [],
+       "same": true
+      },
+      "pandoc": {
+       "got": [],
+       "same": true
+      }
+     }
+    },
+    "stak0002": {
+     "want": {
+      "kind": "para",
+      "text": "Para"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "html_ids": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "roundtrip_source": {
+    "djotjs": "{stay=\"stak0002\"}\nPara.\n",
+    "djotjs-main": "{stay=\"stak0002\"}\nPara.\n",
+    "carve": "{stay=stak0002}\nPara.\n",
+    "pandoc": "{stay=\"stak0002\"}\nPara.\n"
+   }
+  },
+  {
+   "name": "30_split_keys",
+   "about": "stay and stay-hash in two stacked specifiers.",
+   "source": "{stay=splt0001}\n{stay-hash=sha256:abcd}\nPara.\n",
+   "stays": {
+    "splt0001": {
+     "want": {
+      "kind": "para",
+      "text": "Para"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {
+          "stay-hash": "sha256:abcd"
+         }
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {
+          "stay-hash": "sha256:abcd"
+         }
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {
+          "stay-hash": "sha256:abcd"
+         }
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {
+          "stay-hash": "sha256:abcd"
+         }
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {
+          "stay-hash": "sha256:abcd"
+         }
+        }
+       ],
+       "verdict": "as-intended"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {
+          "stay-hash": "sha256:abcd"
+         }
+        }
+       ],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {
+          "stay-hash": "sha256:abcd"
+         }
+        }
+       ],
+       "same": true
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {
+          "stay-hash": "sha256:abcd"
+         }
+        }
+       ],
+       "same": true
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {
+          "stay-hash": "sha256:abcd"
+         }
+        }
+       ],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "html_ids": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "roundtrip_source": {
+    "djotjs": "{stay=\"splt0001\" stay-hash=\"sha256:abcd\"}\nPara.\n",
+    "djotjs-main": "{stay=\"splt0001\" stay-hash=\"sha256:abcd\"}\nPara.\n",
+    "carve": "{stay=splt0001 stay-hash=sha256:abcd}\nPara.\n",
+    "pandoc": "{stay=\"splt0001\" stay-hash=\"sha256\\:abcd\"}\nPara.\n"
+   }
+  },
+  {
+   "name": "31_merged_with_class",
+   "about": "A stay sharing a specifier with an author's class.",
+   "source": "{.note stay=mrge0001}\nPara.\n",
+   "stays": {
+    "mrge0001": {
+     "want": {
+      "kind": "para",
+      "text": "Para"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "html_ids": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "roundtrip_source": {
+    "djotjs": "{.note stay=\"mrge0001\"}\nPara.\n",
+    "djotjs-main": "{.note stay=\"mrge0001\"}\nPara.\n",
+    "carve": "{.note stay=mrge0001}\nPara.\n",
+    "pandoc": "{.note stay=\"mrge0001\"}\nPara.\n"
+   }
+  },
+  {
+   "name": "32_duplicate_key",
+   "about": "The same key twice in one specifier.",
+   "source": "{stay=dupA0001 stay=dupB0001}\nPara.\n",
+   "stays": {
+    "dupA0001": {
+     "want": {
+      "kind": "para",
+      "text": "Para"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [],
+       "verdict": "lost"
+      },
+      "djotjs-main": {
+       "got": [],
+       "verdict": "lost"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "pandoc": {
+       "got": [],
+       "verdict": "lost"
+      },
+      "carve": {
+       "got": [],
+       "verdict": "lost"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [],
+       "same": true
+      },
+      "carve": {
+       "got": [],
+       "same": true
+      },
+      "pandoc": {
+       "got": [],
+       "same": true
+      }
+     }
+    },
+    "dupB0001": {
+     "want": {
+      "kind": "para",
+      "text": "Para"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "html_ids": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "roundtrip_source": {
+    "djotjs": "{stay=\"dupB0001\"}\nPara.\n",
+    "djotjs-main": "{stay=\"dupB0001\"}\nPara.\n",
+    "carve": "{stay=dupB0001}\nPara.\n",
+    "pandoc": "{stay=\"dupB0001\"}\nPara.\n"
+   }
+  },
+  {
+   "name": "33_unquoted_slash",
+   "about": "An unquoted value with a character the bare-value rule excludes.",
+   "source": "{stay=slsh0001 stay-quote=a/b}\nPara.\n",
+   "stays": {
+    "slsh0001": {
+     "want": {
+      "kind": "para",
+      "text": "Para"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [],
+       "verdict": "lost"
+      },
+      "djotjs-main": {
+       "got": [],
+       "verdict": "lost"
+      },
+      "jotdown": {
+       "got": [],
+       "verdict": "lost"
+      },
+      "pandoc": {
+       "got": [],
+       "verdict": "lost"
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {
+          "stay-quote": "a/b"
+         }
+        }
+       ],
+       "verdict": "as-intended"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [],
+       "same": true
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "stay",
+         "keys": {
+          "stay-quote": "a/b"
+         }
+        }
+       ],
+       "same": true
+      },
+      "pandoc": {
+       "got": [],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [
+     "slsh0001"
+    ],
+    "djotjs-main": [
+     "slsh0001"
+    ],
+    "carve": [],
+    "pandoc": [
+     "slsh0001"
+    ]
+   },
+   "html_ids": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "roundtrip_source": {
+    "djotjs": "\\{stay=slsh0001 stay-quote=a/b\\}\nPara.\n",
+    "djotjs-main": "\\{stay=slsh0001 stay-quote=a/b\\}\nPara.\n",
+    "carve": "{stay=slsh0001 stay-quote=a/b}\nPara.\n",
+    "pandoc": "\\{stay=slsh0001 stay-quote=a/b\\}\n\nPara.\n"
+   }
+  },
+  {
+   "name": "34_comment_carrier",
+   "about": "The rejected carrier: a Djot comment.",
+   "source": "{% stay:comm0001 %}\nPara.\n",
+   "stays": {
+    "comm0001": {
+     "want": {
+      "kind": "para",
+      "text": "Para"
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [],
+       "verdict": "lost"
+      },
+      "djotjs-main": {
+       "got": [],
+       "verdict": "lost"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "para",
+         "text": "Para.",
+         "via": "%",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "pandoc": {
+       "got": [],
+       "verdict": "lost"
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "inline",
+         "text": "",
+         "via": "%",
+         "keys": {}
+        }
+       ],
+       "verdict": "elsewhere:inline"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [],
+       "same": true
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "inline",
+         "text": "",
+         "via": "%",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "pandoc": {
+       "got": [],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "html_ids": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "roundtrip_source": {
+    "djotjs": "Para.\n",
+    "djotjs-main": "Para.\n",
+    "carve": "{% stay:comm0001 %}\nPara.\n",
+    "pandoc": "Para.\n"
+   }
+  },
+  {
+   "name": "35_html_comment",
+   "about": "markstay's Markdown carrier in a Djot file is literal text, not a marker.",
+   "source": "Para.\n<!-- stay:html0001 -->\n",
+   "stays": {
+    "html0001": {
+     "want": {
+      "kind": "none",
+      "text": ""
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [],
+       "verdict": "as-intended"
+      },
+      "djotjs-main": {
+       "got": [],
+       "verdict": "as-intended"
+      },
+      "jotdown": {
+       "got": [],
+       "verdict": "as-intended"
+      },
+      "pandoc": {
+       "got": [],
+       "verdict": "as-intended"
+      },
+      "carve": {
+       "got": [],
+       "verdict": "as-intended"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [],
+       "same": true
+      },
+      "carve": {
+       "got": [],
+       "same": true
+      },
+      "pandoc": {
+       "got": [],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [
+     "html0001"
+    ],
+    "djotjs-main": [
+     "html0001"
+    ],
+    "carve": [
+     "html0001"
+    ],
+    "pandoc": [
+     "html0001"
+    ]
+   },
+   "html_ids": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "roundtrip_source": {
+    "djotjs": "Para.\n\\<!-- stay:html0001 --\\>\n",
+    "djotjs-main": "Para.\n\\<!-- stay:html0001 --\\>\n",
+    "carve": "Para.\n<!-- stay:html0001 -->\n",
+    "pandoc": "Para. <!-- stay:html0001 -->\n"
+   }
+  },
+  {
+   "name": "36_thematic_break",
+   "about": "A stay before a thematic break.",
+   "source": "{stay=brk00001}\n* * *\n",
+   "stays": {
+    "brk00001": {
+     "want": {
+      "kind": "break",
+      "text": ""
+     },
+     "parsers": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "break",
+         "text": "",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "break",
+         "text": "",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "jotdown": {
+       "got": [
+        {
+         "kind": "break",
+         "text": "",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "break",
+         "text": "",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "as-intended"
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "list",
+         "text": "*",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "verdict": "elsewhere:list"
+      }
+     },
+     "roundtrip": {
+      "djotjs": {
+       "got": [
+        {
+         "kind": "break",
+         "text": "",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "djotjs-main": {
+       "got": [
+        {
+         "kind": "break",
+         "text": "",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "carve": {
+       "got": [
+        {
+         "kind": "list",
+         "text": "*",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      },
+      "pandoc": {
+       "got": [
+        {
+         "kind": "break",
+         "text": "",
+         "via": "stay",
+         "keys": {}
+        }
+       ],
+       "same": true
+      }
+     }
+    }
+   },
+   "visible": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "html_ids": {
+    "djotjs": [],
+    "djotjs-main": [],
+    "carve": [],
+    "pandoc": []
+   },
+   "roundtrip_source": {
+    "djotjs": "{stay=\"brk00001\"}\n* * * * *\n",
+    "djotjs-main": "{stay=\"brk00001\"}\n* * * * *\n",
+    "carve": "{stay=brk00001}\n* * *\n",
+    "pandoc": "{stay=\"brk00001\"}\n* * * *\n"
+   }
+  }
+ ]
+}
