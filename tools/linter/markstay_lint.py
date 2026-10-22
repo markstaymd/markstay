@@ -48,6 +48,7 @@ import json
 import re
 import string
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -243,6 +244,25 @@ def _parse_marker_body(
     return marker_id, attributes
 
 
+def _forward_finder(text: str, needle: str) -> Callable[[int], int]:
+    """``text.find(needle, query)``, reusing the last answer while it still holds.
+
+    Every marker searches forward for each host closer, and a closer that is far
+    away or absent would otherwise be rescanned to the end of the text per marker.
+    """
+    searched_from = len(text) + 1
+    at = -1
+
+    def find(query: int) -> int:
+        nonlocal searched_from, at
+        if query < searched_from or query > at >= 0:
+            searched_from = query
+            at = text.find(needle, query)
+        return at
+
+    return find
+
+
 def _malformed_key_first(body: str) -> bool:
     """Whether §4 still requires a no-positional-id diagnostic for this body."""
     if not body.startswith("stay:"):
@@ -260,6 +280,12 @@ def _scan_marker_records(text: str, line_offset: int = 0) -> list[_MarkerRecord]
     """
     normalized, raw_boundaries = _normalize_lf_with_raw_boundaries(text)
     records: list[_MarkerRecord] = []
+    # Openers arrive in source order, so the line count advances with them.
+    newlines = 0
+    counted_to = 0
+    find_close = {
+        closer: _forward_finder(normalized, closer) for closer in ("-->", "--!>", "*/")
+    }
     for opener in _MARKER_OPEN_RE.finditer(normalized):
         syntax = "html" if opener.group(0) == "<!--" else "mdx"
         pos = opener.end()
@@ -273,7 +299,7 @@ def _scan_marker_records(text: str, line_offset: int = 0) -> list[_MarkerRecord]
             closers = [
                 (at, closer)
                 for closer in ("-->", "--!>")
-                if (at := normalized.find(closer, search_start)) >= 0
+                if (at := find_close[closer](search_start)) >= 0
             ]
             if not closers:
                 continue
@@ -281,7 +307,7 @@ def _scan_marker_records(text: str, line_offset: int = 0) -> list[_MarkerRecord]
             normalized_end = close_start + len(closer)
             valid_host_close = closer == "-->"
         else:
-            close_start = normalized.find("*/", search_start)
+            close_start = find_close["*/"](search_start)
             if close_start < 0:
                 continue
             valid_host_close = normalized.startswith("}", close_start + 2)
@@ -303,6 +329,8 @@ def _scan_marker_records(text: str, line_offset: int = 0) -> list[_MarkerRecord]
             if key == "subhash" and digest is not None and child_hash is None:
                 child_hash = digest.group(1).lower()
 
+        newlines += normalized.count("\n", counted_to, opener.start())
+        counted_to = opener.start()
         raw_start = raw_boundaries[opener.start()]
         raw_end = raw_boundaries[normalized_end]
         records.append(
@@ -316,7 +344,7 @@ def _scan_marker_records(text: str, line_offset: int = 0) -> list[_MarkerRecord]
                     has_subhash=any(key == "subhash" for key, _, _ in attributes),
                     raw=text[raw_start:raw_end],
                     syntax=syntax,
-                    line=line_offset + normalized.count("\n", 0, opener.start()) + 1,
+                    line=line_offset + (newlines + 1),
                     malformed=malformed,
                 ),
             )
@@ -785,16 +813,18 @@ def _row_refused_marker_lines(text: str, code: set[int]) -> set[int]:
         for record in _scan_marker_records(text)
         if not record.marker.malformed and _marker_outside_code(record.marker, code)
     ]
+    starts = _line_starts(text)
     refused: set[int] = set()
     spans: list[tuple[int, int, int, int]] = []
     for record in records:
-        first = text.count("\n", 0, record.start) + 1
-        last = text.count("\n", 0, max(record.start, record.end - 1)) + 1
+        first = bisect.bisect_right(starts, record.start)
+        last = bisect.bisect_right(starts, max(record.start, record.end - 1))
         spans.append((record.start, record.end, first, last))
         if first != last:
             refused.update(range(first, last + 1))
     for index, (start, end, first, last) in enumerate(spans):
-        for other_start, other_end, other_first, other_last in spans[index + 1 :]:
+        for later in range(index + 1, len(spans)):
+            other_start, other_end, other_first, other_last = spans[later]
             if other_start >= end:
                 break
             if other_end > start:
@@ -1091,18 +1121,20 @@ def _document_marker_records(md: str, text: str) -> list[_MarkerRecord]:
     ]
 
 
-def _record_line_bounds(text: str, record: _MarkerRecord) -> tuple[int, int]:
+def _record_line_bounds(
+    line_starts: list[int], record: _MarkerRecord
+) -> tuple[int, int]:
     """Inclusive source lines occupied by one complete marker record."""
     return (
         record.marker.line,
-        text.count("\n", 0, max(record.start, record.end - 1)) + 1,
+        bisect.bisect_right(line_starts, max(record.start, record.end - 1)),
     )
 
 
 def _record_belongs_to_child(
-    text: str, record: _MarkerRecord, span: _ChildSpan
+    line_starts: list[int], record: _MarkerRecord, span: _ChildSpan
 ) -> bool:
-    first, last = _record_line_bounds(text, record)
+    first, last = _record_line_bounds(line_starts, record)
     return (
         span.start_line <= first
         and last <= span.end_line
@@ -1210,7 +1242,9 @@ def parse_document(
                     if span.kind == "row"
                     for mk in markers
                     if mk.has_subhash
-                    and _record_belongs_to_child(text, record_by_marker[id(mk)], span)
+                    and _record_belongs_to_child(
+                        line_starts, record_by_marker[id(mk)], span
+                    )
                 }
                 for span in child_spans.get(start, []):
                     ordinals[span.kind] = ordinals.get(span.kind, 0) + 1
@@ -1221,7 +1255,7 @@ def parse_document(
                         and id(mk) not in child_marker_ids
                         and (span.kind == "row" or id(mk) not in row_marker_ids)
                         and _record_belongs_to_child(
-                            text, record_by_marker[id(mk)], span
+                            line_starts, record_by_marker[id(mk)], span
                         )
                     ]
                     child_marker_ids.update(id(mk) for mk in owned)

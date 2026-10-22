@@ -212,6 +212,36 @@ def test_hook_blocks_dropped_stay():
         shutil.rmtree(repo, ignore_errors=True)
 
 
+def test_hook_blocks_dropped_stay_in_a_linked_worktree():
+    """A repo that keeps `.markstay/` untracked has none in a linked worktree.
+    The hook resolved the linter from the worktree's own top level, so it
+    skipped the check there and a dropped stay committed unblocked."""
+    repo = _fresh_repo()
+    wt = tempfile.mkdtemp(prefix="markstay-wt-")
+    os.rmdir(wt)
+    try:
+        _install(repo)
+        _write(repo, "a.md", "Alpha block.\n<!-- stay:a1 -->\n\nBeta block.\n<!-- stay:b2 -->\n")
+        _git(repo, "add", "a.md")
+        ok = _git(repo, "commit", "-m", "init")
+        assert ok.returncode == 0, ok.stdout + ok.stderr
+        added = _git(repo, "worktree", "add", "-q", "-b", "side", wt)
+        assert added.returncode == 0, added.stdout + added.stderr
+        assert not os.path.exists(os.path.join(wt, ".markstay"))
+
+        _write(wt, "a.md", "Alpha block.\n<!-- stay:a1 -->\n\nBeta block, reworded.\n")
+        _git(wt, "add", "a.md")
+        blocked = _git(wt, "commit", "-m", "drop b2")
+        out = blocked.stdout + blocked.stderr
+        assert blocked.returncode != 0, out
+        assert "DROPPED_ID" in out
+        assert "linter not found" not in out
+    finally:
+        _git(repo, "worktree", "remove", "--force", wt)
+        shutil.rmtree(wt, ignore_errors=True)
+        shutil.rmtree(repo, ignore_errors=True)
+
+
 def test_hook_allows_preserved_edit():
     repo = _fresh_repo()
     try:

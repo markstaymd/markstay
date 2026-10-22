@@ -31,7 +31,8 @@
 #
 # Any error-level finding blocks the commit (SPEC.md §16: "exit non-zero so it can
 # gate a commit hook"). Hash drift is a warning and does not block. The linter is
-# the vendored copy at <repo>/.markstay/markstay_lint.py (installed by install.sh),
+# the vendored copy at <repo>/.markstay/markstay_lint.py (installed by install.sh;
+# from a linked worktree, the main checkout's copy when the worktree has none),
 # so the hook stays dependency-free; set MARKSTAY_MODE=commonmark to segment over
 # the CommonMark tree (SPEC.md §5.2, needs markdown-it-py). Set
 # MARKSTAY_CHECK_COLLECTIONS=1 to also block when a stamped table or list silently
@@ -222,12 +223,31 @@ def check_entries(entries, L, scope=None, mode="blank-line", check_collections=F
     return result
 
 
+def linter_dir(root):
+    """The `.markstay/` holding the vendored linter for this commit.
+
+    A repo that keeps `.markstay/` untracked has it only in the main checkout,
+    so a linked worktree's top level has none. The hook runs from the shared
+    hooks directory in every worktree, so the main checkout's copy is the one
+    that applies: without it the check is skipped and a dropped stay commits.
+    """
+    own = os.path.join(root, ".markstay")
+    if os.path.exists(os.path.join(own, "markstay_lint.py")):
+        return own
+    common = git("rev-parse", "--path-format=absolute", "--git-common-dir").stdout.strip()
+    if common and os.path.basename(common) == ".git":
+        main = os.path.join(os.path.dirname(common), ".markstay")
+        if os.path.exists(os.path.join(main, "markstay_lint.py")):
+            return main
+    return own
+
+
 def main() -> int:
     root = git("rev-parse", "--show-toplevel").stdout.strip()
     if not root:
         return 0  # not in a work tree; nothing to do
 
-    sys.path.insert(0, os.path.join(root, ".markstay"))
+    sys.path.insert(0, linter_dir(root))
     try:
         import markstay_lint as L
     except ImportError:

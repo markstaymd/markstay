@@ -90,6 +90,15 @@ def test_marker_parser_is_complete_host_first_and_resumes_at_later_openers():
     assert [(mk.id, mk.hash) for mk in markers] == [("good", "beef")]
 
 
+def test_marker_line_count_runs_across_skipped_openers_crlf_and_offset():
+    # Skipped: a non-marker comment, an unclosed MDX opener, a `--!>` close.
+    text = (
+        "a\r\n<!-- note -->\r\n<!-- stay:x -->\r\n{/* stay:bad\r\n\r"
+        "<!-- stay:y --!>\n<!-- stay:z -->"
+    )
+    assert [(m.id, m.line) for m in L.find_markers(text, 10)] == [("x", 13), ("z", 17)]
+
+
 def test_marker_parser_normalizes_quoted_line_endings_but_preserves_raw():
     raw = '<!-- stay:a quote="one\r\ntwo\rthree" subhash="bogus" -->'
     marker = L.find_markers(raw)[0]

@@ -7,6 +7,6 @@ markstay>=0.2,<1.0
 # LangChain pinned to the versions the cache contract was verified against. The
 # drift-sentinel test (test_cache.py::test_langchain_reembeds_match_decision)
 # catches a behavioural break if you bump these; re-pin here when you do.
-langchain-core==1.6.4
-langchain-text-splitters==1.1.2
+langchain-core==1.7.0
+langchain-text-splitters==1.1.3
 pytest>=8
