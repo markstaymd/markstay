@@ -77,7 +77,7 @@ every open. markstay is an attempt to make that same block-id idea source-native
 tool-neutral, so it lives in the Markdown text instead of a single application's
 database.
 
-## Block editors with CRDT identity
+## Block editors with store identity
 
 The richest production analogue is a class of block-based editors. AFFiNE, built on
 the open-source BlockSuite engine, is the clearest example: every document and block
@@ -106,6 +106,19 @@ becomes plain text the ids are gone. markstay is the layer that keeps the id in 
 `.md`. The two are not really competitors: one owns identity inside an application,
 the other carries it in portable text. markstay is what lets a block editor's identity
 survive the trip out to a file.
+
+Lexical, Meta's editor framework, shipped the same idea as an experimental extension in
+v0.53.0 (October 2026). Each block carries a stable id in the editor's state, and a
+pasted copy gets a fresh id while the original is still in the document, as markstay's
+§7 requires. The id does not reach Markdown: neither Markdown exporter writes it, and
+only HTML export carries it, through a separate opt-in. A document loaded without ids
+gets ids computed from its whole content, so in a fresh editor any edit anywhere gives
+every block a new id. Loading into a live editor keeps the old ids by position, so a
+block inserted at the top shifts every later id onto the wrong block. On the default
+import paths a stay marker already in the file is exported as visible escaped text
+(`&#60;!--` or `\<!--`) or dropped. Lexical's own tracker asks for persistent ids in AI
+diff-editing workflows ([#8251](https://github.com/meta/lexical/issues/8251)).
+Measured against the published 0.53.0 packages on 2026-10-31.
 
 ## Markdown as the AI interchange format
 
@@ -173,7 +186,7 @@ moves an id onto the wrong block without leaving anything visibly wrong.
 ## Newer work on the same problem (2025 to 2026)
 
 A scan for tools with a release or dated specification since April 2025 (read
-2026-10-17) found nothing that writes a content-independent id into Markdown source
+2026-10-17 and 2026-10-31) found nothing that writes a content-independent id into Markdown source
 together with per-block drift evidence and a recovery rule. It found more projects
 than before taking one half of it:
 
@@ -184,6 +197,8 @@ than before taking one half of it:
 | [robot-notes](https://github.com/cedricziel/robot-notes) | Per-document block maps for agent notes | A sidecar file | A source hash per block, "never" used to identify one | The identity/evidence split, reached independently, outside the text |
 | [AGD](https://github.com/Pinperepette/agd) | A line syntax for agent documents | `[#id]` in its own syntax | An optional hash that excludes the id | The same split, in a new syntax |
 | [Dirac](https://github.com/dirac-run/dirac) | A coding agent | A stable line-anchor protocol in its edit tools, not in the file | Hash anchors per line, reconciled with a diff | The same split, at line level, inside one agent's tools |
+| [ai-memory](https://github.com/akitaonrails/ai-memory) | Agent memory as a Markdown wiki in git, with section patches over MCP | The page path plus a database id; a section is addressed by its heading text | The section's sha256, required before a replace | Its users asked to edit single table rows ([#1697](https://github.com/akitaonrails/ai-memory/issues/1697)), which a heading address cannot reach |
+| [Corpus](https://github.com/nicia-ai/corpus) and prose-diff | A Markdown library for agent context, with comments anchored to blocks | Block ids re-derived by matching each save, held in a per-version store | An exact quote per anchor | The same split, with identity rebuilt from structure on every save |
 
 Each one reaches the conclusion this page starts from, that identity and evidence are
 different things, and each keeps the identity somewhere other than portable Markdown
@@ -251,6 +266,9 @@ them.
 - **Block editor with CRDT identity**: AFFiNE / BlockSuite, where every block has a
   stable id persisted in a YJS CRDT store, lost on export to Markdown.
   <https://blocksuite.io/guide/adapter.html>
+- **Editor framework with block ids**: Lexical `BlockIdExtension` (experimental since
+  v0.53.0), lost on export to Markdown.
+  <https://github.com/meta/lexical/pull/9421>
 - **Revision / stale-state precedent**: GitHub review comments, anchored by commit,
   path, side, and line, with an outdated state.
   <https://docs.github.com/en/rest/pulls/comments>

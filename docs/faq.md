@@ -84,7 +84,9 @@ thematic break and a setext underline, and it confines the ambiguity rather than
 removing it: an opening `---`, a blank-free payload that reads as YAML, and a closing
 fence is genuinely both readings, and frontmatter wins there, as it does in every
 mainstream site generator. Everything outside that shape is treated as ordinary
-Markdown.
+Markdown. That includes YAML with a blank line inside it: `stamp` treats it as Markdown
+and writes markers into it, which breaks it as YAML. Remove blank lines from frontmatter
+before stamping.
 
 If a document was stamped by a pre-1.2 tool and carries a marker on the frontmatter,
 that marker usually has nothing before it and lints as an orphan error; delete it.
