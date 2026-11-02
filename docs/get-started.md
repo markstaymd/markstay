@@ -64,8 +64,8 @@ every block by reflex. Two coverage models:
   block can `stamp` the whole document; short generated ids keep that cheap.
 
 A marker earns its keep only when there is a consumer for the address. The two
-mitigations below are the first ones: they give every stay a reason to exist by
-keeping it attached through an edit, and reporting the moment one vanishes anyway.
+mitigations below do not supply one. They keep the address attached through an edit and
+report the moment one vanishes anyway, which protects a stay something already needs.
 
 ## 1. Tell the editing agent (the lever)
 

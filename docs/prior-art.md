@@ -17,8 +17,10 @@ never the identity itself.
 
 ## Cross-cutting findings
 
-1. Explicit ids are the only broadly proven way to survive arbitrary edits to a
-   block's text.
+1. Explicit ids are the one approach here that survives arbitrary edits to a block's
+   text by construction, and the systems that prove it own their data model. For a
+   marker in Markdown source the gain over matching on ordinary edits
+   [is small on the one history measured](evaluation.md#ids-against-id-free-matching).
 2. Generated heading slugs are convenient but not stable. GitHub, MyST, Docusaurus,
    and MkDocs share the same limitation: change the heading text or the duplicate
    ordering and the anchor changes.
@@ -66,7 +68,7 @@ show what survives editing and what does not.
 | GitHub review comments | `commit_id` + `path` + `line` + `side` | Revision-scoped line ranges | The diff can map the line through later commits | The line changes or the file is rewritten | Pair location with revision identity; accept an "outdated" state |
 | Figma comments | File key + `client_meta` coords or node id | Coordinate or node-scoped anchor | The node persists | Node deleted, restructured, or moved frames | Stable object ids beat coordinates |
 | Notion comments | Comment UUID + parent block/page UUID | Stable block-id parentage + thread | The parent block exists | Block deleted, copied without thread, or exported | Block-UUID parentage is the closest product analogue to markstay |
-| Sidecar Markdown reviewers | A JSON file beside the `.md`: document hash and offsets, source *and* rendered quotes, heading path | A multi-tier recovery ladder over pure evidence, with nothing written into the source | One tier still matches, and the file keeps its name and location | The block is rewritten past the similarity threshold, moves to another file, or the sidecar is lost | Evidence-only anchoring is workable, and its cost is visible: several tiers, two quote forms, and a section filter to approximate what one stable id resolves directly |
+| Sidecar Markdown reviewers | A JSON file beside the `.md`: document hash and offsets, source *and* rendered quotes, heading path | A multi-tier recovery ladder over pure evidence, with nothing written into the source | One tier still matches, and the file keeps its name and location | The block is rewritten past the similarity threshold, moves to another file, or the sidecar is lost | Evidence-only anchoring is workable, at the cost of several tiers, two quote forms and a section filter. markstay runs a ladder of its own behind the id. Within one document the id added little to it on the history measured, and it does separate byte-identical blocks that evidence cannot |
 
 The recurring pattern: mature systems lean on stable internal object identity wherever
 they own the data model, keep positions and quotes only as recovery evidence, and mark
@@ -128,7 +130,7 @@ and it is the native format for repositories, issues, prompts, and agent respons
 maps directly to Git, diffs line-by-line, and stays readable in raw form.
 
 Its missing piece is identity below the heading. Heading anchors drift, line ranges
-break, and quote matching is ambiguous, which is precisely the substrate an agent
+break, and quote matching is ambiguous on near-duplicate blocks, which is precisely the substrate an agent
 needs when it edits a document and wants its references to survive. That is the gap
 markstay probes.
 
@@ -231,7 +233,9 @@ about how much an instruction alone can do.
 - **Recovering identity from content alone has a cost.** Code-block tracking reaches
   high precision without any in-source id, but leans on syntax trees and refactoring
   semantics that prose does not have
-  ([Hasan et al., IEEE TSE 2024](https://arxiv.org/abs/2409.16185)).
+  ([Hasan et al., IEEE TSE 2024](https://arxiv.org/abs/2409.16185)). On prose, markstay's
+  [own replay](evaluation.md#ids-against-id-free-matching) found text matching close to
+  ids within one document, on one history, so this paper does not settle it for Markdown.
 
 Two gaps are worth stating. No paper found measures whether a model keeps an
 HTML-comment id through a rewrite, so markstay's own [evaluation](evaluation.md) is

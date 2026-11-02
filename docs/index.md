@@ -5,7 +5,8 @@ A specification for giving logical blocks of Markdown a stable identity that sur
 
 markstay is a small, source-native identity layer for Markdown. It gives a logical
 block of content a **stay**: a stable address other tools can point at and keep
-pointing at across edits, moves, and AI rewrites. The address *stays* put while the
+pointing at across edits, moves, and AI rewrites, for as long as the marker is kept on
+its block. The address *stays* put while the
 content around it changes.
 
 This site states the problem, surveys the [prior art](prior-art.md), and gives the
@@ -57,11 +58,11 @@ It has stable handles at every level except one:
 - **Logical blocks** (a specific paragraph, list, table, or code fence) have
   nothing.
 
-There is no portable way to say "this paragraph" and have the reference still hold
-after the block is edited, moved, or regenerated. Heading anchors drift when the
-heading text changes. Line numbers break on the first insertion above them. Quote
-matching fails on repeated or rewritten text. The handles that exist all encode
-*location*, and location is exactly what editing destroys.
+There is no portable handle that names "this paragraph" itself. Heading anchors drift
+when the heading text changes. Line numbers break on the first insertion above them.
+Both encode *location*, which editing destroys. A stored quote encodes content instead,
+and re-finds most blocks through ordinary edits, but it has to be matched again after
+every edit and it fails on near-duplicate blocks and heavy rewrites.
 
 ## Why it matters now
 
@@ -123,8 +124,10 @@ about where it currently sits. markstay takes the same split:
 | `quote` + prefix/suffix | recovery evidence to re-find a detached marker | n/a |
 
 The id is the identity. The hash and quote are never identity, only evidence. A hash
-mismatch with the marker still present means "same block, changed content", not "new
-block". This split is the single most consistent lesson from the
+mismatch with the marker still present is read as "same block, changed content", not
+"new block", and that reading is only as good as the marker's placement, since an edit
+can leave a marker on a neighbouring block. This split is the single most consistent
+lesson from the
 [prior art](prior-art.md).
 
 ## What version 1 settles

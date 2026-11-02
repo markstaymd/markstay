@@ -1,4 +1,4 @@
-# Demo: identity survives an LLM rewrite
+# Demo: finding blocks after an LLM rewrite strips the markers
 
 The objection markstay always meets first:
 
@@ -7,7 +7,9 @@ The objection markstay always meets first:
 So this demo deletes them. It takes a document, has a real model (Claude Sonnet)
 rewrite every prose block, **strips out every marker**, and then asks markstay to say
 which new block is which original one, from the content hash and quote selector alone
-(the [recovery model](spec.md), sections 8 and 9).
+(the [recovery model](spec.md), sections 8 and 9). This tests the stored evidence and
+not the id: no marker is left, and the same hash and quote work for a tool that never
+wrote one.
 
 !!! success "Headline"
     On a heavy rewrite (mean block similarity 0.71), with every marker removed:
@@ -48,8 +50,8 @@ rewrite that DELETES the markers?
 HEADLINE
   8/10 blocks re-identified, 0 misattached  (recovery 80%, false-attach 0%)
 
-  Without markstay (exact content match only): 3/10 recover.
-  The quote selector + the id recover 5 more reworded block(s) that a
+  Exact content match alone: 3/10 recover.
+  The stored quote selector recovers 5 more reworded block(s) that a
   content hash alone would miss, and the §9 commit rule (score + margin)
   turns the unrecoverable ones into a safe "outdated", never a wrong guess.
 ```
@@ -62,30 +64,31 @@ Each row is one original block, with its marker deleted, being re-found in the r
   the table), so its content hash matches exactly. This is all a plain
   content-addressed scheme would recover: 3 of 10.
 - **`quote`** , the block was reworded, so the hash misses, but the stored quote
-  selector still matches it as the clear best candidate. This is markstay's
-  contribution in the no-marker case: 5 reworded blocks recovered that a hash alone
-  cannot.
+  selector still matches it as the clear best candidate. This is what the stored quote
+  adds in the no-marker case: 5 reworded blocks recovered that a hash alone cannot.
 - **`detached`** , two blocks were reworded past confident recognition. The section 9
   commit rule (a minimum score **and** a margin over the runner-up) refuses to guess
   and flags them outdated. That is the point: a missed block is recoverable by a human;
   a block silently attached to the wrong content is a corruption you never see.
 
-The whole run produces **zero wrong attachments**. That property, not the raw recovery
-rate, is what makes the recovery model safe to rely on.
+The whole run produces **zero wrong attachments**. That is the property to look for, more
+than the raw recovery rate, and this is one document: near-duplicate blocks do produce
+wrong ones, so treat a recovery as evidence to check.
 
 ## How honest is this number
 
 The recovery is best-effort and degrades as a rewrite drifts further from the original;
 the full [LLM attachment study](evaluation.md) measures it across 336 ids and three
 models, where it falls from 100% at high similarity to about a third at 0.3 to 0.5
-similarity, but the false-attachment rate stays near zero in every band. The single
-residual failure mode is near-duplicate blocks, where content recovery can bind to the
-wrong twin.
+similarity, but the false-attachment rate stays near zero in every band. Near-duplicate
+blocks are the main failure mode, where content recovery can bind to the wrong twin. The
+other measured failures include a verbatim copy left behind when its original is edited or
+deleted, and a list split in two in the [replay of private history](evaluation.md#ids-against-id-free-matching).
 
 So in normal use you would also give the model the section 11 preservation instruction,
 so the markers rarely get stripped at all (that is what the
 [dogfood case study](dogfood.md) measures). This demo is the worst case, markers fully
-gone, and identity still holds.
+gone, and the stored evidence still finds most blocks.
 
 ## Reproduce it
 

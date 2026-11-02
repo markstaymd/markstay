@@ -4,8 +4,8 @@
 incremental ingestion: it hashes chunks, skips unchanged ones, and deletes records for
 chunks that vanished. markstay does not replace that machinery, and it does not beat a
 good content-hash pipeline on embedding count. It adds the missing identity layer for
-Markdown blocks: duplicate blocks stay distinct, edited blocks keep a durable handle,
-and moved blocks keep the same record.
+Markdown blocks: duplicate blocks stay distinct and edited blocks keep a durable handle.
+A block moved within its document keeps its record, as it does under a content hash.
 
 The short version: a content hash is good cache invalidation, but it is not identity.
 It changes when the text changes, and byte-identical blocks share the same key.
@@ -19,7 +19,8 @@ markstay supplies a [stable block id](spec.md) plus a [body hash](spec.md): the 
     ones. This page does **not** claim a savings number.
 
     What markstay adds *at the same embedding cost* is correctness a content hash cannot
-    provide, proven live on real Claude Sonnet edits of a four-document corpus:
+    provide. The demo shows the stable id on a real Claude Sonnet edit and the duplicate
+    case on a small constructed document:
 
     - **Byte-identical blocks kept distinct.** A doc with two verbatim-identical blocks:
       the content-hash key stores **2** records (the duplicate collapses, one block is

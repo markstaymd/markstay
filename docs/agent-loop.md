@@ -75,7 +75,8 @@ The fix is the thing this specification is about. The baseline is now resolved *
 stay id**: a modified path uses its own previous version, a rename uses the old path,
 and a file git reports as newly added is paired with the document deleted in the same
 commit that shares the most stay ids. A surviving id anchored the pairing at 2%
-similarity, where nothing content-based could have. An id that moved to a different
+whole-file similarity, where git's rename detection could not; a per-block content match
+was not tried on that commit. An id that moved to a different
 document is reported as a *move* rather than a loss, which also stopped the check from
 blocking legitimate cross-file reorganisation.
 

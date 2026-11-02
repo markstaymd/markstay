@@ -6,16 +6,17 @@
 python demo.py
 ```
 
-Answers the one objection markstay always gets , *"an LLM will just delete your
-`<!-- stay -->` comments"* , by deleting them and showing markstay re-attach each
-original id anyway, from content hash + quote alone. It replays a **real** sonnet
+Tests the objection *"an LLM will just delete your `<!-- stay -->` comments"*
+by deleting them and using stored content hash and quote evidence to re-find most
+original blocks. This tests the evidence, and the same hash and quote work without
+ever writing a marker. It replays a **real** sonnet
 rewrite (captured once in `demo_fixture.json`, markers stripped) so the headline
 number is a genuine model's output but the demo is deterministic and free to run:
 
 ```
 HEADLINE
   8/10 blocks re-identified, 0 misattached  (recovery 80%, false-attach 0%)
-  Without markstay (exact content match only): 3/10 recover.
+  Exact content match alone: 3/10 recover.
 ```
 
 Per-block it prints which tier recovered each id (hash / quote) and which blocks

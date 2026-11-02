@@ -52,7 +52,7 @@ meta = {k: fx[k] for k in ("doc", "model", "task", "captured")}
 out = D.render(meta, rows, s, live=False)
 check("render shows the headline", "HEADLINE" in out)
 check("render states recovery + false-attach", "recovery" in out and "false-attach" in out)
-check("render names the baseline contrast", "exact content match only" in out)
+check("render names the baseline contrast", "Exact content match alone" in out)
 check("render has no false-attachment banner", "FALSE ATTACHMENT" not in out)
 check("render points at the live reproduce path", "--live" in out)
 

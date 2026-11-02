@@ -136,7 +136,7 @@ the title and code) and, where the text was reworded, from the quote selector as
 clear best match. Two blocks were reworded past confident recognition; the
 [section 9 commit rule](spec.md) refuses to guess and flags them outdated rather than
 binding them to the wrong block. The run produces **zero wrong attachments**, the
-property that makes recovery safe to rely on. Plate has no reader at all, so its
+property to look for, on this one document. Plate has no reader at all, so its
 recovery here is zero.
 
 ## Honest scope
@@ -147,7 +147,7 @@ recovery here is zero.
   (the [attachment study](evaluation.md) measures the full curve). In normal use you
   would also give the model the [section 11 preservation instruction](spec.md) so the
   markers rarely get stripped at all; this demo is the worst case, markers fully gone,
-  and identity still holds.
+  and the stored evidence still finds most blocks.
 - The bridge is pinned to a captured `@platejs/markdown` format and re-verified when
   Plate bumps it, so the worked example tracks real Plate output rather than a guess.
 

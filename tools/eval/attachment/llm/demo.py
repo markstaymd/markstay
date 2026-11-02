@@ -125,16 +125,16 @@ def render(meta: dict, rows: list, s: dict, live: bool) -> str:
              % (s["correct"], s["n"], s["wrong"], rec,
                 round(100 * s["wrong"] / s["n"]) if s["n"] else 0))
     L.append("")
-    L.append("  Without markstay (exact content match only): %d/%d recover."
+    L.append("  Exact content match alone: %d/%d recover."
              % (s["exact"], s["n"]))
-    L.append("  The quote selector + the id recover %d more reworded block(s) that a"
+    L.append("  The stored quote selector recovers %d more reworded block(s) that a"
              % s["quote_saves"])
     L.append("  content hash alone would miss, and the §9 commit rule (score + margin)")
     L.append("  turns the unrecoverable ones into a safe \"outdated\", never a wrong guess.")
     L.append("")
     L.append("In normal use you'd also give the model the §11 preserve instruction so the")
     L.append("markers rarely get stripped at all (see markstay.org/dogfood). This demo is")
-    L.append("the worst case , markers fully gone , and identity still holds.")
+    L.append("the worst case , markers fully gone , and the stored evidence still finds most blocks.")
     L.append("")
     if not live:
         L.append("Reproduce against a live model (needs an API key):")

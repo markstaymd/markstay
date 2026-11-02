@@ -120,7 +120,7 @@ The paragraph being identified.
 
 ## Agent edit request
 
-Without stable ids, an agent has to describe its target in fragile prose:
+Without stable ids, an agent describes its target by location or by its text:
 
 ```json
 {

@@ -49,9 +49,12 @@ a thing other annotation products can adopt.
 v1 makes the call: the source layer. Markdown is already the interchange format for
 human and agent edits, it travels across tools, and it diffs cleanly in Git, so the id
 should travel in the text. The argument against, that an editor or a sidecar file could
-carry richer identity without cluttering the prose, is real, but the
-[evaluation](evaluation.md) found the sidecar approach worse where it matters most:
-out-of-band frontmatter survived LLM editing *worse* than inline markers. Disagreement
+carry richer identity without cluttering the prose, is real. The
+[evaluation](evaluation.md) tested the out-of-band form closest to the text, and a
+frontmatter id map survived LLM editing *worse* than inline markers. It did not test a
+separate sidecar file, which a rewrite of the document never touches, and
+[evidence kept outside the text](evaluation.md#ids-against-id-free-matching) came close to
+inline ids within one document. Disagreement
 is still welcome and would inform later versions.
 
 ## Will LLMs actually preserve the markers?
@@ -102,12 +105,13 @@ the HTML-comment form.
 
 ## Why now?
 
-Because the use case that makes block identity urgent did not exist at scale until
-recently: agents that read, edit, and regenerate Markdown documents as a routine part
-of their work. Code already has a strong identity substrate (paths, symbols, commit-
-anchored lines). Markdown prose does not, and agents fall back to fuzzy text matching
-that breaks under ordinary edits. The gap was tolerable when only humans edited
-Markdown by hand; it is sharper now.
+Because the use case that raises the question did not exist at scale until recently:
+agents that read, edit, and regenerate Markdown documents as a routine part of their
+work. Code already has a strong identity substrate (paths, symbols, commit-anchored
+lines). Markdown prose does not, so agents name a block by describing it or by matching
+its text. Matching held up on the one edit history measured, and it fails on
+near-duplicate blocks and heavy rewrites. How much a marker on every block is worth over
+that is [still an open question](evaluation.md#ids-against-id-free-matching).
 
 ## Is "markstay" the final name?
 
