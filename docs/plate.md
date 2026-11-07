@@ -25,21 +25,23 @@ half.
     - **Recovery after a full marker strip:** markstay re-identifies **6 of 8** blocks,
       **0 misattached**; Plate recovers **0**.
     - The conversion **round-trips losslessly** for supported blocks; Plate's own
-      `deserializeMd` does not (see below).
+      `deserializeMd` restores neither the ids nor the block types (see below).
 
 ## What Plate writes, and what it leaves out
 
 `serialize({ withBlockId: true })` is **serialize-only**, verified against
-`@platejs/markdown` 53.2.2:
+`@platejs/markdown` 53.2.2 and 53.5.3:
 
 - **No content fingerprint.** The wrapper is an id and nothing else. If an agent
   rewrites the block's text, the id still points at it, but nothing records that the
   content changed. You cannot tell a stale annotation from a current one.
-- **No reader, and a lossy round-trip.** Feeding `withBlockId` output back through
-  Plate's own `deserializeMd` recovers `id: null` for every block **and** turns each
-  wrapper into a paragraph of literal `<block …>` text, flattening headings, code, and
-  quotes and dropping inline marks. Re-importing a `withBlockId` document does not just
-  lose the ids, it corrupts the content.
+- **No reader.** Feeding `withBlockId` output back through Plate's own `deserializeMd`
+  recovers `id: null` for every block **and** turns each wrapper into a paragraph of
+  literal `<block …>` text, so a heading, code block or quote inside it is no longer one in
+  the editor. Through 53.3.17 that paragraph also flattened the content and dropped inline
+  marks, so re-importing corrupted the document. From 53.3.18 it keeps the source as raw
+  text and writes it back on save, which stops the corruption and still restores no id
+  and no block type.
 - **No recovery.** If the visible `<block>` wrapper is stripped (a reformat, a paste, an
   agent that drops it), the id is simply gone.
 
@@ -47,6 +49,26 @@ markstay carries the same id plus a body hash (the
 [drift signal](spec.md), section 8) and a quote selector (the
 [recovery model](spec.md), section 9), so it answers "did this block change?" and
 "which new block is this old one?" that `withBlockId` cannot.
+
+### Plain Plate saves of markstay documents
+
+Since 53.3.18, markstay's own markers survive a plain Plate save. With Plate's
+recommended `remarkGfm` + `remarkMdx` setup and its list and table plugins, a markstay
+document loaded into and saved from a headless Plate editor with no markstay code keeps
+every block, list-item and table-row marker on its block. That was measured at 53.3.18
+and 53.5.3 on one document carrying 10 markers. The save has two costs:
+
+- **A blank line before each block marker.** Readers still bound each block marker to
+  the block above in that document, but the blank line breaks the
+  [§5](spec.md#5-attachment-model) writer rule, which puts a marker directly after its
+  block's last line of content. That rule matters for a block with blank lines inside
+  it, such as a loose list or a fence with internal blank lines, and neither was tested.
+  Nor was the MDX comment-expression marker form.
+- **List and table reformatting.** Plate rewrites list glyphs and pads table cells,
+  which drifts those blocks' hashes once until you restamp.
+
+Without `remarkMdx`, every version from 53.2.2 to 53.5.3 rewrites each marker as escaped
+`{/\* … \*/}` text that no reader recognises.
 
 ## The bridge
 
@@ -61,7 +83,8 @@ markstay's invisible trailing comment, at the same block boundary:
 The id is carried over **verbatim** (Plate's default `nanoid(10)` already satisfies the
 markstay id grammar), now with a content hash and recoverability attached. A reverse
 direction re-wraps a markstay document as `withBlockId`, so a Plate user can round-trip
-through markstay and back, losslessly, which Plate's native deserialize cannot do.
+through markstay and back with ids and block types intact, which Plate's native
+deserialize does not restore.
 
 The bridge is **fail-closed**. It converts the block kinds whose identity markstay can
 carry under the dependency-free baseline, a heading, a paragraph, a single-paragraph
@@ -87,39 +110,49 @@ wrong id is worse than one that tells you it cannot.
 
 The demo runs in one command with no API key. It replays the same captured Sonnet
 rewrite the [attachment study](evaluation.md) uses, so the numbers are a genuine
-model's output while staying deterministic:
+model's output while staying deterministic. This is its full output against the
+published `markstay` 0.14.0:
 
 ```text
 Plate withBlockId vs markstay , what survives an AI edit of the same .md?
 
-  source  : a real sonnet 'restructure' rewrite, mean block similarity 0.713
-  doc     : 10 blocks; markstay bridges 8 (the list + table are below
-            block granularity)
-            skipped b4: "- The partner identifier resolves to an…"
-            skipped b8: "| Stage | Retries | Backoff |"
+  source  : a real sonnet 'restructure' rewrite (captured 2026-06-22), mean block similarity 0.713
+  doc     : 10 blocks; markstay bridges 8 (the list + table are below block granularity, SPEC §5.1/§14)
+            skipped b4-91e5: "- The partner identifier resolves to an…"
+            skipped b8-1f07: "| Stage | Retries | Backoff |"
 
 WORKFLOW 1 , did a block's content drift? (edit, then check)
-  markstay  : 6/8 bridged blocks flagged HASH_DRIFT (stored hash != new body)
-  Plate     : 0/8 , the <block id> wrapper carries no hash, drift is undetectable
+  markstay  : 6/8 bridged blocks flagged HASH_DRIFT (stored §8 hash != new body)
+              · b1-453e drifted
+              · b2-172a drifted
+              · b3-6484 drifted
+              · b5-6088 drifted
+              · b7-1f32 drifted
+              · b9-4451 drifted
+  Plate     : 0/8 , the <block id> wrapper carries no hash, so drift is undetectable
+              (0 markstay markers survive in the Plate form, by construction)
 
-WORKFLOW 2 , the markers got stripped ("an AI deletes them"). Which old
-            block is which new one?
+WORKFLOW 2 , the markers got stripped (the skeptic's "an AI deletes them").
+            Which old block is which new one?
   old id     tier      conf   recovered
   ----------------------------------------------------------
   b0-0ef9    hash      1.00  ✓ #0
-  b1-453e    quote     0.75  ✓ #1
-  b2-172a    quote     0.65  ✓ #2
-  b3-6484    detached  0.44  ○ outdated
-  b5-6088    quote     0.70  ✓ #4
+  b1-453e    quote     0.77  ✓ #1
+  b2-172a    quote     0.67  ✓ #2
+  b3-6484    detached  0.46  ○ outdated 
+  b5-6088    quote     0.73  ✓ #4
   b6-7c6e    hash      1.00  ✓ #5
-  b7-1f32    detached  0.50  ○ outdated
-  b9-4451    quote     0.56  ✓ #7
+  b7-1f32    detached  0.51  ○ outdated 
+  b9-4451    quote     0.57  ✓ #7
 
 HEADLINE
   Drift     : markstay flags 6 edited blocks; Plate flags 0 (no hash channel).
   Recovery  : 6/8 blocks re-identified after a full marker strip, 0 misattached.
-              Plate recovers 0; exact-content match alone gets 2, the quote
-              tier recovers the reworded rest.
+              Plate recovers 0 (no reader; its deserialize returns id:null). Exact-content
+              match alone gets 2; the §9 quote tier recovers the reworded rest.
+
+So Plate writes the id; markstay makes it mean something across an edit: it
+detects the drift and re-finds the block when the marker is gone.
 ```
 
 ## What you are seeing
