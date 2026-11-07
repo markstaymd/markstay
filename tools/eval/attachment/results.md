@@ -60,18 +60,18 @@ Blocks that share most of their wording and differ by a single token (a stage na
 | edit_in_place | 8 | 5 | 0 | 3 | 0 | 0 |  62% |   0% |
 | heavy_paraphrase | 8 | 8 | 0 | 0 | 0 | 0 | 100% |   0% |
 | split | 8 | 8 | 0 | 0 | 0 | 0 | 100% |   0% |
-| merge | 8 | 6 | 2 | 0 | 0 | 0 |  75% |  25% |
+| merge | 8 | 6 | 0 | 2 | 0 | 0 |  75% |   0% |
 | delete | 8 | 7 | 0 | 0 | 1 | 0 | 100% |   0% |
 | insert | 8 | 8 | 0 | 0 | 0 | 0 | 100% |   0% |
 | decoy | 8 | 7 | 0 | 1 | 0 | 0 |  88% |   0% |
 | clone | 8 | 7 | 0 | 1 | 0 | 0 |  88% |   0% |
-| **all** | 72 | 64 | 2 | 5 | 1 | 0 | ** 90%** | **  3%** |
+| **all** | 72 | 64 | 0 | 7 | 1 | 0 | ** 90%** | **  0%** |
 
 ## Margin-guard ablation (the guard's whole job)
 
-Same adversarial cases, aggregated over all operators, with the runner-up margin requirement off vs on. The guard refuses a quote recovery unless there is a *clear* winner, trading recall (more safe *missed*) for fewer false reattachments.
+Same adversarial cases, aggregated over all operators, with the runner-up margin requirement off vs on. The guard refuses a quote recovery unless there is a *clear* winner, trading recall (more safe *missed*) for fewer false reattachments. Every block here carries a stay, so under §9.1's exclusive assignment (v1.11) two stays colliding on one block are contested and detach whatever the margin; the guard's remaining job is a near-duplicate with no stay of its own, which `test_attach.py` checks on the half-stamped document.
 
 | margin | recovery | false-rate | correct | wrong | missed | detach✓ |
 |-------:|---------:|-----------:|--------:|------:|-------:|--------:|
-| 0.0 |  93% |   8% | 66 | 5 | 0 | 0 |
-| 0.05 |  90% |   3% | 64 | 2 | 5 | 1 |
+| 0.0 |  93% |   0% | 66 | 0 | 5 | 1 |
+| 0.05 |  90% |   0% | 64 | 0 | 7 | 1 |

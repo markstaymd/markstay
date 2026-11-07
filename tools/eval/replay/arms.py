@@ -7,10 +7,10 @@ block bodies. None of them reads an id from the newer revision.
 
 Arms
 
-  ladder         SPEC.md §9.1 tiers 2 and 3, the shipped `resolver.resolve` with
-                 tier 1 unavailable. Same decisions as the shipped code on a
-                 markers-stripped document; `test_replay.py` checks that on real
-                 revision pairs.
+  ladder         SPEC.md §9.1 tiers 2 and 3 as v1.10 shipped them,
+                 `ladder_v110.resolve` with tier 1 unavailable. Same decisions as
+                 that code on a markers-stripped document; `test_replay.py` checks
+                 that on real revision pairs.
   hash           tier 2 alone.
   quote          tier 3 alone, the §9 commit rule (0.5 / 0.05).
   heading+quote  tier 3 with the `D12c` heading-path penalty from
@@ -51,7 +51,7 @@ from pathlib import Path
 _ATTACH = Path(__file__).resolve().parents[1] / "attachment"
 if str(_ATTACH) not in sys.path:
     sys.path.insert(0, str(_ATTACH))
-import resolver as R  # noqa: E402
+import ladder_v110 as R  # noqa: E402
 from quote import (  # noqa: E402
     _ratio,
     canonical_path,

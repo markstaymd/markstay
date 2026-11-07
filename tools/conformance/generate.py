@@ -86,14 +86,22 @@ def expect_parse(doc: str) -> list:
     return [block_dict(b) for b in L.parse_document(doc)]
 
 
+def _core(findings) -> list:
+    """Drop §5.4's optional parser advisory, as `run_py.corpus_findings` does.
+    The linter emits it only when `markdown_it` is importable, so without this
+    filter the frozen corpus depended on which interpreter ran the generator."""
+    return [f for f in L.sort_findings(findings)
+            if not (f.code == "OUTSIDE_SUBSET" and f.level == "info")]
+
+
 def expect_lint(doc: str) -> list:
     _, findings = L.lint_document(doc)
-    return [finding_dict(f, with_line=True) for f in L.sort_findings(findings)]
+    return [finding_dict(f, with_line=True) for f in _core(findings)]
 
 
 def expect_diff(before: str, after: str) -> list:
     findings = L.lint_diff(before, after)
-    return [finding_dict(f, with_line=False) for f in L.sort_findings(findings)]
+    return [finding_dict(f, with_line=False) for f in _core(findings)]
 
 
 def expect_seqmatch(a: str, b: str) -> dict:
@@ -443,7 +451,7 @@ def resolve_pairs() -> list[dict]:
 
     Every scenario carries a descriptive `name` and an `expect` claim naming the
     tier each anchor id must actually resolve through. A detach is claimed as
-    `detached:<reason>` (`threshold`, `margin` or `no-candidates`), because
+    `detached:<reason>` (`threshold`, `margin`, `contested` or `no-candidates`), because
     "detached" alone does not say which gate refused and the names here assert the
     gate. `resolve_vectors()` checks the claim against
     the freshly computed resolutions and strips it before writing, so a scenario
@@ -494,23 +502,33 @@ def resolve_pairs() -> list[dict]:
          "after": "Second paragraph here.\n\nFirst paragraph here.\n",
          "threshold": 0.5, "margin": 0.05,
          "expect": {"p1": "hash", "p2": "hash"}},
-        # Deleted block, bodies distinct enough that the survivor scores below
-        # threshold: the detach is a real refusal, not an accident of the corpus.
-        {"name": "deleted-block-detaches-below-threshold",
+        # Deleted block whose dissimilar survivor (0.31 against the deleted quote)
+        # is claimed by HASH, so no block is left to target and the stay detaches
+        # with score 0 (SPEC.md §9.1, v1.11). Through v1.10 this was named
+        # `deleted-block-detaches-below-threshold` and reported 0.31: the claimed
+        # block's score. Pins that a detached stay reports its best UNCLAIMED
+        # candidate, and 0 when there is none, where the survivor's score is below
+        # the threshold anyway. The threshold gate itself is pinned by
+        # `paraphrase-quote-recovers-one-detaches-other` below and by spec/.
+        {"name": "deleted-block-detaches-when-its-dissimilar-survivor-is-claimed",
          "before": ("The order pipeline ingests partner messages.\n<!-- stay:keep -->\n\n"
                     "Invalid payloads route to a dead-letter queue.\n<!-- stay:gone -->\n"),
          "after": "The order pipeline ingests partner messages.\n",
          "threshold": 0.5, "margin": 0.05,
-         "expect": {"keep": "hash", "gone": "detached:threshold"}},
+         "expect": {"keep": "hash", "gone": "detached:no-candidates"}},
         # The same deletion where the survivor is a formulaic near-twin of the
-        # deleted block: QUOTE commits the deleted id onto it. A false attachment,
-        # frozen deliberately because it is what the model does and every
-        # implementation must agree on it (SPEC.md §9's residual, not a bug).
-        {"name": "deleted-block-quote-attaches-to-similar-survivor",
+        # deleted block (0.79 against the deleted quote). Through v1.10 QUOTE
+        # committed the deleted id onto it, a false attachment frozen on purpose as
+        # §9's residual, under the name `deleted-block-quote-attaches-to-similar-
+        # survivor`. Exclusive assignment removes it: the survivor is claimed by
+        # HASH, so it is never a target, and the stay detaches with score 0 rather
+        # than the claimed block's 0.79, which would read as an `unmatched` stay
+        # scoring over the threshold.
+        {"name": "deleted-block-detaches-when-its-similar-survivor-is-claimed",
          "before": marker_kept,
          "after": "First paragraph here.\n",
          "threshold": 0.5, "margin": 0.05,
-         "expect": {"p1": "hash", "p2": "quote"}},
+         "expect": {"p1": "hash", "p2": "detached:no-candidates"}},
         {"name": "paraphrase-quote-recovers-one-detaches-other",
          "before": ("The order pipeline ingests and normalizes partner messages.\n"
                     "<!-- stay:ing -->\n\n"
@@ -578,26 +596,48 @@ def resolve_pairs() -> list[dict]:
 
 
 def _detach_reasons(before: str, after: str, threshold: float, margin: float) -> dict:
-    """Which §9 gate refused, per detached id. `detached` on its own is not a
-    branch: the threshold and the margin are separate refusals and a scenario
-    named for one of them can silently start exercising the other."""
+    """Which §9.1 gate refused, per detached id. `detached` on its own is not a
+    branch: the threshold, the margin, a contest and an empty pool are separate
+    refusals, and a scenario named for one of them can silently start exercising
+    another. Read from the resolver's own reason rather than re-derived, because
+    exclusive assignment (v1.11) decides against claimed blocks and contenders
+    that a whole-document `best_match` cannot see.
+
+    `no-candidates` means a stay reached QUOTE with no block left to target: none
+    at all, or every one claimed at the MARKER or HASH tier. A stay whose marker
+    survives is decided among its carriers whatever is claimed, so its refusal
+    is never `no-candidates`."""
     anchors = R.build_anchors(before)
-    bodies = [b.content for b in L.parse_document(after) if b.index >= 0]
+    res = R.resolve(anchors, after, threshold=threshold, margin=margin)
+    blocks = [b for b in L.parse_document(after) if b.index >= 0]
+    marked = {mk.id for b in blocks for mk in b.markers
+              if mk.id and not mk.malformed and not mk.has_subhash}
+    claimed = {r.target for r in res.values() if r.method in ("marker", "hash")}
+    pool_empty = all(i in claimed for i in range(len(blocks)))
+    by_reason = {"ambiguous": "margin", "contested": "contested"}
     out = {}
-    for a in anchors:
-        idx, score, runner = Q.best_match(a.selector, bodies)
-        if idx < 0:
-            out[a.id] = "no-candidates"
+    for rid, r in res.items():
+        if r.method != "detached":
             continue
-        # Report the gate that actually refused, in the order the resolver checks
-        # them. Once the threshold has failed the margin is moot, so naming both
-        # would credit a co-cause that decided nothing.
-        out[a.id] = "threshold" if score < threshold else "margin"
+        if r.reason == "unmatched":
+            out[rid] = ("no-candidates" if pool_empty and rid not in marked
+                        else "threshold")
+        else:
+            out[rid] = by_reason.get(r.reason, r.reason or "?")
     return out
 
 
 def resolve_vectors() -> list[dict]:
     """Freeze the resolve scenarios, enforcing each one's `expect` claim."""
+    # `_detach_reasons` itself, on a shape no scenario has: `a` is refused among
+    # its two carriers while `y` and `z` claim both blocks, which is a threshold
+    # refusal at tier 1 and never `no-candidates`.
+    probe = _detach_reasons(
+        "abcdef\n<!-- stay:a -->\n\nY body\n<!-- stay:y -->\n\nZ body\n<!-- stay:z -->\n",
+        "abc\n<!-- stay:a -->\n<!-- stay:y -->\n\ndef\n<!-- stay:a -->\n<!-- stay:z -->\n",
+        0.9, 0.05)
+    if probe != {"a": "threshold"}:
+        raise SystemExit(f"_detach_reasons mislabels a carrier refusal: {probe}")
     out = []
     for p in resolve_pairs():
         claim = p.pop("expect")

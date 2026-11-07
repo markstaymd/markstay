@@ -84,6 +84,78 @@ fence attach as a single block; the self-tests cover the recovery of each as one
 block. It is the linter's optional `markdown-it-py` extra, inherited through the
 reused `parse_document`.
 
+### Block-tier exclusivity and duplicated ids (experimental)
+
+```bash
+python excl_arms.py          # writes results_exclusivity.{json,md}, about fifteen seconds
+python test_excl_arms.py     # its self-tests (pytest runs them too)
+```
+
+`../../SPEC.md` §9.2 assigns child blocks exclusively, with historical uniqueness
+at the hash tiers; §9.1 does neither for blocks, and its tier 1 does not say what
+happens when one id's marker sits on two blocks. `excl_arms.py` prices both as
+opt-in arms over the same corpora: tier 2 exclusive, tiers 2 and 3 exclusive,
+two forms of a merge exemption, claimed blocks kept as margin rivals, and three
+tier-1 rules for a duplicated id
+(treat it as absent, resolve only among its carriers, detach it). Its `resolve`
+with every flag off returns what `ladder_v110.resolve` returns, which the tests
+assert over every corpus and operator. `t23dk+carriers` is every chosen rule at once,
+and `resolver.py` is that form as the reference from v1.11: `test_attach.py` checks
+the two agree, reasons included, on the near-duplicate and cross-section fixtures.
+
+`ladder_v110.py` freezes the §9.1 ladder as v1.10 shipped it, so a change to
+`resolver.py` moves no control and no dated number. `excl_arms`, `heading_arms`,
+`twin_corpus`, `measure_context`, `clamp_on_sections`, `llm/llm_attach`,
+`llm/run_llm_attach_eval` and `../replay` read it. `run_attach_eval`, `test_attach`,
+`llm/demo` and `../../conformance` stay on `resolver.py`, because they describe what
+ships. `heading_arms` runs through `run_attach_eval.run_case`, so it passes the frozen
+`resolve` in, and `resolve_variant` is frozen beside it, since `mutation_check.py`'s
+copy moves with the spec. `audit_cross_section` carries its own ladder, and
+`../dogfood` and `../openknowledge/score.py` read only the linter.
+
+The partly-marked run keeps every anchor and leaves a marker on every other id in the
+edited document, once for each parity, with all fourteen operators on all three
+corpora. It is the run where tiers 2 and 3 meet blocks claimed at tier 1. It was
+registered after a probe of the same sweep, so it is not blind, which finding 9 says.
+
+The merge exemption decides placement like this. Let q1 to qk be the contending
+stays' quotes and B the body of the block they contend for, each after §9's quote
+normalization (ASCII letters lowercased, runs of ASCII whitespace collapsed to one
+space, ends trimmed), not §8's hash normalization. Offsets and lengths count
+Unicode code points of those normalized strings, and an occurrence of q at offset
+p is the half-open span [p, p + len(q)), so two occurrences may touch without
+overlapping. The contenders are indexed, so two stays with the same quote text are
+two contenders that need two occurrences. If any qi is empty the exemption fails;
+with no contenders it holds. Otherwise it holds when the k occurrences can be
+chosen so that no two overlap, decided as follows. For each subset S of the
+contenders, end(S) is the smallest offset e such that every quote in S has an
+occurrence inside B[0, e), no two overlapping. end of the empty set is 0. end(S)
+is the minimum, over each qi in S whose end(S without qi) is defined and for
+which find(qi, end(S without qi)) exists, of that find plus len(qi), where
+find(q, p) is the smallest offset at or after p at which q occurs in B; end(S) is
+undefined when no qi qualifies. The exemption holds when end of the full set is
+defined. When the quotes' total length exceeds the length of B, it fails
+immediately, which never changes the answer. The procedure makes 2^k times k
+substring searches, each linear in the length of B under a linear-time search
+algorithm. That is exponential only in the number of contenders, the handful of stays that
+reached one block, and independent of how often a quote occurs. `resolver.py` and the
+conformance corpus fail the exemption outright when more than 16 stays contend,
+checked before the length check (FINDINGS.md finding 9; at §9's defaults no more than
+four can reach the test); the arm has no cap, which differs only above 16 contenders
+at a caller's lower threshold.
+
+The operators it needs live in `perturb.EXCL_OPERATORS`, kept out of `OPERATORS`
+so `results.md` is still measured over the operator set it always was: `replace`
+(unrelated text in a block's slot, so the old id must detach), `replace_related`
+(a same-topic replacement whose detach truth is semantic), `swap_edit`, and twelve
+`copy_*` operators that paste a marked paragraph above or below it or at either
+end of the document, verbatim, with the copy edited, or with the original edited.
+`perturb.TWIN_EDIT_OPERATORS` holds `edit_into_twin`, which rewrites one marked paragraph
+into another's exact text, each keeping its own id: the one shape that reaches exclusive
+tier 2's claimed filter. It runs only partly marked, apart from `EXCL_OPERATORS`, whose
+published sweeps it would otherwise move. The arms also run on a half-stamped variant where
+only every other block carries a marker. The verdict is finding 9 in `FINDINGS.md`.
+
 ### Detached diagnostics
 
 `Resolution.method` keeps the stable `marker | hash | quote | detached` axis.
@@ -113,6 +185,7 @@ tier attaches the stay, the final detached result retains the strongest contest.
 | File | Role |
 |------|------|
 | `resolver.py` | the evidence ladder: marker -> hash -> quote -> DETACHED, with detached reasons and diagnostic candidates. Reuses the linter's `parse_document` / `body_hash`. |
+| `ladder_v110.py` | that ladder and its parameterised form as spec v1.10 shipped them, frozen for the arms and dated records. |
 | `quote.py` | W3C `TextQuoteSelector`-style recovery: similarity + exact-containment + prefix/suffix tiebreak, with a compatibility wrapper over ranked candidates. |
 | `perturb.py` | deterministic edit operators (reorder, edit, heavy-paraphrase, split, merge, delete, insert, decoy, clone) with ground-truth tracking. |
 | `run_attach_eval.py` | harness, scoring, report. |
@@ -123,16 +196,24 @@ tier attaches the stay, the final detached result retains the strongest contest.
 | `results_crosssection_fixture.{json,md}` | that fixture's control baseline under the shipped resolver, with the fixture's measured shape. |
 | `heading_arms.py` | the heading-path arms: thirteen configurations x four corpora, with Clopper-Pearson intervals and a case-by-case regression list against the control. |
 | `results_headingpath.{json,md}` | what those arms measured. |
+| `excl_arms.py` | the exclusivity and duplicated-id arms, with Clopper-Pearson intervals and a case-by-case comparison against the control. |
+| `results_exclusivity.{json,md}` | what those arms measured. |
+| `test_excl_arms.py` | the arms' and the identity-boundary operators' self-tests. |
 | `FINDINGS.md` | what the data says and what it means for the spec. |
 
 ## Headline
 
 On lexically distinct prose: 99% correct re-attachment, 0% false attachment
-(hash does 81% of the work, exactly). On near-duplicate blocks: false attachment
-appears (3% with the guard, 8% without), worst on merge. Takeaway: content
+(hash does 81% of the work, exactly). On near-duplicate blocks the v1.10 ladder
+attaches falsely (3% with the guard, 8% without), worst on merge. v1.11's
+exclusive assignment (SPEC.md §9.1) detaches those collisions instead, and
+`results.md` now reads 0 of 72 wrong both ways, its two merge errors become two
+misses. That second number is in-sample: this fixture is one of the three
+corpora the rule was chosen on (`FINDINGS.md` finding 9). Takeaway: content
 recovery is best-effort evidence, not authority; the surviving id token and exact
 hash are the trustworthy signals, and the margin guard (default to DETACHED on a
-near-tie) is mandatory. See `FINDINGS.md`.
+near-tie) is mandatory, since a near-duplicate with no stay of its own has
+nothing to contest it. See `FINDINGS.md`.
 
 The experimental item-granularity matrix measures 95.0% recovery, 0.0% false
 attachment (0/324), and 5.0% detach on surviving items, with a 95%

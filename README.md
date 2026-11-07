@@ -20,7 +20,7 @@ Users authenticate with an API key in the Authorization header.
 The id is the identity. An optional `hash` detects drift and an optional `quote`
 helps recover a detached marker, but neither is ever identity. See the
 [specification](https://markstay.org/spec/) for the full grammar, attachment model,
-hashing rule, and recovery ladder. The current version is **1.1** (settled).
+hashing rule, and recovery ladder. The current version is **1.11** (settled).
 
 ## Layout
 

@@ -23,7 +23,7 @@ The relevant count is the cross-section one: a clean run can only certify the pr
 | Edit | n | correct | wrong | missed | detach✓ | false-attach | recovery | false-rate |
 |------|--:|--------:|------:|-------:|--------:|-------------:|---------:|-----------:|
 | reorder | 44 | 33 | 0 | 11 | 0 | 0 |  75% |   0% |
-| edit_in_place | 44 | 32 | 2 | 10 | 0 | 0 |  73% |   5% |
+| edit_in_place | 44 | 31 | 0 | 13 | 0 | 0 |  70% |   0% |
 | heavy_paraphrase | 44 | 28 | 0 | 16 | 0 | 0 |  64% |   0% |
 | split | 44 | 33 | 0 | 11 | 0 | 0 |  75% |   0% |
 | merge | 44 | 32 | 0 | 12 | 0 | 0 |  73% |   0% |
@@ -34,9 +34,9 @@ The relevant count is the cross-section one: a clean run can only certify the pr
 | cross_section_move | 44 | 33 | 0 | 11 | 0 | 0 |  75% |   0% |
 | cross_section_move_edit | 44 | 33 | 0 | 11 | 0 | 0 |  75% |   0% |
 | section_move | 44 | 33 | 0 | 11 | 0 | 0 |  75% |   0% |
-| heading_rename | 44 | 34 | 2 | 8 | 0 | 0 |  77% |   5% |
+| heading_rename | 44 | 33 | 0 | 11 | 0 | 0 |  75% |   0% |
 | heading_delete | 44 | 32 | 0 | 11 | 1 | 0 |  74% |   0% |
-| **all** | 616 | 452 | 4 | 158 | 2 | 0 | ** 74%** | **  1%** |
+| **all** | 616 | 450 | 0 | 164 | 2 | 0 | ** 73%** | **  0%** |
 
-Control: ** 74% recovery,   1% false attachment** over 616 resolutions.
+Control: ** 73% recovery,   0% false attachment** over 616 resolutions.
 

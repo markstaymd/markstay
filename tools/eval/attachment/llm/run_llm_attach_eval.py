@@ -28,7 +28,7 @@ _EVAL = Path(__file__).resolve().parents[2]
 if str(_EVAL) not in sys.path:
     sys.path.insert(0, str(_EVAL))
 import perturb as PB  # noqa: E402
-import resolver as R  # noqa: E402
+import ladder_v110 as R  # noqa: E402
 import providers as P  # noqa: E402
 
 sys.path.insert(0, str(_EVAL.parent / "impl" / "py" / "src"))

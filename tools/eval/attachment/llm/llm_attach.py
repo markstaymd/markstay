@@ -48,8 +48,8 @@ for p in (str(_ATTACH), str(_EVAL)):
         sys.path.insert(0, p)
 
 import perturb as PB  # noqa: E402
-import resolver as R  # noqa: E402
-import markstay_lint as L  # noqa: E402  (path set up by resolver import)
+import ladder_v110 as R  # noqa: E402
+import markstay_lint as L  # noqa: E402  (path set up by the ladder import)
 from quote import normalize  # noqa: E402
 
 # --- rewrite tasks: a spread of intensities to span the similarity range ----

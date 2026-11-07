@@ -110,7 +110,7 @@ def test_ladder_matches_the_shipped_resolver_on_stripped_history():
                 drifted += shipped[a.id].method == "quote" or shipped[a.id].method == "detached"
                 agree &= shipped[a.id].target == fast[a.id]
                 check(f"{doc}: no marker tier once stripped", shipped[a.id].method != "marker")
-    check("ladder decisions equal resolver.resolve", agree)
+    check("ladder decisions equal ladder_v110.resolve", agree)
     check(f"the comparison reaches the quote tier ({drifted} of {total})", drifted > 20 and total > 300)
 
 
@@ -318,7 +318,7 @@ def test_ids_plus_ladder_matches_the_shipped_resolver_with_markers_kept():
                 n += 1
                 fallback += a.id not in c.new.ids
                 agree &= shipped[a.id].target == ours[a.id]
-    check(f"ids+ladder equals resolver.resolve with markers kept ({fallback} fallbacks of {n})",
+    check(f"ids+ladder equals ladder_v110.resolve with markers kept ({fallback} fallbacks of {n})",
           agree and fallback > 20)
 
 

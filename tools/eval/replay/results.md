@@ -416,13 +416,13 @@ unclaimed block at 0.8+ (the `repair` rule). `lost_block_survives` sums the four
 
 | document | edits | relocated | lost_block_survives | removed | xmove | adopted | verbatim_reminted | verbatim_unstamped | near_reminted | near_unstamped | newly_duplicated | lint_DROPPED_ID | lint_DUPLICATED_ID | lint_RELOCATED_ID | lint_NEW_ID |
 |---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|
-| `CLAUDE.md` | 30 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| `CLAUDE.md` | 30 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 |
 | `NEIGHBOURS.md` | 11 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 47 |
-| `ROADMAP.md` | 36 | 2 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 8 |
-| `SPEC.md` | 42 | 6 | 125 | 79 | 0 | 0 | 8 | 110 | 7 | 0 | 0 | 204 | 1 | 0 | 321 |
-| `SPEC_DECISIONS.md` | 44 | 4 | 10 | 87 | 0 | 0 | 0 | 10 | 0 | 0 | 0 | 98 | 0 | 0 | 305 |
+| `ROADMAP.md` | 36 | 2 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 2 | 8 |
+| `SPEC.md` | 42 | 6 | 125 | 79 | 0 | 0 | 8 | 110 | 7 | 0 | 0 | 204 | 1 | 6 | 321 |
+| `SPEC_DECISIONS.md` | 44 | 4 | 10 | 87 | 0 | 0 | 0 | 10 | 0 | 0 | 0 | 98 | 0 | 4 | 305 |
 | `eval/attachment/FINDINGS.md` | 5 | 0 | 1 | 8 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 9 | 0 | 0 | 40 |
-| **all** | 168 | 13 | 136 | 174 | 0 | 0 | 9 | 120 | 7 | 0 | 0 | 311 | 1 | 0 | 721 |
-| **per 100 edits** | 100 | 7.7 | 81.0 | 103.6 | 0.0 | 0.0 | 5.4 | 71.4 | 4.2 | 0.0 | 0.0 | 185.1 | 0.6 | 0.0 | 429.2 |
+| **all** | 168 | 13 | 136 | 174 | 0 | 0 | 9 | 120 | 7 | 0 | 0 | 311 | 1 | 13 | 721 |
+| **per 100 edits** | 100 | 7.7 | 81.0 | 103.6 | 0.0 | 0.0 | 5.4 | 71.4 | 4.2 | 0.0 | 0.0 | 185.1 | 0.6 | 7.7 | 429.2 |
 
-Edits with at least one such event, out of all edits: lint_DROPPED_ID 15, lint_DUPLICATED_ID 1, lint_NEW_ID 66, lost_block_survives 14, near_reminted 1, relocated 13, removed 12, verbatim_reminted 4, verbatim_unstamped 10.
+Edits with at least one such event, out of all edits: lint_DROPPED_ID 15, lint_DUPLICATED_ID 1, lint_NEW_ID 66, lint_RELOCATED_ID 13, lost_block_survives 14, near_reminted 1, relocated 13, removed 12, verbatim_reminted 4, verbatim_unstamped 10.

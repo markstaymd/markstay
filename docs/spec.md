@@ -1,5 +1,5 @@
-# markstay specification, version 1.10
-<!-- stay:umd0IOWq hash=sha256:ade51c0c391c -->
+# markstay specification, version 1.11
+<!-- stay:umd0IOWq hash=sha256:6334f9dccc6b -->
 
 Status: **normative, stable.** This is the markstay standard, not a proposal.
 Version 1 pins the marker grammar, attachment model, hashing, and recovery
@@ -33,11 +33,18 @@ reported the document clean. **Version 1.10 takes one case back out of that
 requirement**: a block stay rewritten in place as a child stay, which is how a tool
 adopts a hand-written stay on a list item as that item's own, keeps its id and is
 reported as a warning rather than as a drop. The test is lexical, so every linter
-applies it. The reference linter (`linter/`), the resolver used by the attachment eval
-(`eval/attachment/`), and the Python writer implement version 1.10. The JavaScript
+applies it. **Version 1.11 makes §9.1 assign blocks exclusively**: a block committed
+at one tier is claimed for the weaker ones, a duplicated id resolves only among the
+blocks that carry it, and stays that select one block all commit only when their
+quotes sit at separate places in it. It also makes a relocated id an error (§11) when
+an edit types a block between another block and its trailing marker, and stops a
+writer inserting a marker into a leading span that §5.3 rejects as frontmatter only
+for a blank line, which a frontmatter reader outside markstay may still parse as YAML.
+The reference linter (`linter/`), the resolver used by the attachment eval
+(`eval/attachment/`), and the Python writer implement version 1.11. The JavaScript
 and Rust cores implement the mandatory rules and decline optional child identity. Where this document and the reference code disagree, this document is
 authoritative and the code is a bug.
-<!-- stay:DraQ5ZPq hash=sha256:18673e0e87ee -->
+<!-- stay:DraQ5ZPq hash=sha256:38aecb003606 -->
 
 **Version 1.3 adds §5.5 and §9.2**, which let a **direct list item carry its own
 stay**, addressed inside its list rather than as a block of its own. It is an
@@ -128,8 +135,10 @@ block currently sits. This split is the one idea the whole spec rests on.
 
 The `id` is the identity. `hash` and `quote` are **never** identity, only
 evidence. A `hash` mismatch with the marker present means "same block, changed
-content," not "new block."
-<!-- stay:oWXdTy8G hash=sha256:a2ddd56ca21c -->
+content," not "new block," and that reading is only as good as the marker's placement:
+an edit that types a block between another block and its trailing marker leaves the
+marker on the new block, which a linter reports as a relocated id (§11).
+<!-- stay:oWXdTy8G hash=sha256:7c201ea9c416 -->
 
 ### 2.2 Same stay or new stay
 <!-- stay:SPB1M7vv hash=sha256:42b84ff031a5 -->
@@ -880,9 +889,41 @@ same call every mainstream Markdown site generator makes on the same bytes. What
 conditions 3 and 4 buy is not the absence of false positives, it is that the
 ambiguity is confined to documents of exactly this shape: an opening thematic
 break, no blank line before the closer, and a payload line that reads as YAML.
-Everything else fails towards ordinary Markdown, where the worst case is a
-spurious block and a stray drift warning.
-<!-- stay:zBULIRwq hash=sha256:20c7afebd569 -->
+Everything else fails towards ordinary Markdown, where a reader's worst case is a
+spurious block and a stray drift warning. A writer's can be worse, and the next
+rule covers it.
+<!-- stay:zBULIRwq hash=sha256:481e30e0143a -->
+
+**A writer MUST NOT write into a span rejected only for a blank line (v1.11).** When
+line 1 opens a span, condition 2 fixes its closer at line *n*, the payload holds a
+blank line (so condition 3 fails; blank in §5's ASCII sense, so a line of only form
+feeds or vertical tabs counts), and at least one
+payload line satisfies condition 4, the document has no frontmatter, and readers
+segment lines 1 to *n* as ordinary Markdown as above. That is the shape of real YAML
+with a blank line in it, which a static site generator, an issue-template reader or
+a skill loader still parses as metadata, so a marker written there lands inside what
+those tools read. A conforming writer therefore MUST NOT insert a marker on lines 1
+to *n*, and a block that starts on those lines gets no minted stay. A child block
+(§5.5, §5.6) that starts there gets none either, whatever happens to its container
+(the `items` profile's `a-list-item-inside-a-refused-frontmatter-span-is-not-stamped`
+vector pins it). Refreshing a marker already on those lines is not an insertion, as
+in §3.4. Recognition does not change: the document still has no frontmatter, its
+lines still segment and hash as Markdown, and a reader still binds a marker it finds
+there.
+<!-- stay:YCMIKaF9 hash=sha256:107c1c05960c -->
+
+The span is the one condition 2 fixes: the first closer ends it, and a later `---`
+or `...` neither extends nor reopens it. The rule reaches each segmenter only through
+which block starts where. Under §5.1 a blank-line block that starts inside the span
+and runs on past the closer starts on those lines and is refused whole, while §5.2
+reads the closer as a thematic break or a setext underline and stamps a block that
+begins after it, so the two segmenters can stamp different blocks here, in a
+document already outside §5.4's agreement subset. The refusal errs in one direction
+only: prose between two thematic breaks, with a blank line inside and a line that
+happens to read as a key (`Note: this.`), is refused and stays unstamped, which costs
+a stay and breaks nothing. Of 3166 Markdown files taken from npm packages, 3 have the
+shape, and all three are real YAML.
+<!-- stay:51gjHehR hash=sha256:facbd4b150cb -->
 
 The whitespace sets above are **ASCII**, spelled out as character ranges rather than
 delegated to a language's "whitespace" or "non-whitespace" class, for the same
@@ -1655,25 +1696,106 @@ Normative parameters of the reference recovery model:
 <!-- stay:Dr9XpGtH hash=sha256:bbc1c5ffef6d -->
 
 Quote recovery is **best-effort evidence, never authority.** The trustworthy
-signals are the surviving id (kept via §11) and the exact `hash` (§8); the
-attachment eval measures the hash tier alone recovering 81% of moved-but-unchanged
-blocks with zero false attachment, while quote recovery on near-duplicate blocks
-false-attaches even with the margin guard. A quote match without a clear margin
+signals are the surviving id (kept via §11) and the exact `hash` (§8). On distinct
+prose the attachment eval finds the hash tier deciding 81% of all ids, every
+moved-but-unchanged block among them, with zero false attachment, while quote recovery
+on near-duplicate blocks false-attaches even with the margin guard. The hash has one
+measured exposure: when a marked block is edited or deleted and an unmarked verbatim
+copy of it survives elsewhere, the copy is the one block with the stored hash and
+takes the id at full confidence (`eval/attachment/FINDINGS.md`, finding 7). A quote match without a clear margin
 MUST surface as detached (§10) rather than reattach.
-<!-- stay:eHJeQ3ox hash=sha256:0e5bd26a7797 -->
+<!-- stay:eHJeQ3ox hash=sha256:f2317ffeee0a -->
 
 ### 9.1 The resolution ladder
 <!-- stay:z1CpxJom hash=sha256:39dff40e20b0 -->
 
-A conforming resolver applies the evidence strongest-first:
-<!-- stay:asV4mUlu hash=sha256:32c55b033016 -->
+A conforming resolver applies the evidence strongest-first and **assigns
+exclusively** (v1.11). Before tier 1 the anchors collapse to one per id, the last one
+read, and every tier sees only that anchor. This decides a baseline that repeats an
+id, whether on two blocks, which §7 forbids, or twice on one block. At each tier every stay still unresolved is evaluated before any commit at that tier
+takes effect, and a block committed at a tier is **claimed** for the weaker tiers. The
+order in which a resolver reports its results is not part of this specification.
+<!-- stay:asV4mUlu hash=sha256:51cf3a5b76c3 -->
 
-1. **MARKER**, the id's marker is still present → trust it.
-2. **HASH**, no marker, but exactly one block's normalized-body hash equals the
- stored hash → the content survived verbatim, just lost its marker.
-3. **QUOTE**, no marker and no unique hash hit → fuzzy-recover via §9, committing
- only on a clear winner; otherwise **DETACHED**.
-<!-- stay:h0XizihD hash=sha256:6936087ab677 -->
+1. **MARKER**, the id's marker is still present. On exactly one block → commit to
+ it. On two or more blocks, resolve among those **carriers** only: commit to the
+ carrier whose body hash equals the stored hash if exactly one does; otherwise apply
+ §9's commit rule with the carriers as the only candidates, each scored with its
+ physical neighbours as context; otherwise DETACHED. A commit among carriers is
+ reported as MARKER whichever evidence chose it, with the carrier's quote score when
+ the quote chose. A duplicated id never reaches the weaker tiers. If the original
+ was edited after a paste, this gives the id to the copy, whose body is still the
+ one stored; no content rule can tell that from an edited copy, and a linter reports
+ the duplicate either way (§7, §11). Claims do not limit this tier, because §5 lets
+ one block carry several stays.
+2. **HASH**, no marker, the stored hash was recorded by exactly one stay, counting
+ distinct ids, and exactly one unclaimed block's normalized-body hash equals it →
+ the content survived verbatim, just lost its marker. Otherwise continue to tier 3.
+ A hash recorded by two stays commits to neither here, because either could own it.
+3. **QUOTE**, §9 scoring of every block, claimed or not, each with its physical
+ neighbours as context. The target is the highest-ranked unclaimed block, and the
+ runner-up is the highest-ranked other block, claimed or not, so claiming a rival
+ never opens a margin. Apply §9's commit rule; with no unclaimed block the stay is
+ DETACHED. Stays that select the same target all commit if their quotes occupy
+ disjoint places in it, and all go DETACHED otherwise, or when more than 16 select it.
+<!-- stay:h0XizihD hash=sha256:f6246fe78516 -->
+
+**The score a stay reports.** A commit at MARKER without the quote, or at HASH,
+reports 1.0. A stay that §9's commit rule refuses reports its best candidate's score
+in the pool that rule was applied to: the carriers at tier 1, the unclaimed blocks at
+tier 3, and 0 when no block is unclaimed. A stay that loses a tier-3 contest keeps
+the score it selected the target with.
+<!-- stay:Sn7Rt6Q0 hash=sha256:9d0d6d0887e5 -->
+
+**The disjoint test.** Let q1 to qk be the contending stays' quotes and B the
+target's body, each after §9's normalization for matching, not §8's. Offsets and
+lengths count Unicode code points of those normalized strings, and an occurrence of q
+at offset p is the half-open span [p, p + len(q)), so two occurrences may touch
+without overlapping. The contenders are indexed, so two stays with the same quote are
+two contenders and need two occurrences. The quotes occupy disjoint places when one
+occurrence can be chosen for each, no two overlapping, and a resolver MUST decide it
+exactly. With more than 16 contenders the test fails, and when the quotes' total
+length exceeds B's it fails; both checks come first and run in that order. Otherwise,
+for each subset S of the contenders, end(S) is the smallest offset e such that every
+quote in S has an occurrence inside B[0, e), no two overlapping. end of the empty set
+is 0, and end(S) is the minimum, over each qi in S whose end(S without qi) is defined
+and for which find(qi, end(S without qi)) exists, of that find plus len(qi), where
+find(q, p) is the smallest offset at or after p at which q occurs in B; end(S) is
+undefined when no qi qualifies. The test holds when end of the full set is defined.
+Reading the occurrences left to right shows this is exact, where taking each quote's
+first occurrence in arrival order is not: `abcd` and `bcde` fit `abcdef abcd` only if
+`abcd` takes its second occurrence. The procedure is exponential only in the number
+of contenders, and at §9's defaults no more than four can reach it: the context bonus
+adds at most 0.1, so a contender's body score is at least 0.4, and a quote inside B
+scores 2·len(q) / (len(q) + len(B)), which needs a quote at least a quarter of B's
+length; the cap binds only at a caller's
+lower threshold, where it fails closed and lets implementations agree without a
+big-integer mask. A block's body is never blank, so no quote is empty.
+<!-- stay:fUNPNk5N hash=sha256:5f808dd2ff17 -->
+
+**What the rule costs, stated.** Three outcomes follow from it and are pinned by
+conformance vectors rather than left to each implementation. A block that carries two
+stays and loses both markers detaches both, because their one hash was recorded twice
+and one copy of the text cannot hold two identical quotes (§10 calls such a stay
+`contested`). A merged block that keeps one stay's marker is claimed at tier 1, so
+the other stay cannot select it, and with nothing else close it detaches. And the copy
+rule above gives an id to a pasted copy when the original was edited after the paste.
+The first two fail towards DETACHED, which §10 calls a correct outcome; the third
+fails towards the block whose body is the one stored, which is wrong only when the
+original is the block that changed. Tier 1's commit by quote among carriers rests on
+its two vectors alone: no measured sweep reaches it.
+<!-- stay:H4dgud1t hash=sha256:87a291052b0b -->
+
+**§9.1 and §9.2 differ on purpose.** At block level, removing a claimed block from the
+quote pool left a weak wrong candidate alone above the threshold and introduced
+misattachments, so tier 3 keeps it as a rival. Among a container's children the same
+kept rival blocks a correct recovery: in an in-place edit beside a hash-claimed
+near-duplicate sibling, the sibling holds the margin against the edited item, and no
+false attachment is avoided in exchange (the `items` profile's two near-duplicate
+`resolve` vectors pin it). So §9.2's child tiers keep removing claimed candidates, and
+its tier 0 keeps the container rule it had before this version, which the child
+evidence was measured on.
+<!-- stay:7t17VLrJ hash=sha256:40f5c009d676 -->
 
 ### 9.2 The child resolution ladder (v1.3)
 <!-- stay:wsG5Ieyn hash=sha256:3d9f10bf89f0 -->
@@ -1689,12 +1811,22 @@ candidate in its container, so a row's container siblings are exactly that table
 other body rows.
 <!-- stay:7mqLi8iw hash=sha256:92df494a3a6f -->
 
-0. **Resolve the container** by §9.1, applied **exclusively**: containers are
- resolved tier by tier across the document, and a block claimed by a stronger tier
+0. **Resolve the container** on §9.1's three tiers, **exclusively**: containers are
+ resolved tier by tier across the document, every container stay is evaluated at a
+ tier before any commit there takes effect, and a block claimed by a stronger tier
  leaves the candidate pool for the weaker ones. Resolving each container in
  isolation would let a deleted list quote-match onto a surviving near-duplicate
  sibling at a wide margin, because the rival that would have contested the match is
- the one the edit removed. A container that resolves to DETACHED detaches its
+ the one the edit removed. This tier keeps the rule it had before version 1.11,
+ which differs from §9.1's in six ways, each pinned by an `items` profile vector:
+ a container id the baseline repeats keeps the **first** anchor read; at MARKER the
+ **first** block in document order carrying the id's marker is committed; at HASH a
+ container commits when exactly one unclaimed block has the stored hash, with **no
+ historical uniqueness**; at QUOTE a claimed block is **not a rival**, so §9 scores
+ the unclaimed blocks as if the claimed ones were absent, and a candidate's context
+ neighbours are its nearest unclaimed blocks; and two container stays that select one
+ block at HASH or QUOTE both lose it, with **no merge exemption**, and continue to the
+ next tier or detach. A container that resolves to DETACHED detaches its
  children, **except** those whose own marker survived (tier 1 outranks this gate: a
  failed inference about the container MUST NOT discard stored identity).
 1. **CHILD MARKER**, the child's marker is still present → trust it. This runs
@@ -1731,15 +1863,16 @@ other body rows.
  is restricted to the **exact hash**; quote recovery is deliberately not offered at
  document scope, because on short near-duplicate items that is precisely the
  false-attachment case §9 warns about.
-<!-- stay:BHNQSFUx hash=sha256:dc1980a0e5d2 -->
+<!-- stay:BHNQSFUx hash=sha256:0f40612fd1da -->
 
  **Its known exposure, stated rather than claimed away:** uniqueness in the edited
  document is weaker evidence than provenance. If an item's text was *copied*
  elsewhere without its marker and the original is then edited, the copy becomes the
  sole hash match and this tier attaches to it, when §7 says a copy is a new stay and
  §10 would rather detach. This is the same trade §9.1's document-wide hash tier
- already makes for whole blocks, where the attachment eval measured 81% recovery at
- 0% false attachment, and it is **sharper for children**, because short items repeat
+ already makes for whole blocks, where on distinct prose the attachment eval found it
+ deciding 81% of ids, every moved-but-unchanged block among them, with no false
+ attachment, and it is **sharper for children**, because short items repeat
  far more often than whole blocks do and no equivalent measurement has been run on
  them. A tool MAY offer this tier as a reported, reversible attachment rather than a
  silent one. A later version should either measure it or fence it with provenance.
@@ -1753,9 +1886,10 @@ other body rows.
 6. Otherwise **DETACHED** (§10, unchanged: surface, don't guess). When tier 5
  itself refuses the attachment, §10's `unmatched` and `ambiguous` reasons apply.
  A resolver MAY expose more specific child diagnostics for a failed container
- gate, an unaddressed marker, or a same-tier contest, but version 1.4 standardizes
- neither their names nor their precedence. The outcome remains DETACHED.
-<!-- stay:S18ZgaHG hash=sha256:295d47a09719 -->
+ gate, an unaddressed marker, or a same-tier contest. Version 1.11 names the last,
+ `contested` (§10); the others have no standard name, and none has a standard
+ precedence. The outcome remains DETACHED.
+<!-- stay:S18ZgaHG hash=sha256:9c8c5da03039 -->
 
 **Assignment is exclusive at every tier, and a contested item goes to neither stay.**
 A child block is a candidate for at most one stay: once a tier attaches a stay to an
@@ -1792,10 +1926,14 @@ a conforming resolver SHOULD report `unmatched` if there is no candidate or the
 best score is below `0.5`, and `ambiguous` if the best score reaches `0.5` but its
 margin over the runner-up is below `0.05`. A resolver MAY report plain DETACHED. If
 it exposes a machine-readable reason for either refusal, it MUST use those names and
-meanings. The reason MUST NOT authorize an attachment or weaken §9's commit rule.
+meanings. When exclusive assignment (§9.1, §9.2) leaves a stay DETACHED because
+another stay reached the same block at the same tier, neither name describes it, since
+its score and margin may both pass; a resolver that exposes a reason for that refusal
+MUST call it `contested` (v1.11), and plain DETACHED remains conforming here too. The
+reason MUST NOT authorize an attachment or weaken §9's commit rule.
 Candidate lists, evidence labels, provenance, ordering, presentation, and transport
 schema are outside this specification.
-<!-- stay:f61ICvwp hash=sha256:98e6b095ebb6 -->
+<!-- stay:f61ICvwp hash=sha256:8e37600184ad -->
 
 DETACHED is a correct outcome, not a failure: a marker whose block was genuinely
 deleted MUST resolve to detached.
@@ -1832,6 +1970,59 @@ choice of marker syntax, which measurement found barely affects survival
 (`eval/FINDINGS.md`).
 <!-- stay:EImE9iNp hash=sha256:44f1f9c28781 -->
 
+**A relocated id (v1.11).** A conforming linter reports `RELOCATED_ID`, at error
+level, for an id that exactly one marker carries before the edit and exactly one
+after, on a block whose body hash changed, in either of two cases. Two markers on one
+block carry an id twice, so such an id is not tested. The first case is a **swap**: the
+id's block now has the body hash of the baseline block of another id that exactly one
+marker carried. The second is an id **moved off** its block, which is what an edit does
+when it types a block between another block and that block's trailing marker: the new
+block takes the marker, and the old text is left above it, unmarked. Scores here are
+§9's body score, with its containment floor and without context, over §9's
+normalization for matching. The id has moved off when all three hold:
+<!-- stay:4qaIKYhW hash=sha256:717f993b54df -->
+
+1. its current block scores **under 0.5** against its old text;
+2. **exactly one candidate** scores **0.8 or more** against the old text. The
+ candidates are the **window**, the run of blocks directly above the current block
+ that carry no **kept** id, back to the nearest block that does, which ends the run
+ and is not a candidate. A kept id is a block stay carried in both documents; a new
+ id or a child marker (`subhash`) does not count. A block in the window whose body
+ is unchanged from a baseline block other than the id's own is not a candidate
+ either: it was there before the edit, so the edit did not strand it;
+3. the current block's normalized text is not a substring of the old text, so typing a
+ blank line into a paragraph, which leaves the marker on a short tail the old text
+ contains, is drift and not relocation.
+<!-- stay:KGUoWrCx hash=sha256:b7db584f116c -->
+
+Otherwise the change is hash drift (§8), a warning. The bounds are exact: a current
+block scoring exactly 0.5 has not moved off, and a candidate scoring exactly 0.8
+counts. On this repository's own history the moved-off test fires on 13 of 168
+edits, all of them real relocations, out of 17 a hand census found
+(`eval/replay/FINDINGS.md`).
+<!-- stay:1eeLdW6d hash=sha256:da499b5e7da1 -->
+
+**What the test gets wrong, accepted.** Three edits are reported although no id
+moved, and each blocks a commit. A split whose tail is then reworded: clause 3 no
+longer finds the tail in the old text. A block in the window that echoes the old text,
+newly typed or edited in the same edit, while the paragraph below it is rewritten:
+that is the block structure of a relocation whose stranded block was then edited, and
+no test on the two documents separates them. Version 1.11 considered a further check
+for this case and left it out. And the swap case, when an edit makes one block's text
+identical to another block's baseline text. In the other direction, old text that
+survives anywhere but the window, a stranded block edited below 0.8, and an unchanged
+survivor of old text the baseline already held twice all stay drift; once that
+survivor is edited it is a candidate again, and the test can fire.
+<!-- stay:Cksxrypp hash=sha256:c5a3fc53e454 -->
+
+**Its cost.** A block lies in the window of at most one block, so the test makes at
+most one comparison per window block for each kept id on the block below it: linear
+while ids sit one to a block. An edit that piles every kept marker onto one block is
+the quadratic case, since every id then scans the whole document above it; with 250
+such ids the reference implementations took 6.6 to 28 seconds and reported every id
+correctly. Version 1.11 sets no cap on it.
+<!-- stay:X9Y6eGX5 hash=sha256:2dfd35ba3fbc -->
+
 ## 12. Address scope
 <!-- stay:2fRaiRj3 hash=sha256:279a77f011d9 -->
 
@@ -1867,7 +2058,7 @@ documents.
 
 | Failure mode | Answer |
 |--------------|--------|
-| **Marker detachment** (edit splits/merges/moves a block) | hash-drift check (§8) + quote recovery (§9) + explicit stale state (§10). On distinct prose the marker→hash→quote ladder re-attaches 98% of ids with zero false attachment; near-duplicate blocks are the residual risk, so a quote match without a clear margin surfaces as detached. |
+| **Marker detachment** (edit splits/merges/moves a block) | hash-drift check (§8) + quote recovery (§9) + explicit stale state (§10). On distinct prose the marker→hash→quote ladder re-attaches 99% of ids with zero false attachment; near-duplicate blocks are the residual risk, so a quote match without a clear margin surfaces as detached. |
 | **Sanitizer stripping** (a pipeline removes HTML comments) | the MDX/attribute profiles (§3.2), and consumers that detect a missing expected marker. |
 | **AI regeneration churn** (an agent drops or reassigns markers) | the AI editing contract (§11): a preservation instruction restores survival to 100% in the eval; a post-edit linter catches silent loss; generated non-semantic ids (§6) give a model nothing to "improve." |
 | **Copy-paste duplication** | copy mints a new id (§7); tools detect and repair duplicates. |
@@ -1877,7 +2068,7 @@ documents.
 | **A carrier captured by the line it shares, or by its own evidence** (a cell ending in a backslash escapes the marker's opening bracket; an unclosed comment, tag or raw-text element takes the marker's closer or its `>`; a `quote` value closes a link title or splits a GFM cell) | a writer refuses a carrier whose text carries a character that can begin a capture, judged by presence rather than by meaning and read outside the plain markers already in that text, writes only an id and a digest there, and mints nothing for a child block it refuses (§3.4). |
 | **A write that changes the rendering** (a marker written on its own line still lands inside a construct the segmenter cannot see) | not solved, and §3.4 says so rather than implying otherwise: a write preserves bytes, not rendering. §5.4's advice to authors is what reduces it, and the tree profile measured at 0 of 2417 documents where the baseline measured 159. |
 | **Scope creep into an annotation product** | core stays at identity + resolution; annotation is a separate, layered spec (§14). |
-<!-- stay:K6J3h42A hash=sha256:c182cdedf26b -->
+<!-- stay:K6J3h42A hash=sha256:d82bb316db1f -->
 
 ## 14. Non-goals
 <!-- stay:x3XFUhd4 hash=sha256:2f59dc50d4cf -->
@@ -1958,9 +2149,17 @@ already carries content anywhere else, though it may refresh one already there a
 reader still binds one it finds there (§5). Readers are otherwise unaffected.
 <!-- stay:q4rLgnZx hash=sha256:f8048708e4e2 -->
 
+Every conforming **writer** MUST also apply §5.3's write refusal (v1.11): when a
+leading span is rejected as frontmatter only because its payload holds a blank line,
+the writer MUST NOT insert a marker on its lines, and a block or child block that
+starts on them gets no stay. Refreshing a marker already there is not an insertion.
+Recognition and readers are unaffected.
+<!-- stay:fjWc0Vcf hash=sha256:d849d168d7cf -->
+
 A conforming linter MUST, for a single document, report: malformed markers (no id,
 §4), orphan markers (§5), duplicate ids (§7), and hash drift (§8). For a
-before/after pair it MUST report dropped, duplicated, and relocated ids (§11). It
+before/after pair it MUST report dropped, duplicated, and relocated ids, a relocated
+id being one that §11's swap or moved-off test reports, at error level (v1.11). It
 MUST exit non-zero on any error-level finding so it can gate a commit hook or an
 agent's post-edit step. **A dropped id includes a child stay (v1.9)**: an id that the
 baseline carries on exactly one marker, where that marker carries the exact `subhash`
@@ -1978,7 +2177,7 @@ the question needs, SHOULD report a document outside §5.4's agreement subset, b
 §5.1 write is measurably more likely to change what such a document shows. That is a
 one-directional signal and a linter should present it as one: being inside the subset is
 a better bet, not a guarantee (§3.4). The reference linter in `linter/` is such a tool.
-<!-- stay:xr9pdYQe hash=sha256:935c7d4e9deb -->
+<!-- stay:xr9pdYQe hash=sha256:8f4754390ed8 -->
 
 **A block stay rewritten in place as a child stay is kept (v1.10).** A linter MUST NOT
 report a dropped id when the marker carrying it was rewritten where it stood, and MUST
@@ -2043,13 +2242,14 @@ shows it. Whether it addresses the right item is §9.2's question, the same limi
 another item.
 <!-- stay:L0GqAK0j hash=sha256:26e1dfb4f793 -->
 
-A conforming resolver MUST apply the §9.1 ladder and MUST resolve to detached
-rather than reattach when no tier yields a confident result. It SHOULD distinguish
-the `unmatched` and `ambiguous` quote-refusal cases defined by §10; if it exposes a
-machine-readable reason for either, it MUST use those names and meanings. Plain
+A conforming resolver MUST apply the §9.1 ladder, assigning exclusively, and MUST
+resolve to detached rather than reattach when no tier yields a confident result. It
+SHOULD distinguish the `unmatched` and `ambiguous` quote-refusal cases defined by
+§10; if it exposes a machine-readable reason for either, or for a stay that lost a
+same-tier contest, it MUST use §10's names and meanings. Plain
 DETACHED remains conforming, and candidate or evidence detail is not a conformance
 requirement. The resolver used by `eval/attachment/` is such a tool.
-<!-- stay:tpIZKKBm hash=sha256:df90dced5eba -->
+<!-- stay:tpIZKKBm hash=sha256:f450889ec518 -->
 
 Child-block identity (§5.5 for list items, §5.6 for table rows) splits into an optional
 half and a mandatory one, and the split is not the same as §5.2's. **Segmenting and
@@ -2102,6 +2302,7 @@ NOT stamp, hash, or attach a marker to it.
 
 | Version | What it changed |
 |---------|-----------------|
+| **1.11** | Makes §9.1 assign blocks exclusively. Before tier 1 the anchors collapse to one per id, the last read. A block committed at a tier is claimed for the weaker tiers, and every stay is evaluated at a tier before any commit there. A duplicated id resolves only among the blocks that carry its marker, by hash and then by quote, and otherwise detaches; it never falls through, so a copy edited after its paste leaves the id on the verbatim original, and an original edited after the paste gives it to the copy. Tier 2 needs the stored hash recorded by one stay and held by one unclaimed block. Tier 3 ranks every block, takes the best unclaimed one as the target and keeps claimed blocks as rivals, so claiming a rival cannot open a margin; stays that select one target all commit if their quotes sit at disjoint places in it, decided exactly by a stated procedure with a cap of 16, and all detach otherwise. The score a detached stay reports is stated. §9.2 tier 0 states its own container rule in full instead of pointing at §9.1, unchanged in behaviour, and §10 names the contest refusal `contested` for a resolver that exposes reasons. §11 defines a relocated id: besides the swap, an id whose block scores under 0.5 against its old text while exactly one block in the run of unowned blocks above scores 0.8 or more, and whose block is not a piece of the old text, is a linter error rather than hash drift; three false reports are accepted and stated. §5.3 adds a writer refusal: a leading span rejected as frontmatter only for a blank line in its payload gets no inserted marker and no minted stay, because other tools still parse it as YAML; recognition and readers are unchanged, and the claim that everything else fails towards a stray warning is narrowed to readers. The grammar, identity, hashing and §9's scoring are unchanged. |
 | **1.10** | Takes one case out of §16's dropped block stay: a block stay rewritten in place as a child stay keeps its id and is reported as a non-blocking warning, `ADOPTED_ID`, instead. The test is lexical and needs no §5.5 or §5.6 segmentation: one marker without `subhash` before the edit and one with it after, on a single line shared with other text, in a block with no multi-line marker whose opening line (its first, or the first after a leading ATX heading and marker-only lines) opens a list item, with no thematic break, empty item, heading-led line or line beginning with `>`, `<`, `|` or a fence from there to the marker, no blank-line-spanning HTML block opened anywhere above it, at the same offset in that block's marker-stripped source, unchanged, whose normalized body no other block in either document has. It covers a tool adopting a hand-written stay on a list item as that item's own stay, which every conforming linter had reported as a drop; the warning keeps a shape the approximation misjudges from passing in silence. It reads the block the linter's own segmenter selects, so the answer agrees inside §5.4's agreement subset and can split outside it. Every other change of a block stay into a child marker in the same document remains a drop. Readers, writers, the grammar, identity, hashing and recovery are unchanged. |
 | **1.9** | Closes a gap in §16's linter requirement. A child stay (§5.5, §5.6) that leaves a document is a dropped id: carried by exactly one marker in the baseline, that marker carrying the exact `subhash` key, and by no marker after the edit. It is an error, reported apart from a dropped block stay so that §16's reader rule still holds, and it is an error when the item went with it, matching a section deleted with its stay. The check compares keys and ids only, so it binds every linter whether or not it implements child identity. Version 1.6's reader rule had been implemented by filtering child markers out of the id index every diff read, and nothing replaced them, so a hand edit that stripped one item's marker was reported clean by every conforming linter. Readers, writers, the grammar, identity, hashing and recovery are unchanged. |
 | **1.8** | Masks a closed inline code span before §3.4's scan, at §5.5's non-flush carrier only: a `<` that a run of backticks opens and closes around, inside the carrier text, no longer refuses a marker being inserted there. The clause is a presence question, not a meaning one, since it asks whether backtick runs pair by length and never what the `<` would open, and it is found by a line-at-a-time scan that stops at the first line whose runs do not pair evenly, because CommonMark pairs runs sequentially across a whole paragraph and a leftover run would otherwise take the next line's opener as its closer and shift every pairing after it. An unclosed run masks nothing, and a line §3.3 has already put inside a fence is excluded from the scan. §5.6's row carrier is unaffected and keeps the full presence rule, because GFM splits a row's cells before any inline scan runs. Recovers 1018 of 3186 refused positions under the tree profile (32.0%) and 810 of 2716 under the blank-line profile (29.8%), on the same 2417-document corpus §3.4 measures, with zero rendering changes attributable to any recovered position across two corpora. Every recovered position is a §5.5 list child; rows and unclosed spans are refused exactly as under v1.7. Binds writers only; readers, the grammar, identity, hashing and recovery are unchanged, same as v1.7. |
@@ -2114,7 +2315,7 @@ outright and three outside the scope it was reading, and withdrawn. Deciding cor
 | **1.2** | Excludes leading YAML frontmatter from segmentation under both segmenters (§5, §5.3), and restates the two segmenters' agreement condition as the agreement subset (§5.4), which v1.1 stated too narrowly. Normative change to §5; grammar, identity, hashing, and recovery unchanged. A marker already stamped onto frontmatter usually becomes an orphan error. |
 | **1.1** | Adds CommonMark-tree attachment (§5.2) as an optional segmenter, so a loose list, a blank-line fence, or a blockquote with an internal blank line can carry a single stay. Adds no requirement to a baseline tool and changes no marker's meaning; its statement of when the two segmenters agree was corrected in 1.2. |
 | **1.0** | The marker grammar (§3, §4), the identity model (§2, §7), blank-line attachment (§5), hash normalization (§8), quote recovery and the commit rule (§9), the detached state (§10), and the AI editing contract (§11). |
-<!-- stay:wpHe8SeN hash=sha256:ad69f1686b7d -->
+<!-- stay:wpHe8SeN hash=sha256:34d03e5d40f9 -->
 
 markstay does **not** offer a compatibility guarantee across versions at this
 stage. Where a version corrects a defect, it corrects it rather than carrying the

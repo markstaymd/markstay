@@ -9,7 +9,7 @@ It is a 2x2 of two independent choices, not a list of variants, because their
 interaction is the result: the bonus is what makes lifting the clamp safe, and
 the clamp is what gives the bonus a floor.
 
-    A       shipped resolver (clamp kept, no heading evidence)
+    A       the v1.10 ladder, `ladder_v110.py` (clamp kept, no heading evidence)
     A'      clamp lifted only. Any B gain measured without this arm could be
             the clamp's rather than the heading path's.
     B..     a bonus when the candidate's heading path equals the stored one,
@@ -48,7 +48,7 @@ from math import comb
 from pathlib import Path
 
 import perturb as PB
-import resolver as R
+import ladder_v110 as R
 
 HERE = Path(__file__).parent
 DOCS_DIR = HERE.parent / "docs"
@@ -217,7 +217,8 @@ def run(threshold=R.DEFAULT_THRESHOLD, margin=R.DEFAULT_MARGIN) -> dict:
                   "heading_bonus": size, "heading_gate": gate}
             rows, cases[label] = [], {}
             for op in corpus["ops"]:
-                cells = [(f"d{i}", RUN.run_case(b, op, True, threshold, margin, kw))
+                cells = [(f"d{i}", RUN.run_case(b, op, True, threshold, margin, kw,
+                                             resolve=R.resolve))
                          for i, b in enumerate(corpus["bases"])]
                 rows.append({
                     "op": op,

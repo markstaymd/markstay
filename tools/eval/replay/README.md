@@ -94,10 +94,10 @@ python3 -m venv --system-site-packages VENV && VENV/bin/pip install numpy==2.1.3
    the older only is gone, unless another document carries it at the newer commit
    (a cross-file move, scored apart). Duplicated ids are excluded and counted.
 4. **Arms** (`arms.py`) see the older revision's stored evidence and the newer
-   revision's bodies with markers stripped: `ladder` (the shipped resolver with
-   tier 1 gone), `hash`, `quote`, `heading+quote`, `structural`, `lcs`. Two id
+   revision's bodies with markers stripped: `ladder` (the v1.10 ladder,
+   `../attachment/ladder_v110.py`, with tier 1 gone), `hash`, `quote`, `heading+quote`, `structural`, `lcs`. Two id
    arms sit beside them: `markers only` (the marker tier itself) and `ids+ladder`
-   (the marker tier, then the shipped ladder for an id whose marker is gone), which
+   (the marker tier, then the v1.10 ladder for an id whose marker is gone), which
    is markstay as designed and the row the question turns on.
 5. **Repaired truth.** The ids are wrong about the block in two ways the history
    shows: an id lost while its block survives, and an id relocated onto a block
@@ -112,8 +112,8 @@ python3 -m venv --system-site-packages VENV && VENV/bin/pip install numpy==2.1.3
 | File | Role |
 |------|------|
 | `replay.py` | corpus, pairs, ground truth and its repair, scoring, cost, report |
-| `arms.py` | the id-free arms, fast ports of the shipped resolver and the identity-survival prototype's structural matchers |
-| `test_replay.py` | checks each port against the shipped code on real revision pairs, the repair rules, and the statistics |
+| `arms.py` | the id-free arms, fast ports of the v1.10 ladder and the identity-survival prototype's structural matchers |
+| `test_replay.py` | checks each port against the code it ports on real revision pairs, the repair rules, and the statistics |
 | `crossfile.py` | moves between documents: the scan, the pooled ladders, the arms, the sample, the call |
 | `test_crossfile.py` | the pooled ladder against the shipped one on one document, the arms on synthetic moves, the scan on a throwaway repository |
 | `results.{json,md}` | the numbers |

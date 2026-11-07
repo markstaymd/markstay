@@ -44,14 +44,13 @@
    "op": "edit_in_place",
    "n": 44,
    "cats": {
-    "correct": 32,
-    "missed": 10,
-    "wrong": 2
+    "correct": 31,
+    "missed": 13
    },
    "methods": {
-    "hash": 23,
+    "hash": 20,
     "quote": 11,
-    "detached": 10
+    "detached": 13
    }
   },
   {
@@ -182,14 +181,13 @@
    "op": "heading_rename",
    "n": 44,
    "cats": {
-    "correct": 34,
-    "missed": 8,
-    "wrong": 2
+    "correct": 33,
+    "missed": 11
    },
    "methods": {
-    "hash": 31,
+    "hash": 28,
     "quote": 5,
-    "detached": 8
+    "detached": 11
    }
   },
   {
@@ -207,12 +205,11 @@
   }
  ],
  "agg": {
-  "correct": 452,
-  "missed": 158,
-  "wrong": 4,
+  "correct": 450,
+  "missed": 164,
   "correct_detach": 2
  },
- "recovery": 0.7361563517915309,
- "false_rate": 0.006493506493506494,
+ "recovery": 0.7328990228013029,
+ "false_rate": 0.0,
  "n": 616
 }

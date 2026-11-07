@@ -139,6 +139,58 @@ def anchors_variant(document: str, *, store_whole_neighbour: bool = False,
     return out
 
 
+def _disjoint_variant(body: str, quotes: list[str], *, merge: str, cap: int | None,
+                      length_units: str) -> bool:
+    """§9.1's merge test with its contested readings exposed. `merge` is
+    `disjoint` (the reference), `contained` (every quote verbatim somewhere),
+    `length-then-contained` (the length check, then containment), `none` (no
+    exemption), `greedy` (first occurrence in contender order, the
+    order the stays arrive in), `closed` (spans share their end offset, so
+    touching spans overlap) or `set` (equal quotes count once)."""
+    if merge == "none":
+        return False
+    if cap is not None and len(quotes) > cap:
+        return False
+    if not all(quotes):
+        return False
+    if merge == "set":
+        quotes = list(dict.fromkeys(quotes))
+    if merge == "contained":
+        return all(q in body for q in quotes)
+
+    def units(q: str) -> int:
+        return len(q.encode("utf-16-le")) // 2 if length_units == "utf16-quotes" else len(q)
+
+    if sum(map(units, quotes)) > len(body):
+        return False
+    if merge == "length-then-contained":
+        return all(q in body for q in quotes)
+    gap = 1 if merge == "closed" else 0
+    if merge == "greedy":
+        at = 0
+        for q in quotes:
+            i = body.find(q, at)
+            if i < 0:
+                return False
+            at = i + len(q) + gap
+        return True
+    k = len(quotes)
+    end: dict[int, int] = {0: 0}
+    for mask in range(1, 1 << k):
+        best = -1
+        for i in range(k):
+            if not mask & (1 << i):
+                continue
+            before = end.get(mask & ~(1 << i), -1)
+            if before < 0:
+                continue
+            at = body.find(quotes[i], before)
+            if at >= 0 and (best < 0 or at + len(quotes[i]) + gap < best):
+                best = at + len(quotes[i]) + gap
+        end[mask] = best
+    return end[(1 << k) - 1] >= 0
+
+
 def resolve_variant(before: str, after: str, threshold: float, margin: float, *,
                     rank: str = "aggregate", guard: str = "aggregate",
                     guard_clamp: bool = True, report_clamp: bool = True,
@@ -151,10 +203,31 @@ def resolve_variant(before: str, after: str, threshold: float, margin: float, *,
                     hash_ambiguity: str = "fall-through",
                     unicode_fold: bool = False, bonus_weight: float = 0.05,
                     bonus_tiebreak_only: float | None = None,
-                    normalize_sides: str = "both") -> dict:
+                    normalize_sides: str = "both",
+                    dup: str = "carriers", carrier_hash: bool = True,
+                    carrier_method: str = "marker",
+                    hash_unique: bool = True, hash_filter: bool = True,
+                    rivals: str = "kept", context_over: str = "document",
+                    detached_score: str = "unclaimed",
+                    sequential: bool = False, merge: str = "disjoint",
+                    cap: int | None = 16, length_units: str = "code-points",
+                    repeated_id: str = "last") -> dict:
     """The §9.1 ladder with each contested choice exposed as a parameter.
 
     Defaults reproduce the reference exactly; every non-default is a mutation.
+    The exclusive-assignment parameters (v1.11) are `dup` (`carriers`, `first`
+    for first-carrier-wins, `absent` to fall through), `carrier_hash`,
+    `carrier_method`, `hash_unique` (historical uniqueness at tier 2),
+    `hash_filter` (tier 2 skips claimed blocks), `rivals` (`kept` or `pool`,
+    which removes claimed blocks from the ranking), `context_over` (`document`,
+    or `pool`, which scores context against neighbours in the unclaimed list as
+    §9.2's tier 0 does), `detached_score` (`unclaimed`, or `best`, which reports a
+    claimed block's score), `sequential` (commit one stay at a time), and
+    `merge`, `cap` and `length_units` for the merge exemption. `repeated_id`
+    says what a baseline that repeats an id resolves: `last` (one anchor per id,
+    the last read, before every tier), `first` (the first read), or `per-anchor`
+    (no collapse, so tier 2 counts each recording and may commit an earlier
+    anchor).
     """
     anchors = R.build_anchors(before)
     if store_whole_neighbour:
@@ -166,10 +239,17 @@ def resolve_variant(before: str, after: str, threshold: float, margin: float, *,
                                          suffix=stored[a.id]["suffix"]))
             for a in anchors
         ]
+    if repeated_id == "last":
+        anchors = list({a.id: a for a in anchors}.values())
+    elif repeated_id == "first":
+        first: dict = {}
+        for a in anchors:
+            first.setdefault(a.id, a)
+        anchors = list(first.values())
     after_blocks = [b for b in L.parse_document(after) if b.index >= 0]
     bodies = [b.content for b in after_blocks]
 
-    surviving: dict[str, int] = {}
+    carriers: dict[str, list[int]] = {}
     for i, b in enumerate(after_blocks):
         for mk in b.markers:
             # SPEC.md §16: a marker carrying the exact `subhash` key is never the
@@ -179,7 +259,9 @@ def resolve_variant(before: str, after: str, threshold: float, margin: float, *,
             # rule is mandatory for. Block markers are still lexically present on
             # `b.markers`; the filter is about attribution, not retention.
             if mk.id and not mk.malformed and not mk.has_subhash:
-                surviving.setdefault(mk.id, i)
+                on = carriers.setdefault(mk.id, [])
+                if i not in on:
+                    on.append(i)
     hash_to_idx: dict[str, list[int]] = {}
     for i, body in enumerate(bodies):
         hash_to_idx.setdefault(L.body_hash(body), []).append(i)
@@ -187,27 +269,32 @@ def resolve_variant(before: str, after: str, threshold: float, margin: float, *,
     ge = (lambda a, b: a >= b) if threshold_op == ">=" else (lambda a, b: a > b)
     ge_m = (lambda a, b: a >= b) if margin_op == ">=" else (lambda a, b: a > b)
 
-    out: dict[str, dict] = {}
-    for a in anchors:
-        if a.id in surviving:
-            out[a.id] = {"method": "marker", "target": surviving[a.id], "score": 1.0}
-            continue
-        hits = hash_to_idx.get(a.hash, [])
-        # §9.1 tier 2 needs a UNIQUE hit; taking the first of several is the
-        # reading that turns an ambiguous hash into a confident attachment.
-        if len(hits) == 1 or (hits and hash_ambiguity == "first-hit"):
-            out[a.id] = {"method": "hash", "target": hits[0], "score": 1.0}
-            continue
+    def order(scores, idxs):
+        pairs = [(s, i) for s, i in zip(scores, idxs)]
+        # reverse-sorting (score, index) puts the LATER index first on an
+        # exact tie, which conformance spec/score.json requires.
+        pairs.sort(reverse=(tie_order == "later"))
+        if tie_order != "later":
+            pairs.sort(key=lambda p: (-p[0], p[1]))
+        return pairs
 
+    def quote_decide(a, allowed, rivals_from: str) -> dict:
+        """§9's commit rule. `allowed` is the set of blocks that may be the
+        target (None: all). The runner-up comes from every block when
+        `rivals_from` is `all`, or from `allowed` only when it is `allowed`."""
         sel = a.selector
+        idxs = list(range(len(bodies)))
+        if context_over == "pool" and allowed is not None:
+            idxs = [i for i in idxs if i in allowed]
+        cands = [bodies[i] for i in idxs]
         body = [body_score_variant(sel.quote, c, containment_floor=containment_floor,
                                    unicode_fold=unicode_fold,
-                                   normalize_sides=normalize_sides) for c in bodies]
+                                   normalize_sides=normalize_sides) for c in cands]
         agg = []
-        for i in range(len(bodies)):
-            prev = bodies[i - 1] if i > 0 else ""
-            nxt = bodies[i + 1] if i + 1 < len(bodies) else ""
-            agg.append(body[i] + context_bonus_variant(
+        for j in range(len(cands)):
+            prev = cands[j - 1] if j > 0 else ""
+            nxt = cands[j + 1] if j + 1 < len(cands) else ""
+            agg.append(body[j] + context_bonus_variant(
                 sel, prev, nxt, sides=context_sides, window=window,
                 unicode_fold=unicode_fold, weight=bonus_weight,
                 window_stored=window_stored))
@@ -217,24 +304,21 @@ def resolve_variant(before: str, after: str, threshold: float, margin: float, *,
             # scores are already within epsilon of the leader, rather than
             # additively to every candidate as the reference does.
             top = max(body)
-            agg = [agg[i] if abs(bs - top) <= bonus_tiebreak_only else bs
-                   for i, bs in enumerate(body)]
+            agg = [agg[j] if abs(bs - top) <= bonus_tiebreak_only else bs
+                   for j, bs in enumerate(body)]
+        if rivals_from == "allowed" and allowed is not None:
+            keep = [j for j, i in enumerate(idxs) if i in allowed]
+            idxs = [idxs[j] for j in keep]
+            body = [body[j] for j in keep]
+            agg = [agg[j] for j in keep]
 
         if not agg or len(agg) < min_candidates:
-            out[a.id] = {"method": "detached", "target": None,
-                         "score": min(max(agg), 1.0) if agg else 0.0}
-            continue
+            return {"method": "detached", "target": None,
+                    "score": min(max(agg), 1.0) if agg else 0.0}
 
-        def order(scores):
-            pairs = [(s, i) for i, s in enumerate(scores)]
-            # reverse-sorting (score, index) puts the LATER index first on an
-            # exact tie, which conformance spec/score.json requires.
-            pairs.sort(reverse=(tie_order == "later"))
-            if tie_order != "later":
-                pairs.sort(key=lambda p: (-p[0], p[1]))
-            return pairs
-
-        agg_order = order(agg)
+        agg_order = order(agg, idxs)
+        body_order = order(body, idxs)
+        free = (lambda i: True) if allowed is None else (lambda i: i in allowed)
         cap_r = (lambda x: min(x, 1.0)) if report_clamp else (lambda x: x)
         # §9 says the bonus breaks near-ties "between structurally identical
         # blocks". Read narrowly, that licenses lifting the clamp ONLY when the
@@ -245,17 +329,92 @@ def resolve_variant(before: str, after: str, threshold: float, margin: float, *,
         exact_tie = bool(body) and max(body) >= 1.0
         clamp_guard = guard_clamp and not (unclamp_exact_ties and exact_tie)
         cap_g = (lambda x: min(x, 1.0)) if clamp_guard else (lambda x: x)
-        reported = cap_r(agg_order[0][0])
 
-        gate = agg_order if guard == "aggregate" else order(body)
-        idx = (agg_order if rank == "aggregate" else order(body))[0][1]
-        best = cap_g(gate[0][0])
-        runner = cap_g(gate[1][0]) if len(gate) > 1 else 0.0
-
+        rank_order = agg_order if rank == "aggregate" else body_order
+        gate = agg_order if guard == "aggregate" else body_order
+        target = next((i for _, i in rank_order if free(i)), None)
+        if target is None:
+            best_any = cap_r(agg_order[0][0])
+            return {"method": "detached", "target": None,
+                    "score": best_any if detached_score == "best" else 0.0}
+        g_best = next(s for s, i in gate if i == target)
+        g_runner = next((s for s, i in gate if i != target), None)
+        best = cap_g(g_best)
+        runner = cap_g(g_runner) if g_runner is not None else 0.0
+        reported = cap_r(next(s for s, i in agg_order if i == target))
         if ge(best, threshold) and ge_m(best - runner, margin):
-            out[a.id] = {"method": "quote", "target": idx, "score": reported}
-        else:
-            out[a.id] = {"method": "detached", "target": None, "score": reported}
+            return {"method": "quote", "target": target, "score": reported}
+        if detached_score == "best":
+            reported = cap_r(agg_order[0][0])
+        return {"method": "detached", "target": None, "score": reported}
+
+    out: dict[str, dict] = {}
+    # Tier 1.
+    for a in anchors:
+        on = carriers.get(a.id)
+        if not on:
+            continue
+        if len(on) == 1 or dup == "first":
+            out[a.id] = {"method": "marker", "target": on[0], "score": 1.0}
+            continue
+        if dup == "absent":
+            continue
+        hits = [i for i in on if L.body_hash(bodies[i]) == a.hash] if carrier_hash else []
+        if len(hits) == 1:
+            out[a.id] = {"method": "marker", "target": hits[0], "score": 1.0}
+            continue
+        r = quote_decide(a, set(on), "allowed")
+        if r["method"] == "quote":
+            r["method"] = carrier_method
+        out[a.id] = r
+    claimed = {r["target"] for r in out.values() if r["target"] is not None}
+
+    # Tier 2.
+    recorded: dict[str, int] = {}
+    for a in anchors:
+        recorded[a.hash] = recorded.get(a.hash, 0) + 1
+    hash_commits: dict[str, int] = {}
+    for a in anchors:
+        if a.id in out or (hash_unique and recorded[a.hash] != 1):
+            continue
+        hits = hash_to_idx.get(a.hash, [])
+        if hash_filter:
+            hits = [h for h in hits if h not in claimed]
+        # §9.1 tier 2 needs a UNIQUE hit; taking the first of several is the
+        # reading that turns an ambiguous hash into a confident attachment.
+        if len(hits) == 1 or (hits and hash_ambiguity == "first-hit"):
+            hash_commits[a.id] = hits[0]
+    for aid, t in hash_commits.items():
+        out[aid] = {"method": "hash", "target": t, "score": 1.0}
+        claimed.add(t)
+
+    # Tier 3.
+    pending: dict[str, dict] = {}
+    for a in anchors:
+        if a.id in out:
+            continue
+        pool = set(range(len(bodies))) - claimed
+        r = quote_decide(a, pool, "all" if rivals == "kept" else "allowed")
+        pending[a.id] = r
+        if sequential and r["method"] == "quote":
+            claimed.add(r["target"])
+    if not sequential:
+        # One contender per id, as both resolvers key their results: a before-
+        # document that repeats an id yields one stay, not two contenders.
+        quotes = {a.id: a.selector.nquote for a in anchors}
+        by_target: dict[int, list[str]] = {}
+        for sid, r in pending.items():
+            if r["method"] == "quote":
+                by_target.setdefault(r["target"], []).append(sid)
+        for t, sids in by_target.items():
+            if len(sids) == 1 or _disjoint_variant(
+                    Q.normalize(bodies[t]), [quotes[i] for i in sids],
+                    merge=merge, cap=cap, length_units=length_units):
+                continue
+            for sid in sids:
+                pending[sid] = {"method": "detached", "target": None,
+                                "score": pending[sid]["score"]}
+    out.update(pending)
     return out
 
 
@@ -394,6 +553,47 @@ MUTATIONS = [
      {"hash_ambiguity": "first-hit"}, "caught"),
     ("refuse to commit when there is only one candidate",
      {"min_candidates": 2}, "caught"),
+    # --- exclusive assignment (SPEC.md §9.1, v1.11) ------------------------
+    ("tier 1: the first carrier in document order wins a duplicated id",
+     {"dup": "first"}, "caught"),
+    ("tier 1: a duplicated marker counts as absent and falls through to HASH and QUOTE",
+     {"dup": "absent"}, "caught"),
+    ("tier 1: skip the hash rule among carriers and go straight to quote",
+     {"carrier_hash": False}, "caught"),
+    ("tier 1: report a carrier chosen by quote as method `quote`",
+     {"carrier_method": "quote"}, "caught"),
+    ("tier 2: commit a hash recorded by more than one stay",
+     {"hash_unique": False}, "caught"),
+    ("tier 2: count blocks claimed at tier 1 among the hash hits",
+     {"hash_filter": False}, "caught"),
+    ("tier 3: remove claimed blocks from the ranking instead of keeping them as rivals",
+     {"rivals": "pool"}, "caught"),
+    ("tier 3: score context against neighbours in the unclaimed list, as §9.2 tier 0 does",
+     {"context_over": "pool"}, "caught"),
+    ("tier 3: report the best block's score, claimed or not, for a detached stay",
+     {"detached_score": "best"}, "caught"),
+    ("tier 3: commit one stay at a time, each claiming its block for the next",
+     {"sequential": True}, "caught"),
+    ("merge: no exemption, every shared target is contested",
+     {"merge": "none"}, "caught"),
+    ("merge: containment instead of disjoint placement",
+     {"merge": "contained"}, "caught"),
+    ("merge: the length check, then containment",
+     {"merge": "length-then-contained"}, "caught"),
+    ("merge: greedy first occurrence in contender order",
+     {"merge": "greedy"}, "caught"),
+    ("merge: closed spans, so touching quotes overlap",
+     {"merge": "closed"}, "caught"),
+    ("merge: equal quotes count once",
+     {"merge": "set"}, "caught"),
+    ("merge: no contender cap", {"cap": None}, "caught"),
+    ("merge: a cap of 15", {"cap": 15}, "caught"),
+    ("merge: quote lengths in UTF-16 code units against a body in code points",
+     {"length_units": "utf16-quotes"}, "caught"),
+    ("repeated id: the first anchor read is the one resolved",
+     {"repeated_id": "first"}, "caught"),
+    ("repeated id: no collapse, so tier 2 counts each recording and may commit an earlier anchor",
+     {"repeated_id": "per-anchor"}, "caught"),
     # --- the constants -----------------------------------------------------
     ("compile in threshold 0.6", {"default_threshold": 0.6}, "caught"),
     ("compile in threshold 0.4", {"default_threshold": 0.4}, "caught"),
@@ -1165,9 +1365,35 @@ def check_fence(vectors, **kw) -> list[str]:
             setattr(m, n, fn)
 
 
-def differential(n: int = 400, seed: int = 20260816) -> list[str]:
+# What the marked phase reaches at the default seed, asserted rather than only
+# printed. 272 and 97 were recounted independently from the parsed documents in
+# review; a counter reverted to measuring marker presence reads 275 and 100.
+DIFFERENTIAL_REACHED = {"duplicated id": 97, "claimed at tier 1": 272,
+                        "contested": 44, "merge committed": 6}
+
+
+def _agree(before: str, after: str, t: float, m: float) -> tuple[bool, dict, dict]:
+    got = resolve_variant(before, after, t, m)
+    ref = R.resolve(R.build_anchors(before), after, threshold=t, margin=m)
+    want = {k: {"method": v.method, "target": v.target, "score": v.score}
+            for k, v in ref.items()}
+    ok = got.keys() == want.keys() and not any(
+        got[k]["method"] != want[k]["method"]
+        or got[k]["target"] != want[k]["target"]
+        or abs(got[k]["score"] - want[k]["score"]) >= TOL for k in want)
+    return ok, got, ref
+
+
+def differential(n: int = 400, seed: int = 20260816) -> tuple[list[str], dict]:
     """Compare the UNMUTATED variant against `resolver.resolve` over generated
-    document pairs, so agreement is tested beyond the frozen vectors."""
+    document pairs, so agreement is tested beyond the frozen vectors.
+
+    Two phases. The first strips every marker, as it always has. The second
+    (v1.11) keeps some markers, pastes some blocks twice with their markers,
+    merges neighbours and uses low thresholds, because exclusive assignment
+    decides against blocks claimed at tier 1 and the first phase never claims
+    one. Returns the disagreements and how often each §9.1 branch was reached,
+    so a phase that stops reaching a branch shows up as a zero."""
     rng = random.Random(seed)
     words = ["alpha", "bravo", "charlie", "delta", "echo", "retries", "stage",
              "queue", "payload", "three", "seven", "audit", "partner"]
@@ -1175,7 +1401,18 @@ def differential(n: int = 400, seed: int = 20260816) -> list[str]:
     def para():
         return " ".join(rng.choice(words) for _ in range(rng.randint(3, 12))) + "."
 
+    reached = {"duplicated id": 0, "claimed at tier 1": 0, "contested": 0,
+               "merge committed": 0}
     bad = []
+    # Fixed regressions the generators below do not produce: a baseline that
+    # repeats an id is one stay, so it must not count as two merge contenders.
+    for before, after, t, m in [
+        ("alpha\n<!-- stay:a -->\n<!-- stay:a -->\n", "alpha x\n", 0.3, 0.05),
+        ("abcd\n<!-- stay:x -->\n<!-- stay:x -->\n", "abcd!\n", 0.5, 0.05),
+    ]:
+        ok, got, ref = _agree(before, after, t, m)
+        if not ok:
+            bad.append(f"fixed case {before!r}: {got} != {ref}")
     for case in range(n):
         blocks = [para() for _ in range(rng.randint(1, 6))]
         before = "\n\n".join(
@@ -1187,16 +1424,60 @@ def differential(n: int = 400, seed: int = 20260816) -> list[str]:
         after = "\n\n".join(kept) + "\n" if kept else ""
         t = rng.choice([0.3, 0.5, 0.7])
         m = rng.choice([0.0, 0.05, 0.2])
-        got = resolve_variant(before, after, t, m)
-        ref = R.resolve(R.build_anchors(before), after, threshold=t, margin=m)
-        want = {k: {"method": v.method, "target": v.target, "score": v.score}
-                for k, v in ref.items()}
-        if got.keys() != want.keys() or any(
-                got[k]["method"] != want[k]["method"]
-                or got[k]["target"] != want[k]["target"]
-                or abs(got[k]["score"] - want[k]["score"]) >= TOL for k in want):
-            bad.append(f"case {case}: {got} != {want}")
-    return bad
+        ok, got, ref = _agree(before, after, t, m)
+        if not ok:
+            bad.append(f"case {case}: {got} != {ref}")
+
+    def drift(text):
+        ws = text.rstrip(".").split()
+        i = rng.randrange(len(ws))
+        ws[i] = rng.choice(words)
+        return " ".join(ws) + "."
+
+    for case in range(n):
+        blocks = [para() for _ in range(rng.randint(2, 6))]
+        ids = [f"id{i}" if rng.random() < 0.85 else None for i in range(len(blocks))]
+        before = "\n\n".join(f"{b}\n<!-- stay:{i} -->" if i else b
+                             for b, i in zip(blocks, ids)) + "\n"
+        out: list[tuple[str, list[str]]] = []
+        for b, i in zip(blocks, ids):
+            r = rng.random()
+            if r < 0.15:
+                continue  # deleted
+            text = drift(b) if rng.random() < 0.3 else b
+            mark = [i] if i and rng.random() < 0.5 else []
+            out.append((text, mark))
+            if rng.random() < 0.2:  # pasted copy, marker and all, maybe edited
+                out.append((drift(b) if rng.random() < 0.5 else b, list(mark)))
+        if len(out) > 1 and rng.random() < 0.4:  # merge two neighbours
+            j = rng.randrange(len(out) - 1)
+            (ta, ma), (tb, mb) = out[j], out[j + 1]
+            keep = [x for x in ma + mb if rng.random() < 0.5]
+            out[j:j + 2] = [(f"{ta}\n{tb}", keep)]
+        rng.shuffle(out)
+        after = "\n\n".join(
+            text + "".join(f"\n<!-- stay:{i} -->" for i in mark) for text, mark in out
+        ) + "\n" if out else ""
+        t = rng.choice([0.05, 0.3, 0.5, 0.7])
+        m = rng.choice([0.0, 0.05, 0.2])
+        ok, got, ref = _agree(before, after, t, m)
+        if not ok:
+            bad.append(f"marked case {case}: {got} != {ref}")
+        carriers: dict[str, set[int]] = {}
+        for k, (_, mark) in enumerate(out):
+            for i in mark:
+                carriers.setdefault(i, set()).add(k)
+        reached["duplicated id"] += sum(1 for c in carriers.values() if len(c) > 1)
+        # A block committed at tier 1 while a stay with no carrier goes on to the
+        # weaker tiers (a refusal among carriers is tier 1 too, so method alone
+        # does not say a stay got past it).
+        reached["claimed at tier 1"] += any(
+            r.method == "marker" and r.target is not None for r in ref.values()
+        ) and any(k not in carriers for k in ref)
+        reached["contested"] += sum(r.reason == "contested" for r in ref.values())
+        targets = [r.target for r in ref.values() if r.method == "quote"]
+        reached["merge committed"] += len(targets) - len(set(targets))
+    return bad, reached
 
 
 def main(argv=None) -> int:
@@ -1206,14 +1487,27 @@ def main(argv=None) -> int:
     print(f"resolve corpus: {len(vectors)} vectors\n")
 
     if "--differential" in argv:
-        bad = differential()
+        bad, reached = differential()
         if bad:
             print(f"FAIL differential: {len(bad)} generated cases disagree with "
                   "resolver.resolve, so this file has drifted from the reference")
             for b in bad[:5]:
                 print(f"       - {b}")
             return 1
-        print("  ok   differential: 400 generated pairs match resolver.resolve")
+        missed = [k for k, v in reached.items() if not v]
+        if missed:
+            print(f"FAIL differential: the marked phase never reached {missed}, so "
+                  "it no longer tests what it exists to test")
+            return 1
+        if reached != DIFFERENTIAL_REACHED:
+            print(f"FAIL differential: reached {reached}, pinned "
+                  f"{DIFFERENTIAL_REACHED}. The generator, its seed, a counter or "
+                  "the reference moved; recount by hand before re-pinning, since a "
+                  "counter that measures the wrong thing still prints a number")
+            return 1
+        print("  ok   differential: 400 stripped and 400 marked generated pairs match "
+              "resolver.resolve (reached: "
+              + ", ".join(f"{k} {v}" for k, v in reached.items()) + ")")
 
     base = check(vectors)
     if base:

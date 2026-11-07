@@ -31,8 +31,13 @@ id that sat on exactly one marker before an edit and on none after it is reporte
 a dropped id, under its own code so it is never named as its container's stay.
 Version 1.10 **keeps a block stay a tool rewrites in place as a list item's own**:
 the id survives and is reported as a warning, `ADOPTED_ID`, rather than as a drop.
+Version 1.11 makes **content recovery assign blocks exclusively**: a block one stay
+claims is not open to a weaker match, and a duplicated id resolves only among the
+blocks that carry it. It also reports an id that an edit moves off its block as
+`RELOCATED_ID`, an error, and stops writers inserting a marker into a leading span
+that other tools may still parse as YAML.
 
-!!! note "Status: version 1.10, settled"
+!!! note "Status: version 1.11, settled"
     The surface is small and stable. It is also young: real-world use and critique
     will shape later versions. **Write safety is a placement rule, not a guarantee
     that arbitrary Markdown renders identically after stamping.** A child carrier

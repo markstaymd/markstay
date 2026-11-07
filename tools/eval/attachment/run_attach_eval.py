@@ -26,7 +26,6 @@ from pathlib import Path
 
 import perturb as PB
 import resolver as R
-import item_eval
 
 HERE = Path(__file__).parent
 DOCS_DIR = HERE.parent / "docs"  # reuse the marker-survival fixtures
@@ -54,9 +53,11 @@ def run_case(
     threshold: float,
     margin: float = R.DEFAULT_MARGIN,
     resolve_kw: dict | None = None,
+    resolve=R.resolve,
 ) -> dict:
     """One (document, operator, strip) cell. `resolve_kw` passes the
-    experimental resolver arguments through; empty is the shipped resolver."""
+    experimental resolver arguments through; empty is the shipped resolver.
+    `resolve` is for a caller measuring a frozen ladder (`heading_arms`)."""
     before_md, pblocks = PB.annotate(base_md)
     anchors = R.build_anchors(before_md)
     # Lookup spans both registries; which operators a *report* iterates is the
@@ -66,8 +67,8 @@ def run_case(
     truth = PB.default_truth(after_pblocks)
     truth.update(adj)
 
-    resolutions = R.resolve(anchors, after_md, threshold=threshold, margin=margin,
-                            **(resolve_kw or {}))
+    resolutions = resolve(anchors, after_md, threshold=threshold, margin=margin,
+                          **(resolve_kw or {}))
     cats: dict[str, int] = {}
     methods: dict[str, int] = {}
     detail = []
@@ -204,7 +205,11 @@ def write_report(path, sec):
         "Same adversarial cases, aggregated over all operators, with the "
         "runner-up margin requirement off vs on. The guard refuses a quote "
         "recovery unless there is a *clear* winner, trading recall (more safe "
-        "*missed*) for fewer false reattachments.\n"
+        "*missed*) for fewer false reattachments. Every block here carries a "
+        "stay, so under §9.1's exclusive assignment (v1.11) two stays colliding "
+        "on one block are contested and detach whatever the margin; the guard's "
+        "remaining job is a near-duplicate with no stay of its own, which "
+        "`test_attach.py` checks on the half-stamped document.\n"
     )
     L.append("| margin | recovery | false-rate | correct | wrong | missed | detach✓ |")
     L.append("|-------:|---------:|-----------:|--------:|------:|-------:|--------:|")
@@ -396,6 +401,10 @@ def main():
         return
 
     if args.granularity == "item":
+        # Imported here so the published tools, which do not carry item_eval.py,
+        # can still import this module (excl_arms and heading_arms do).
+        import item_eval
+
         payload = item_eval.write(out)
         summary = payload["summary"]
         print(f"wrote {out}.json and {out}.md")

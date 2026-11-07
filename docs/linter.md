@@ -44,7 +44,7 @@ Rust cores and the adapters do not emit this diagnostic.
 | `DROPPED_CHILD_ID` | error | a list item's or table row's own id: carried in the baseline by exactly one marker bearing the exact `subhash` key, and by no marker after the edit. Reported apart from `DROPPED_ID` so it is never named as its container's stay ([§16](spec.md#16-conformance-summary), v1.9) |
 | `ADOPTED_ID` | warn | a block stay rewritten in place as a child stay: one marker without `subhash` in the baseline, the same id on one marker with it after the edit, at the same place in a list item's line, with the block's marker-stripped source unchanged and its body shared by no other block. §16 lists the shapes the test refuses, which stay drops. The id is kept, not dropped ([§16](spec.md#16-conformance-summary), v1.10) |
 | `DUPLICATED_ID` | error | id appears more than once after the edit (copy without re-mint, or a regeneration collision) |
-| `RELOCATED_ID` | error | an id now sits on content that previously carried a *different* id |
+| `RELOCATED_ID` | error | an id now sits on content that previously carried a *different* id (a swap), or, since v1.11, an id was moved off its block: an edit typed a block between a block and its trailing marker, so the marker now sits on new text and the old text is left above it, unmarked ([§11](spec.md#11-ai-editing-contract)) |
 | `HASH_DRIFT` | warn | id present in both, content edited in place |
 | `NEW_ID` | info | id present only after the edit |
 
@@ -107,10 +107,17 @@ relocates a stay.
 
 ## Known limitation
 
-Relocation detection is exact-content only: it catches markers that swap between blocks
-whose text is otherwise unchanged. It does **not** detect partial relocation when a
-block is split or merged. That case needs the `quote`/selector recovery model and is
-the subject of the next planned experiment, not a deterministic linter.
+Relocation detection covers two shapes. A **swap**: an id now sits on a block whose
+text is exactly another id's baseline text. An id **moved off** its block (v1.11), which
+is what typing a paragraph between a block and its trailing marker does: the id's block
+now scores under 0.5 against its old text, while exactly one eligible block above it,
+back to the nearest block that keeps its id, scores 0.8 or more.
+[§11](spec.md#11-ai-editing-contract) states the test in full: which blocks are eligible
+and what ends the window, the bounds, and three accepted false reports, one of them a
+split whose tail was reworded. Beyond those two shapes, a block split or merged, or an
+id moved further than that window, is not reported as a relocation: general split and
+merge recovery belongs to the `quote`/selector recovery model, not a deterministic
+linter.
 
 ## Why a deterministic check, not a smarter one
 

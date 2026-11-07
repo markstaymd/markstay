@@ -571,8 +571,8 @@ def id_answers(case: Case) -> dict:
 
 def all_answers(case: Case, T: Table) -> dict:
     """Every arm's answer for every anchor. `ids+ladder` is markstay as designed:
-    the marker tier first, then the shipped ladder's hash and quote tiers for an
-    id whose marker is gone (`resolver.resolve` on the unstripped revision;
+    the marker tier first, then the v1.10 ladder's hash and quote tiers for an
+    id whose marker is gone (`ladder_v110.resolve` on the unstripped revision;
     `test_replay.py` checks the two agree)."""
     answers = {name: fn(case.anchors, case.after, T) for name, fn in A.ARMS.items()}
     return {MARKERS: id_answers(case), IDS_LADDER: ids_plus_ladder(case, answers["ladder"]), **answers}

@@ -206,12 +206,20 @@ def test_clone_refuses_to_guess():
 
 def test_margin_guard_reduces_false_attach():
     # The adversarial fixture is the only place a false attach is reachable.
-    _, _, res_off = _run(ADV, "edit_in_place", strip=True, threshold=0.3, margin=0.0)
-    anchors, truth, res_on = _run(
-        ADV, "edit_in_place", strip=True, threshold=0.5, margin=0.05
-    )
-    a2, t2, _ = _run(ADV, "edit_in_place", strip=True, threshold=0.3, margin=0.0)
-    wrong_off = cats(a2, t2, res_off)["wrong"]
+    # Every other block carries a stay, so the edited ids compete against
+    # near-duplicates with no stay of their own. With every block stamped,
+    # §9.1's exclusive assignment (v1.11) turns the guard-off collisions into
+    # contests and nothing is left for the guard to show; through v1.10 the
+    # fully stamped run exposed them.
+    before, pbs = PB.annotate(ADV)
+    anchors = [a for k, a in enumerate(R.build_anchors(before)) if k % 2 == 1]
+    after_pbs, adj = PB.OPERATORS["edit_in_place"](pbs)
+    after = PB.serialize(after_pbs, strip=True)
+    truth = PB.default_truth(after_pbs)
+    truth.update(adj)
+    res_off = R.resolve(anchors, after, threshold=0.3, margin=0.0)
+    res_on = R.resolve(anchors, after, threshold=0.5, margin=0.05)
+    wrong_off = cats(anchors, truth, res_off)["wrong"]
     wrong_on = cats(anchors, truth, res_on)["wrong"]
     check("guard off exposes false attachments on near-duplicates", wrong_off > 0)
     check("guard on reduces (or holds) false attachments", wrong_on <= wrong_off)
@@ -690,28 +698,122 @@ def test_ranked_matcher_is_bit_identical_to_the_frozen_oracle():
         )
 
 
-def test_committed_map_is_identical_and_anchor_order_inert_over_every_corpus():
+def _decisions(res):
+    return {k: (r.method, r.target, r.score, r.reason) for k, r in res.items()}
+
+
+def test_anchor_order_is_inert_over_every_corpus():
+    """SPEC.md §9.1 (v1.11) evaluates every stay at a tier before any commit at
+    that tier takes effect, so no decision may depend on the order the anchors
+    arrive in. That holds for a baseline whose ids are unique. A baseline that
+    repeats an id collapses to one anchor per id, the last read, before tier 1,
+    so reversing it changes which anchor survives and nothing else: for those
+    vectors the test checks that the reversed list resolves exactly as one
+    first-read anchor per id does, in forward order. Through v1.10 this test also pinned the committed map to the
+    frozen ladder (`_legacy_resolve_map`); exclusive assignment changes that map
+    on purpose, and the corpus now pins it instead. Checked over every resolve
+    vector and over the near-duplicate fixture under the edits that make stays
+    compete for blocks, markers stripped and every other one kept."""
     for vector in _corpus_vectors("resolve"):
         anchors = R.build_anchors(vector["before"])
-        threshold = vector.get("threshold", R.DEFAULT_THRESHOLD)
-        margin = vector.get("margin", R.DEFAULT_MARGIN)
-        expected = _legacy_resolve_map(anchors, vector["after"], threshold, margin)
-        current = R.resolve(
-            anchors, vector["after"], threshold=threshold, margin=margin
-        )
+        kw = {
+            "threshold": vector.get("threshold", R.DEFAULT_THRESHOLD),
+            "margin": vector.get("margin", R.DEFAULT_MARGIN),
+        }
+        forward = R.resolve(anchors, vector["after"], **kw)
         assert {
-            key: (value.method, value.target) for key, value in current.items()
-        } == expected
+            k: {"method": r.method, "target": r.target}
+            for k, r in forward.items()
+        } == {
+            k: {"method": v["method"], "target": v["target"]}
+            for k, v in vector["resolutions"].items()
+        }, vector["name"]
+        backward = R.resolve(list(reversed(anchors)), vector["after"], **kw)
+        ids = [a.id for a in anchors]
+        if len(set(ids)) == len(ids):
+            assert _decisions(backward) == _decisions(forward), vector["name"]
+        else:
+            first_read: dict = {}
+            for a in anchors:  # the first anchor read per id, in forward order
+                first_read.setdefault(a.id, a)
+            first_read = list(first_read.values())
+            assert _decisions(backward) == _decisions(
+                R.resolve(first_read, vector["after"], **kw)
+            ), vector["name"]
 
     before, blocks = PB.annotate(ADV)
-    after_blocks, _ = PB.edit_in_place(blocks)
-    after = PB.serialize(after_blocks, strip=True)
     anchors = R.build_anchors(before)
-    expected = _legacy_resolve_map(anchors, after)
-    reversed_current = R.resolve(list(reversed(anchors)), after)
-    assert {
-        key: (value.method, value.target) for key, value in reversed_current.items()
-    } == expected
+    ops = {**PB.OPERATORS, **PB.EXCL_OPERATORS, **PB.TWIN_EDIT_OPERATORS}
+    for name in ("edit_in_place", "merge", "copy_above", "copy_above_edit_original",
+                 "replace_related", "edit_into_twin"):
+        after_blocks, _ = ops[name](blocks)
+        for kept in (None, 0, 1):
+            shown = [
+                PB.PBlock(text=pb.text, ids=[
+                    i for i in pb.ids
+                    if kept is not None and int(i[1:].split("-")[0]) % 2 == kept
+                ])
+                for pb in after_blocks
+            ]
+            after = PB.serialize(shown, strip=kept is None)
+            forward = R.resolve(anchors, after)
+            backward = R.resolve(list(reversed(anchors)), after)
+            check(f"{name}, kept parity {kept}: anchor order is inert",
+                  _decisions(backward) == _decisions(forward))
+
+
+def test_block_contest_and_merge_test_edges():
+    """SPEC.md §9.1 (v1.11): stays selecting one block at the QUOTE tier detach as
+    `contested` unless their quotes fit disjointly; the merge test's edges are
+    pinned here where a vector cannot reach them (an empty quote scores 0 and
+    never contends)."""
+    before = (
+        "Same body here.\n<!-- stay:a -->\n\nDifferent middle block.\n<!-- stay:m -->\n\n"
+        "Same body here.\n<!-- stay:b -->\n"
+    )
+    after = "Same body here.\n\nDifferent middle block.\n<!-- stay:m -->\n"
+    res = R.resolve(R.build_anchors(before), after)
+    check("collapsed twins both detach as contested",
+          all(res[k].method == "detached" and res[k].reason == "contested"
+              and res[k].score == 1.0 for k in ("a", "b")))
+    merged = R.resolve(R.build_anchors(before), "Same body here.\nSame body here.\n")
+    check("two copies of the twin text hold both stays",
+          all(merged[k].method == "quote" and merged[k].target == 0 for k in ("a", "b")))
+    check("an empty quote never fits", not R.disjoint_in("abc", ["", "abc"]))
+    check("greedy trap fits", R.disjoint_in("abcdef abcd", ["abcd", "bcde"]))
+    check("half-open spans touch", R.disjoint_in("abcdef", ["abc", "def"]))
+    check("overlapping spans do not fit", not R.disjoint_in("abcdef", ["abcd", "cdef"]))
+    check("equal quotes need two occurrences", not R.disjoint_in("abc", ["abc", "abc"]))
+    check("the cap is 16", R.MERGE_CONTENDER_CAP == 16
+          and R.disjoint_in("a" * 16, ["a"] * 16)
+          and not R.disjoint_in("a" * 17, ["a"] * 17))
+
+
+def test_reference_is_the_chosen_exclusivity_arm():
+    """`resolver.resolve` is `excl_arms`'s `t23dk+carriers`, the form finding 9
+    priced and v1.11 chose. The arm was measured, the reference ships, so they must
+    not drift apart. Checked with reasons, on the two fixtures where stays compete,
+    under every operator the arm runs, markers stripped and every other one kept.
+    The arm has no merge contender cap, so the two differ by design above 16
+    contenders, which needs a below-default threshold; the conformance vector
+    `merge-exemption-fails-above-16-contenders` pins the reference there."""
+    import excl_arms as X
+
+    flags = dict(X.ARMS)[X.CHOSEN]
+    for base in (ADV, (HERE / "fixtures" / "cross_section_dups.md").read_text()):
+        before, pbs = PB.annotate(base)
+        anchors = R.build_anchors(before)
+        for name, op in sorted(X.ALL_OPS.items()):
+            after_pbs, _ = op(pbs)
+            for kept in (None, 0, 1):
+                stamped = {a.id for k, a in enumerate(anchors)
+                           if kept is not None and k % 2 == kept}
+                shown = [PB.PBlock(text=pb.text, ids=[i for i in pb.ids if i in stamped])
+                         for pb in after_pbs]
+                after = PB.serialize(shown, strip=kept is None)
+                live = R.resolve(anchors, after)
+                arm = X.resolve(anchors, after, **flags)
+                assert _decisions(live) == _decisions(arm), (name, kept)
 
 
 def test_detached_reason_and_candidate_policy():

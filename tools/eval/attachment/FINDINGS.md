@@ -62,8 +62,10 @@ fails. Deletions resolve to DETACHED (correct), and an exact duplicated twin
 
 **2. Near-duplicate blocks are the failure mode, and it is severe.** On the
 adversarial fixture, even with the guard on: **90% recovery, 3% false attachment
-(2 of 72).** Per edit:
-<!-- stay:oNnTs2lV hash=sha256:efe08567ec2d -->
+(2 of 72).** Per edit (the v1.10 ladder; under v1.11's exclusive assignment the
+two merge errors become two misses and `results.md` reads 0 of 72, in-sample,
+see finding 9):
+<!-- stay:oNnTs2lV hash=sha256:a4458f6c3ae1 -->
 
 | Edit | recovery | false-attach rate |
 |------|---------:|------------------:|
@@ -409,6 +411,265 @@ a consumer who has this failure, and there is none. The flag stays experimental
 and canonical-Python-only, with the numbers recorded so the question is reopened
 from evidence rather than from intuition.
 <!-- stay:t12XE56K hash=sha256:673db23cd508 -->
+
+## 9. Block-tier exclusivity and the duplicated id (2026-10)
+<!-- stay:OsfLuMIN hash=sha256:2f683483da95 -->
+
+Findings 7 and 8 left one mechanism standing: on the only corpus here with
+duplicate content, every false attachment comes from §9.1 resolving each stay on
+its own. §9.2 already forbids that for child blocks. A tier is evaluated for every
+stay before any commit, a block claimed by a stronger tier leaves the pool, a block
+two stays reach at the same tier goes to neither, and the hash tiers require the
+hash to have been unique when it was recorded. `excl_arms.py` applies those rules
+to blocks as opt-in arms and runs them over the existing corpora
+(`results_exclusivity.{json,md}`). It also prices a gap §9.1 does not mention at
+all: what tier 1 does when one id's marker sits on two blocks.
+<!-- stay:6a7T0TZQ hash=sha256:48e56cde9ab9 -->
+
+The arms: `t2` makes tier 2 exclusive with historical uniqueness, `t23` makes
+tiers 2 and 3 exclusive, `t23m` and `t23d` add a merge exemption (below), and
+`absent`, `carriers` and `detach` are three tier-1 rules for a duplicated id. The
+control is `ladder_v110.py`, the v1.10 ladder frozen so these numbers do not move
+with `resolver.py`. With every flag off the arm resolver returns exactly what it
+returns, field for field and candidates included. The tests check that over every
+corpus document and operator, markers stripped and kept, fully, half stamped and
+partly marked. A second threshold
+and margin (0.4 and 0.1) run fully stamped with markers stripped only, and §5.2
+segmentation runs over five operators, fully stamped, at the default threshold and
+margin. Each arm therefore differs from the control by its rule and nothing else,
+on the inputs those tests cross.
+<!-- stay:XjuX72KW hash=sha256:0d86282772cc -->
+
+**Exclusivity removes every block misattachment in the closed world, for two
+recoveries.** Markers stripped, every block stamped, the existing operators over
+all three corpora, 868 resolutions, 95% Clopper-Pearson intervals:
+<!-- stay:SMmLlten hash=sha256:2053767a7391 -->
+
+| Arm | correct | missed | misattached | misattach rate |
+|---|--:|--:|--:|---|
+| shipped ladder | 692 | 165 | 6 | 0.7% [0.3, 1.5] |
+| `t2`, tier 2 exclusive | 691 | 168 | 4 | 0.5% [0.1, 1.2] |
+| `t23`, tiers 2 and 3 exclusive | 690 | 173 | 0 | 0.0% [0.0, 0.4] |
+| `t23m`, plus containment exemption | 699 | 162 | 2 | 0.2% [0.0, 0.8] |
+| `t23d`, plus disjoint exemption (post hoc) | 698 | 165 | 0 | 0.0% [0.0, 0.4] |
+| `t23dk`, t23d with claimed rivals kept (post hoc) | 690 | 173 | 0 | 0.0% [0.0, 0.4] |
+<!-- stay:YLeVdRmA hash=sha256:42fd13fab988 -->
+
+The control's six are two ids collapsed onto one surviving rollback block by
+`edit_in_place`, two collapsed onto one surviving `### Access` heading by
+`heading_rename` (finding 7's many-to-one shape, both at tier 2), and two
+`near_dups` merge ids sent to a sibling at tier 3. Tier 2 exclusivity alone fixes
+the first pair only. The heading pair stops committing at tier 2 and then commits
+to the same wrong heading at tier 3, so tier 3 has to be exclusive as well. The
+intervals assume independent trials and these are not (a handful of documents put
+through every operator), so read them as a floor on uncertainty, as in finding 8.
+<!-- stay:7IC21qkS hash=sha256:c67c4dc72b8c -->
+
+**The cost is merges, and historical uniqueness takes the true owner down with
+the impostors.** §5 lets a merged block carry both ids, but under `t23` two ids
+reaching one merged block are a contest and both detach. That loses five
+recoveries the ladder makes: both merged ids in each distinct-prose document and
+one on the cross-section fixture. It also loses the id whose rollback block or
+heading was the unchanged one of the three twins, because a hash recorded three
+times commits for none of them. Five `edit_in_place` recoveries that `t23` gains,
+where a claimed twin no longer splits the margin, offset most of it.
+<!-- stay:m35W2tIx hash=sha256:eb76004cfe4b -->
+
+**The containment exemption fails on identical twins, and requiring disjoint
+text fixes it on these corpora.** The prototype's proposal was to commit every
+contender when each one's quote sits verbatim inside the block. That is `t23m`,
+and it brings back the heading collapse, because two byte-identical twins are each
+contained in their one surviving copy. `t23d` requires the quotes to occupy
+different places in the block, so identical twins need two copies of their text.
+The check is a search over subsets of the contenders that takes, for each
+subset, the earliest end at which all its quotes fit without overlapping (the
+README states it exactly). Contender order matters to a greedy first match, which
+can miss a placement that exists: quotes `abcd` and `bcde` fit `abcdef abcd` only
+if `abcd` takes its second occurrence. With every marker stripped it keeps every merge (merge goes from 58 correct and 2 misattached
+under the ladder to 61 and 0) and keeps zero misattachments. It was defined after
+`t23m` had run, against the case `t23m` lost, so it is a candidate rule, not
+neutral evidence for one.
+<!-- stay:sLfg7NIz hash=sha256:357c1408730a -->
+
+**Exclusivity can create a misattachment by removing a rival.** The shipped ladder
+sometimes detaches correctly only because a wrong candidate tied with another wrong
+candidate. Claim those candidates for their own stays and the weaker wrong one is
+left alone above the threshold. That happens three times: `replace_related` twice
+(the replacement keeps half its words, and the near-duplicate siblings that used
+to outscore it are claimed) and once in the half-stamped run below (a deleted
+`## Ingest` heading detaches under the ladder because `## Persist` and
+`## Dispatch` tie, both are claimed, and the unstamped `## Staging` commits at
+0.65). Each is the item-level cascade from the README's prototype history seen
+from the other side: there, resolving in isolation let an edit remove the rival;
+here, exclusive assignment does. The commit threshold of 0.5 is what lets a short
+heading through once its rivals are gone.
+<!-- stay:JurhNRNE hash=sha256:5ff310fcca8e -->
+
+`t23dk` closes that path. A block claimed at a stronger tier still cannot be a
+target, but it stays in the ranking as the runner-up, so claiming a rival never
+opens a margin that the unclaimed document did not have. Compared case by case
+with the control, `t23dk` introduces no misattachment in any of the four runs
+(closed and half-stamped, existing and identity-boundary operators). It fixes the
+control's six, the `swap_edit` one, and five of six in the half-stamped run. It
+pays with recall. With every marker stripped it keeps every merge the ladder
+recovers and turns the ladder's
+two wrong merge ids into detaches, but it loses the three merge recoveries `t23d`
+adds (merge is 58 correct and 0 misattached under `t23dk`, 61 and 0 under `t23d`).
+It also gives up the five `edit_in_place` recoveries `t23` gained, because those
+came from removing a claimed twin, which is the same mechanism. It loses two
+recoveries against the control (the unchanged owner of each thrice-recorded hash)
+and gains none: 690 correct to `t23d`'s 698.
+<!-- stay:chWRtiMS hash=sha256:5d0743eed0ab -->
+
+**Identity-boundary operators.** `replace` (unrelated text in the slot) detaches
+correctly under every arm, 4 of 4. `swap_edit` gains one recovery under exclusivity.
+The ladder's 19 misattachments over these 1080 resolutions are 16 `copy_*`
+cases with the original edited and its verbatim copy unmarked, which is finding 7
+again: the copy is the unique hash hit, every arm here commits to it, and
+historical uniqueness cannot help because the hash was unique when recorded. The
+other three are `replace_related` twice and `swap_edit` once.
+<!-- stay:ekPlbV03 hash=sha256:3cfe3c7ee135 -->
+
+**Half-stamped documents.** With only every other block stamped, the shipped
+ladder returns exactly what it returns fully stamped, because it resolves each
+anchor independently and stripping a marker does not remove its block. Only the
+exclusive arms move: `t23` keeps 2 misattachments of 868 (one `near_dups` merge it
+did not fix and the `## Staging` case above) against the control's 6, and `t23dk`
+keeps only that merge id. Exclusivity
+needs the competing blocks to have stays of their own, which a partly stamped
+document does not give it.
+<!-- stay:3lUvYf4o hash=sha256:8dcd4a5e3cbc -->
+
+**A pasted copy that keeps the marker.** §7 says a copy mints a new stay, so the
+id belongs to the original. Markers kept, the second marked paragraph pasted above
+or below the original or at either end of the document, 16 cases per variant over
+four documents. Cells are correct / missed / wrong for the copied id; every other
+id resolves correctly at tier 1 under every rule.
+<!-- stay:yrCAYdZh hash=sha256:32c84749af2f -->
+
+| Paste | shipped (first wins) | detach | absent | carriers |
+|---|---|---|---|---|
+| verbatim | 8 / 0 / 8 | 0 / 16 / 0 | 0 / 16 / 0 | 0 / 16 / 0 |
+| copy then edited | 8 / 0 / 8 | 0 / 16 / 0 | 16 / 0 / 0 | 16 / 0 / 0 |
+| original then edited | 8 / 0 / 8 | 0 / 16 / 0 | 0 / 0 / 16 | 0 / 0 / 16 |
+<!-- stay:Ot4aHsRI hash=sha256:505c71371336 -->
+
+The shipped rule is position: a copy pasted anywhere earlier in the document takes
+the id at tier 1 with confidence 1.0, and `lint_diff`'s `DUPLICATED_ID` is the only
+signal. Both rules that look at content fix the copy-above case, refuse the
+verbatim one, and keep an edited copy off the id. Neither can survive an edited
+original, because the copy is then the block whose body matches what was stored.
+They also turn the eight edited-original cases the shipped rule got right by
+position into wrong answers. A verbatim copy far from its original is not rescued
+by context either: both bodies score 1.0 before the context bonus and the clamp
+holds them tied, so the margin never opens.
+<!-- stay:CfsaX3mx hash=sha256:7c6da4737377 -->
+
+`absent` and `carriers` agree on all 48 cases because every case keeps at least
+one carrier verbatim. Either one carrier is the unique hash match, which both rules
+find, or both carriers are exact matches and tie, which both rules detach. So the
+agreement says nothing about a case where every carrier has drifted, and none of
+the 48 is that case. A separate test vector in `test_excl_arms.py` is: both
+carriers drift and an unmarked verbatim copy sits elsewhere. There `absent`
+attaches the id to that unmarked block by hash, while `carriers` stays among the
+blocks that carry the id and picks the closer one by quote. `carriers` cannot
+attach the id to a block that does not carry it, and `absent` can.
+<!-- stay:f1re23un hash=sha256:380544a090ac -->
+
+**Partly marked, the run that was missing.** Every block-tier table above strips all
+markers from the blocks it scores, so tiers 2 and 3 never meet a block claimed at tier 1;
+the copy table keeps markers but scores only the copied id.
+This run keeps every anchor and leaves a marker on every other id, once for each
+parity, with all fourteen operators on all three corpora. **It is not blind.** Its
+stop rule, that the chosen form introduces no misattachment against the control,
+was written after a probe of this same sweep had shown zero, so it shows the probe
+reproduces in committed code and is not an independent test of the rule. Section
+operators leave a corpus without sections unchanged, which accounts for 280 of the
+2016 resolutions, all correct under every arm.
+<!-- stay:1E2BekJx hash=sha256:cbde8cee09d2 -->
+
+| Arm | correct | missed | misattached | misattach rate |
+|---|--:|--:|--:|---|
+| shipped ladder | 1835 | 165 | 6 | 0.3% [0.1, 0.6] |
+| `t23dk+carriers`, the chosen form | 1829 | 177 | 0 | 0.0% [0.0, 0.2] |
+<!-- stay:BD17FirU hash=sha256:7be8d48cd684 -->
+
+The chosen form fixes the control's six and introduces none. It loses six recoveries,
+and they are the correction to this finding: "keeps every merge" holds only with every
+marker stripped, which this finding first said without the qualifier.
+<!-- stay:LkLZ5CKG hash=sha256:0be8b23cebc5 -->
+
+**A merge with one surviving marker loses the other id.** Five of the six are this
+shape. §5 lets a merged block carry both ids, but the exemption compares tier-3
+contenders only. If one id keeps its marker on the merged block, that block is claimed
+at tier 1, and the other id has no target and no contest to be exempted from, so it goes
+from `quote` to `detached: unmatched`. The sixth is the unchanged owner of a hash
+recorded three times under `edit_in_place`, the same case the stripped run loses.
+<!-- stay:DVrTZi85 hash=sha256:bddadc84ded0 -->
+
+**A block carrying two stays loses both when its markers go.** §5 says more than one
+marker may bind to one block. Two anchors from one block record one hash twice, so tier 2
+commits to neither, tier 3 makes them contenders, and one copy of the text cannot hold two
+identical quotes. The ladder gives `hash` for both, the chosen form `detached: contested`
+for both. The anchor format cannot tell these two anchors from two twins, so this has no
+one-line exemption. It is rare: across the 674 stamped blocks of `CLAUDE.md`,
+`NEIGHBOURS.md`, `ROADMAP.md`, `SPEC.md` and `SPEC_DECISIONS.md` before this run, one block
+carries two stays, and it is a quoted example in `SPEC.md`.
+<!-- stay:8h42zVfB hash=sha256:af88df79cfda -->
+
+Both shapes fail closed, to a detach, which §10 calls a correct outcome, and both stay as
+the rule has them. Fixing either means a new exemption on a post-hoc rule. `test_excl_arms.py`
+pins each one.
+<!-- stay:yth90De9 hash=sha256:c3d745567679 -->
+
+**Tier 2's claimed filter has one shape behind it.** Removing the filter from the chosen
+form changes 0 of the 2016 resolutions above. `edit_into_twin` rewrites one marked paragraph
+into another's exact text, each keeping its own id, and there the filter changes 4 of 144:
+the stripped id's hash names two blocks, one is claimed at tier 1, and the filter turns a
+detach into the correct block. No misattachment results. The operator was built to reach the
+filter, so this shows the path runs and says nothing about how often the shape occurs. Beyond
+that one shape the filter has no corpus behind it.
+<!-- stay:Zu2rew4R hash=sha256:25f431939165 -->
+
+**Tier 1's commit by quote among carriers has two vectors behind it and no sweep.** It
+needs an id on two carriers, neither still hashing to the stored hash. The
+differential sweeps that checked the ports never build that: 0 of their 54,000
+resolutions carry an id twice, and the repeated-id sweep (3,240) strips every marker.
+`marker-duplicated-both-carriers-drifted-quote-chooses-among-carriers-only` and
+`repeated-id-resolves-the-last-anchor-read-among-its-carriers` in
+`conformance/spec/resolve.json` reach the commit; beyond those two shapes it has no
+corpus behind it.
+<!-- stay:DmF0239i hash=sha256:566a1546ae96 -->
+
+**The copy operators, outside that run.** A `copy_*` operator pastes the marker too, so one
+parity has the copied id on two blocks and tier 1's carriers rule decides it. Over those 2160
+resolutions the chosen form introduces eight misattachments, all tier-1 decisions on
+`copy_below_edit_original` and `copy_end_edit_original`. They are the eight edited-original
+cases in the copy table above, where the shipped rule was right by position and the id now
+goes to the verbatim copy, and a test holds the two lists equal. `t23dk` alone, which keeps
+the shipped tier 1, introduces none.
+<!-- stay:FzTJwdMw hash=sha256:63b6941eae0f -->
+
+**What was chosen, and what stays open.** The form taken for §9.1 is `t23dk` at
+tiers 2 and 3 with `carriers` at tier 1: exclusive assignment with historical
+uniqueness, a merge exemption for quotes at disjoint places, claimed blocks kept
+as margin rivals, and a duplicated id resolved only among its carriers. At tiers 2
+and 3 it trades eight recoveries against `t23d` for never creating a misattachment
+the ladder did not make; tier 1's carriers rule does create some, as the copy cases
+show. The disjoint exemption and the kept rivals are both post hoc on
+three synthetic corpora, so conformance vectors and a second implementation have
+to confirm that the rules reproduce exactly. `carriers` keeps a known failure: when
+the original is edited after a paste, the copy is the carrier whose body matches
+what was stored, and the id goes to it. No content rule can tell that case from an
+edited copy, because only the paste itself knows which block came first, and
+`lint_diff` reports `DUPLICATED_ID` either way. The arm `t23dk+carriers` runs the
+whole chosen form: with markers stripped it equals `t23dk`, and in the copy table it
+equals `carriers`. §9.2's child tiers keep removing claimed candidates: the same
+kept-rivals rule, applied to scratch copies of both child resolvers and run on
+`item_eval.py`'s matrix, scores 284 correct, 16 missed and 0 false of 324, against
+285, 15 and 0 for the shipped child rule. That probe is not in this tree; its
+record is `SPEC_DECISIONS.md` § What v1.11 decides about §9.1 assignment.
+<!-- stay:MH6NNLYV hash=sha256:a069c11614fd -->
 
 ## Limitations and next
 <!-- stay:bDKGV1Dh hash=sha256:5a77eea2831c -->

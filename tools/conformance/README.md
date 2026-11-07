@@ -31,16 +31,22 @@ filter applies to lint, diff, and commit-check reports.
 - **`gen/`** , emitted from the reference by `generate.py` for breadth and
   regression. A `gen/` failure means the reference changed since generation;
   regenerate only when the change was intended.
-- **`rows/`** , the optional `rows` profile (below).
+- **`rows/`** , the optional profiles, `rows` and `items` (below).
 - **`tree/`** , §5.2-only vectors consumed solely by the remark adapter. The
   string runners would fail them by design, so they are not part of the core.
 
-Core count today: **469** (229 `spec/` + 240 `gen/`, 22 files).
+Core count today: **531** (291 `spec/` + 240 `gen/`, 22 files).
 
 ## Optional profiles
 
-A corpus file MAY declare a top-level `"profile"`. `rows` is the only one:
-SPEC.md §5.6 table-row identity, 32 vectors.
+A corpus file MAY declare a top-level `"profile"`. There are two, both in
+`rows/`:
+
+- `rows` (`rows/rows.json`): SPEC.md §5.6 table-row identity, 32 vectors.
+- `items` (`rows/items.json`): SPEC.md §5.5 list-item identity, 9 vectors. It
+  shares the directory and not the name, because these vectors are not rows: a
+  runner that advertised `rows` would otherwise claim list items it never
+  implemented.
 
 §16 keeps §5.5 and §5.6 child segmentation **optional**, so declining a profile
 is conforming. Running fewer than every core vector is not. **The four FULL
@@ -54,8 +60,8 @@ runner, and the note on each says which:
   adding a category to the corpus without touching the runners would pass as
   silence, which is the exact failure this project exists to catch.
 - `ADVERTISED_PROFILES` , what this runner implements. Both Python references
-  advertise `rows` and report `501/501 (469 core, 32 rows)`. JavaScript and Rust
-  decline it and report `469/469 core`.
+  advertise both profiles and report `572/572 (531 core, 9 items, 32 rows)`.
+  JavaScript and Rust decline both and report `531/531 core`.
 - `CORE_VECTORS` , the core count, asserted so a whole file dropping out of
   collection is caught by something other than a smaller number nobody read.
 - `PROFILE_VECTORS` , the same guarantee for each ADVERTISED profile, so a runner
@@ -63,7 +69,8 @@ runner, and the note on each says which:
   equal `ADVERTISED_PROFILES`: reading it with a `.get()` and skipping a missing
   entry would reinstate exactly the hole the count closes. **Only the two Python
   runners carry it**, because only they advertise a profile; JavaScript and Rust
-  pin the declined count directly instead, asserting `declined == ["rows:32"]`.
+  pin the declined counts directly instead, asserting
+  `declined == ["items:9", "rows:32"]`.
 
 A declining runner still **vendors** the profile's vectors. A runner that cannot
 see a profile cannot prove it declined one.
@@ -93,6 +100,22 @@ recognition and attachment, the transactional write path with its migration
 probe, and §9.2 child recovery. Three separate categories would let a runner
 advertise the profile while implementing only the half it found easy.
 
+The `items` category uses two of those shapes. Its first two `resolve` vectors are
+`eval/attachment/item_eval.py`'s `in-place-edit` cells on the near-duplicate
+shapes, with every marker gone: the edited item's siblings commit by sibling hash
+and are claimed, and the edited item then commits at the quote tier because §9.2
+removes a claimed sibling from the quote pool. That is the rule §9.1's tier 3
+deliberately does not share, which keeps claimed blocks as rivals; kept as rivals
+here, the near-duplicate siblings hold the margin and both vectors detach. Six
+more `resolve` vectors pin §9.2 tier 0, the container ladder, where it differs from
+§9.1 (v1.11): the first carrier of a duplicated container id, the first anchor read
+for a container id the baseline repeats, no historical uniqueness, claimed blocks
+out of the quote pool, context read among the unclaimed blocks, and no merge
+exemption. Each is failed by the one scratch-copy fault that gives tier 0 §9.1's
+rule on its point, and by no other. Its `stamp` vector pins §5.3's write refusal per child: list items that start in a
+refused frontmatter-shaped span get no marker, whatever happens to their
+container.
+
 **§3.4 has no vectors of its own, and its row half lives in this profile.** The
 section requires lexical **placement decisions**, rather than guaranteeing that
 every write preserves rendering. The `stamp` vectors here pin a capturing
@@ -102,8 +125,8 @@ implementations that advertise row identity; JavaScript and Rust decline this
 optional profile and do not insert child carriers. Rendering effects need both
 a CommonMark parser and an HTML parser, so they are measured separately in
 `eval/write_safety/`. §5.5's
-child carrier has no profile to sit in, since only the Python reference segments
-list items, so its refusals are pinned by that implementation's own tests.
+child-carrier refusals are not in the `items` profile, which carries recovery and
+the §5.3 refusal only; they are pinned by the Python reference's own tests.
 
 The adapters do not insert child carriers either. `remark-stay` records existing
 stays in `file.data.stay`; `rehype-stay` sets HTML `id` properties. Neither writes
@@ -124,8 +147,25 @@ honestly, and requires a named vector to catch it:
 python3 conformance/mutation_check.py --differential
 ```
 
-`57/57 mutations behaved as declared` is the passing line, alongside
-`ok differential: 400 generated pairs match resolver.resolve`.
+`79/79 mutations behaved as declared` is the passing line, alongside
+`ok differential: 400 stripped and 400 marked generated pairs match
+resolver.resolve`, which also prints how often the marked pairs reached a
+duplicated id, a tier-1 claim, a contest and a committed merge, and fails if any
+of those is zero.
+
+The `resolve` battery includes §9.1's exclusive assignment (v1.11): first-carrier
+wins and fall-through for a duplicated id, tier 2 without historical uniqueness
+or without its claimed filter, claimed blocks removed from the ranking rather
+than kept as rivals, context scored against the unclaimed list, a claimed block's
+score reported for a detached stay, one-at-a-time commits, and six readings of
+the merge test (none, containment, greedy, closed spans, equal quotes counted
+once, the cap missing or at 15, UTF-16 lengths), and two readings of a baseline
+that repeats an id (the first anchor read wins; no collapse, so tier 2 counts
+each recording). Every one is caught by a named
+`spec/resolve.json` vector, and `generate.py` asserts that each `gen/` resolve
+scenario reaches the gate its name claims, reading the resolver's own reason
+(`threshold`, `margin`, `contested`, or `no-candidates` when every block is
+claimed).
 
 **A mutation battery measures the seam it patches, not the rule it names.** A
 refactor that moves a decision out from under a patched function retires that

@@ -99,6 +99,43 @@ def test_marker_line_count_runs_across_skipped_openers_crlf_and_offset():
     assert [(m.id, m.line) for m in L.find_markers(text, 10)] == [("x", 13), ("z", 17)]
 
 
+
+def test_overlapping_rejected_candidates_remain_independent():
+    for opener, closer in (("<!--", "-->"), ("{/*", "*/}")):
+        text = (opener + "stay:x a=") * 4000 + "\n" + closer
+        assert L.find_markers(text) == []
+        raw = opener + 'stay:good quote="one\r\ntwo\\\"three\\\\four" ' + closer
+        markers = L.find_markers(text + "\r\n" + raw, 10)
+        assert [(m.id, m.line, m.raw) for m in markers] == [("good", 13, raw)]
+
+
+def test_overlapping_candidates_preserve_quote_state_and_host_boundaries():
+    # The inner opener begins in the outer quoted value. Its bare-value LF
+    # rejection must not poison the outer candidate's legal quoted LF.
+    raw = '<!--stay:outer quote="<!--stay:inner a=one\r\ntwo" -->'
+    assert [(m.id, m.raw) for m in L.find_markers(raw)] == [("outer", raw)]
+    text = ('<!--stay:x a={/*stay:mdx quote="one\ntwo" */}\n-->'
+            '<!--stay:no=positional --!><!--stay:last -->')
+    markers = L.find_markers(text, 4)
+    assert [(m.id, m.malformed, m.line) for m in markers] == [
+        ("mdx", False, 5), (None, True, 7), ("last", False, 7)
+    ]
+
+
+def test_marker_suffix_validation_visits_each_state_position_at_most_once():
+    class CountedText(str):
+        reads = 0
+
+        def __getitem__(self, item):
+            self.reads += 1
+            return super().__getitem__(item)
+
+    text = CountedText("x a=" + "<!--stay:x a=" * 4000 + "\n")
+    validate = L._marker_body_validator(text)
+    for match in L._MARKER_OPEN_RE.finditer(text):
+        assert not validate(match.end() + 5, len(text))
+    assert text.reads <= 9 * len(text)
+
 def test_marker_parser_normalizes_quoted_line_endings_but_preserves_raw():
     raw = '<!-- stay:a quote="one\r\ntwo\rthree" subhash="bogus" -->'
     marker = L.find_markers(raw)[0]
@@ -717,7 +754,9 @@ def test_markerless_row_recovers_by_parent_hash_and_document_hash():
     )
 
 
-def test_row_quote_candidates_exclude_overlapping_list_children(monkeypatch):
+def test_row_quote_candidates_exclude_overlapping_list_children():
+    from unittest.mock import patch
+
     marker = _child_marker("r", "target original")
     before = (
         "- outer\n"
@@ -739,8 +778,8 @@ def test_row_quote_candidates_exclude_overlapping_list_children(monkeypatch):
         calls.append(list(candidates))
         return original(quote, prefix, suffix, candidates)
 
-    monkeypatch.setattr(L, "_best_match", record_candidates)
-    assert L._resolve_children([anchor], after, "commonmark")["r"][0] == "quote"
+    with patch.object(L, "_best_match", side_effect=record_candidates):
+        assert L._resolve_children([anchor], after, "commonmark")["r"][0] == "quote"
     assert calls == [["target revised"]]
 
 

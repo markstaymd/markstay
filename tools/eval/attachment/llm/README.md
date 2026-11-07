@@ -90,7 +90,9 @@ not rerun the resolver against a captured before/after document pair.
 | `results.{json,md}` | last run's raw data + report |
 | `FINDINGS.md` | write-up |
 
-Reuses `../resolver.py`, `../quote.py`, `../perturb.py` (annotate/serialize),
+Reuses `../ladder_v110.py` (the ladder as v1.10 shipped it, so these dated results
+do not move with the spec; `demo.py` alone reads the live `../resolver.py`),
+`../quote.py`, `../perturb.py` (annotate/serialize),
 `../../linter/markstay_lint.py`, and `../../providers.py` (shared LLM providers).
 
 ## Run

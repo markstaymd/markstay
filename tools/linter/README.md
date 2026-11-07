@@ -63,7 +63,7 @@ Regeneration diff (`--before OLD.md NEW.md`):
 | `ADOPTED_ID` | warn | a block stay rewritten in place as its list item's child stay (`subhash`), where `DROPPED_ID` would otherwise fire (SPEC.md §16, v1.10). Kept, and printed rather than passed in silence: the test is lexical, so check the marker sits on the item it names |
 | `DROPPED_CHILD_ID` | error | a child (`subhash`) id in the baseline that no marker carries after the edit, reported apart from `DROPPED_ID` so it is never named as its container's stay (SPEC.md §16, v1.9). Needs no `--child-blocks`: an item's marker stripped from a surviving item is the case it exists for, and an item deleted with its marker blocks the way a deleted section does |
 | `DUPLICATED_ID` | error | id appears more than once after the edit (copy without re-mint, or a regeneration collision) |
-| `RELOCATED_ID` | error | an id now sits on content that previously carried a *different* id (markers swapped/relocated) |
+| `RELOCATED_ID` | error | an id now sits on content that previously carried a *different* id (markers swapped), or it has moved off its block: its current block scores under 0.5 against its old text while that text survives on exactly one free block in the run above it (SPEC.md §11, v1.11; see [Relocation](#relocation)) |
 | `HASH_DRIFT` | warn | id present in both, content edited in place (hidden from text output by default, see [Hash drift](#hash-drift)) |
 | `NEW_ID` | info | id present only after the edit |
 | `CHILD_DROPPED` | error | an opt-in child id cannot be recovered from its parent, exact child hash, or sibling-scoped quote evidence. When it fires, `DROPPED_CHILD_ID` is not repeated for the same id |
@@ -205,8 +205,11 @@ in a pipeline, read `--json` or the return tuple.
  a mapping (`---`/`title: v`/`---`, a setext heading under one). Both satisfy all
  four conditions and their content **is** excluded (frontmatter wins, as it does in
  every mainstream site generator). A document that fails any of the four conditions
- falls through to "not frontmatter", where the worst case is a stray hash-drift
- warning rather than silently discarded content. Spans
+ falls through to "not frontmatter", where for this linter, a reader, the worst
+ case is a stray hash-drift warning rather than silently discarded content. A
+ writer has one worse case and refuses it (§5.3, v1.11): a payload that still reads
+ as YAML but holds a blank line is YAML to a frontmatter reader, so the packaged
+ `stamp` writes no marker into that span. Recognition here does not change. Spans
  left alone as ordinary Markdown therefore include `---` with no closing fence,
  any `---` fence that is not at line 1, `---`/blank/prose/blank/`---` (two thematic
  breaks), `---`/`Title`/`---` (a setext heading), and comment-only payloads.
@@ -225,13 +228,79 @@ in a pipeline, read `--json` or the return tuple.
  marker, so it never reports drift merely because a freshly computed hash is
  longer than a short stored one.
 
-## Known limitation
+## Relocation
 
-Relocation detection is exact-content only: it catches markers that swap between
-blocks whose text is otherwise unchanged. It does **not** detect partial
-relocation when a block is split or merged. That case needs quote/selector
-recovery (`../SPEC.md` §9), handled by the attachment-survival eval
-(`../eval/attachment/`), not this deterministic linter.
+`RELOCATED_ID` has two branches. An exact swap: an id now sits on content that
+carried a different id in the baseline. And a move (SPEC.md §11, v1.11): a kept
+id carried by one block before and after, whose hash changed, is reported when
+
+1. §9's body score, without context, of its old text against its current block
+   is under 0.5;
+2. exactly one **candidate** scores 0.8 or more against the old text. The
+   candidates are the run of free blocks directly above the current block, back to
+   the nearest block carrying an id present in both documents (a free block
+   carries none), less any block whose body is unchanged from a baseline block
+   other than the id's own: that block was there before the edit, so the edit did
+   not strand it. An unmarked heading that restates the paragraph under it is the
+   case this exists for; and
+3. the current block's normalized text is not inside the old text.
+
+That is the shape the rule exists for. In this repo's own history it fires on
+13 of 168 edits, 7.7 per 100, and a hand census puts true relocations at 17, 10.1
+per 100 (`../eval/replay/FINDINGS.md`): a paragraph typed between a block and
+its trailing marker takes the marker, and the original paragraph is
+left unmarked directly above. Clause 3 keeps a split from firing: a blank line
+typed into a paragraph leaves the marker on a short tail that the old text
+contains, and either half is an acceptable home for the id. All 13 firings are
+real relocations, so conditional recall is 13 of 17.
+
+What it does not catch: old text that survives anywhere other than in the run
+of free blocks above the id's block, a successor edited under 0.8, a surviving
+copy whose body is unchanged from a baseline block other than the id's own, and a
+split or merge where content only partly
+moved (except the reworded-tail split below, which fires). Those stay
+`HASH_DRIFT`, and partial relocation is the domain of quote/selector recovery
+(`../SPEC.md` §9, `../eval/attachment/`).
+
+What it reports although the id did not move, all known and accepted:
+
+- **A split whose tail is then reworded.** Clause 3 needs the tail inside the old
+  text; once the tail is edited it is not, and the head directly above still
+  scores 0.8 or more.
+- **A block in the run above, carrying no kept id, that echoes the old text,
+  while the paragraph is rewritten.** The echo is a heading, blockquote or
+  lead-in that repeats the paragraph's old wording, anywhere between the
+  paragraph and the nearest block above carrying a kept id. It may be unmarked
+  or carry only new ids or child (`subhash`) markers, and it may be newly typed
+  or edited in the same commit. It scores 0.8 or more against the old text while
+  the rewritten paragraph scores under 0.5.
+  An echoing block unchanged from a baseline block other than the paragraph
+  itself is excluded (above), but one edit to it, even an added period, makes it
+  a candidate again. This is the same block structure as
+  a relocation whose stranded block was edited, which the rule exists to catch,
+  and no content test on the two documents alone separates them.
+- **Two blocks made identical (the exact-swap branch).** An edit that makes one
+  block's text identical to another block's baseline text reports
+  `RELOCATED_ID` for the edited block's id, although neither marker moved. This
+  branch predates v1.11.
+
+Each blocks a commit. Rewording the echoing block so it no longer repeats the old
+text clears the second; when the id still names the block it should, the hook's
+one-time bypass is `git commit --no-verify`. Moving the marker onto the echoing
+block also clears the error, but it changes what the id names, so do it only
+when the id really belongs there.
+
+**Cost.** Each free block sits in the window of at most one block, so the scan
+makes at most one comparison per free block for each kept id on that block.
+Measured 2026-11-07 on a shared machine, N kept ids each rewritten with two free
+blocks typed above it (`test_relocation_cost.py`, the same documents in all four
+implementations), N = 2000 and 4000 free blocks: 3.0 s for this linter and the
+Python package, 1.7 s in JavaScript, 0.7 s in Rust, doubling with N. The
+document-wide search the rule replaced took 109 s in Rust and 251 s in JavaScript
+at N = 1000 with 1000 free blocks. The quadratic case left is an edit that piles
+every marker onto one block: then every id scans the whole document above it,
+and N = 250 takes 28 s here, 13 s in JavaScript and 6.6 s in Rust. Every id
+there is correctly reported as relocated.
 
 ## Programmatic use
 

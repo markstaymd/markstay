@@ -471,3 +471,159 @@ SECTION_OPERATORS = {
     "heading_rename": heading_rename,
     "heading_delete": heading_delete,
 }
+
+
+# --- identity-boundary operators --------------------------------------------
+# These price the rules that decide *which* block keeps an id when content says
+# two candidates fit: a replacement in the same slot, two neighbours that trade
+# places while drifting, and a pasted copy that may carry the original's marker.
+# They exist for the exclusivity arms (`excl_arms.py`) and sit in their own
+# registry for the same reason SECTION_OPERATORS do: adding them to OPERATORS
+# would move every published number in `results.md`.
+
+_UNRELATED = ("A completely different statement now occupies this slot, written "
+              "later about an unrelated subject that shares nothing with the text "
+              "it displaced.")
+
+
+def _nth_marked_para(pblocks: list[PBlock], n: int) -> int | None:
+    seen = 0
+    for i, pb in enumerate(pblocks):
+        if is_para(pb) and pb.ids:
+            seen += 1
+            if seen == n:
+                return i
+    return None
+
+
+def _drift(text: str) -> str:
+    """The same light edit `edit_in_place` makes."""
+    return text.replace("the ", "each ", 1).rstrip() + " This sentence was added by an editor."
+
+
+def replace(pblocks: list[PBlock]) -> tuple[list[PBlock], dict]:
+    """Put unrelated text in the second paragraph's slot. SPEC.md §2.2 says a
+    replacement earns a new stay, so the old id has no home and MUST detach.
+    This is the case a position-based aligner gets wrong by construction."""
+    out = [PBlock(text=pb.text, ids=list(pb.ids)) for pb in pblocks]
+    i = _nth_marked_para(out, 2)
+    if i is None:
+        return out, {}
+    adj = {mid: {"accept": None, "preferred": None} for mid in out[i].ids}
+    out[i] = PBlock(text=_UNRELATED, ids=[])
+    return out, adj
+
+
+def replace_related(pblocks: list[PBlock]) -> tuple[list[PBlock], dict]:
+    """Replace the second paragraph with a same-topic statement that withdraws
+    its claim: the first half of its words kept, the assertion reversed.
+
+    Ground truth is DETACH under §2.2, but that truth is semantic rather than
+    lexical. Half the words survive, so no similarity threshold can separate
+    this from an edit, and an arm that misattaches here is approximating the
+    rule rather than breaking it. Reported apart from `replace` for that reason."""
+    out = [PBlock(text=pb.text, ids=list(pb.ids)) for pb in pblocks]
+    i = _nth_marked_para(out, 2)
+    if i is None:
+        return out, {}
+    adj = {mid: {"accept": None, "preferred": None} for mid in out[i].ids}
+    words = out[i].text.split()
+    half = " ".join(words[: max(4, len(words) // 2)])
+    out[i] = PBlock(text=half + " is no longer true and has been withdrawn entirely.",
+                    ids=[])
+    return out, adj
+
+
+def swap_edit(pblocks: list[PBlock]) -> tuple[list[PBlock], dict]:
+    """Swap the first pair of adjacent marked paragraphs and drift both. A
+    position aligner sees two in-place edits; identity says each id follows its
+    own text, and neither hash survives, so both must recover at the quote tier."""
+    out = [PBlock(text=pb.text, ids=list(pb.ids)) for pb in pblocks]
+    paras = [i for i, pb in enumerate(out) if is_para(pb) and pb.ids]
+    for a, b in zip(paras, paras[1:]):
+        if b == a + 1:
+            first, second = out[a], out[b]
+            out[a] = PBlock(text=_drift(second.text), ids=list(second.ids))
+            out[b] = PBlock(text=_drift(first.text), ids=list(first.ids))
+            break
+    return out, {}
+
+
+def edit_into_twin(pblocks: list[PBlock]) -> tuple[list[PBlock], dict]:
+    """Rewrite one marked paragraph into another's exact text, each keeping its
+    own id. Run with alternate ids stripped, this is the one shape that reaches
+    exclusive tier 2's claimed filter: the stripped id's hash now names two blocks,
+    and one of them is claimed at tier 1 by the marker that stayed.
+
+    The rewritten paragraph is the first one after the second marked paragraph an
+    odd number of stays away, so the two ids always fall on opposite parities and
+    one parity of a partly-marked run has the shape. The source's hash has to be
+    unique among the stored stays, or historical uniqueness refuses it first."""
+    out = [PBlock(text=pb.text, ids=list(pb.ids)) for pb in pblocks]
+    marked = [i for i, pb in enumerate(out) if pb.ids]
+    hashes = [L.body_hash(pb.text) for pb in out if pb.ids]
+    paras = [i for i in marked if is_para(out[i])]
+    for src in paras[1:]:
+        if hashes.count(L.body_hash(out[src].text)) > 1:
+            continue
+        for dst in paras:
+            if dst > src and (marked.index(dst) - marked.index(src)) % 2:
+                out[dst] = PBlock(text=out[src].text, ids=list(out[dst].ids))
+                return out, {}
+    return out, {}
+
+
+def _copy(where: str, edit: str | None):
+    """Build a copy operator: paste the second marked paragraph, marker and all,
+    at `where` (`above` / `below` the original, or the document's `start` /
+    `end`), then optionally drift the `copy` or the `original`.
+
+    SPEC.md §7 says a copy mints a fresh stay, so the id belongs to the original
+    in every variant. With markers kept the id appears on two blocks, which is
+    what prices §9.1 tier 1 for a duplicated id; with markers stripped the copy
+    is an unmarked twin, which is `clone` at a chosen distance."""
+
+    def op(pblocks: list[PBlock]) -> tuple[list[PBlock], dict]:
+        out = [PBlock(text=pb.text, ids=list(pb.ids)) for pb in pblocks]
+        i = _nth_marked_para(out, 2)
+        if i is None:
+            return out, {}
+        src = out[i]
+        cp = PBlock(text=_drift(src.text) if edit == "copy" else src.text,
+                    ids=list(src.ids))
+        if edit == "original":
+            out[i] = src = PBlock(text=_drift(src.text), ids=list(src.ids))
+        if where == "above":
+            out.insert(i, cp)
+            orig = i + 1
+        elif where == "below":
+            out.insert(i + 1, cp)
+            orig = i
+        elif where == "start":
+            out.insert(0, cp)
+            orig = i + 1
+        else:
+            out.append(cp)
+            orig = i
+        return out, {mid: {"accept": {orig}, "preferred": orig} for mid in src.ids}
+
+    op.__name__ = f"copy_{where}" + (f"_edit_{edit}" if edit else "")
+    op.__doc__ = _copy.__doc__
+    return op
+
+
+COPY_OPERATORS = {
+    f"copy_{where}" + (f"_edit_{edit}" if edit else ""): _copy(where, edit)
+    for edit in (None, "copy", "original")
+    for where in ("above", "below", "start", "end")
+}
+
+EXCL_OPERATORS = {
+    "replace": replace,
+    "replace_related": replace_related,
+    "swap_edit": swap_edit,
+    **COPY_OPERATORS,
+}
+
+# Kept apart from EXCL_OPERATORS, whose published sweeps would otherwise move.
+TWIN_EDIT_OPERATORS = {"edit_into_twin": edit_into_twin}
